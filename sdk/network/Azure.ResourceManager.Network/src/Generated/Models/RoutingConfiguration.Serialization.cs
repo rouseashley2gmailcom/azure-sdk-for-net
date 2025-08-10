@@ -5,74 +5,197 @@
 
 #nullable disable
 
+using System;
+using System.ClientModel.Primitives;
+using System.Collections.Generic;
+using System.Text;
 using System.Text.Json;
 using Azure.Core;
 using Azure.ResourceManager.Resources.Models;
 
 namespace Azure.ResourceManager.Network.Models
 {
-    public partial class RoutingConfiguration : IUtf8JsonSerializable
+    public partial class RoutingConfiguration : IUtf8JsonSerializable, IJsonModel<RoutingConfiguration>
     {
-        void IUtf8JsonSerializable.Write(Utf8JsonWriter writer)
+        void IUtf8JsonSerializable.Write(Utf8JsonWriter writer) => ((IJsonModel<RoutingConfiguration>)this).Write(writer, ModelSerializationExtensions.WireOptions);
+
+        void IJsonModel<RoutingConfiguration>.Write(Utf8JsonWriter writer, ModelReaderWriterOptions options)
         {
             writer.WriteStartObject();
-            if (Optional.IsDefined(AssociatedRouteTable))
-            {
-                writer.WritePropertyName("associatedRouteTable");
-                JsonSerializer.Serialize(writer, AssociatedRouteTable);
-            }
-            if (Optional.IsDefined(PropagatedRouteTables))
-            {
-                writer.WritePropertyName("propagatedRouteTables");
-                writer.WriteObjectValue(PropagatedRouteTables);
-            }
-            if (Optional.IsDefined(VnetRoutes))
-            {
-                writer.WritePropertyName("vnetRoutes");
-                writer.WriteObjectValue(VnetRoutes);
-            }
+            JsonModelWriteCore(writer, options);
             writer.WriteEndObject();
         }
 
-        internal static RoutingConfiguration DeserializeRoutingConfiguration(JsonElement element)
+        /// <param name="writer"> The JSON writer. </param>
+        /// <param name="options"> The client options for reading and writing models. </param>
+        protected virtual void JsonModelWriteCore(Utf8JsonWriter writer, ModelReaderWriterOptions options)
         {
-            Optional<WritableSubResource> associatedRouteTable = default;
-            Optional<PropagatedRouteTable> propagatedRouteTables = default;
-            Optional<VnetRoute> vnetRoutes = default;
-            foreach (var property in element.EnumerateObject())
+            var format = options.Format == "W" ? ((IPersistableModel<RoutingConfiguration>)this).GetFormatFromOptions(options) : options.Format;
+            if (format != "J")
             {
-                if (property.NameEquals("associatedRouteTable"))
+                throw new FormatException($"The model {nameof(RoutingConfiguration)} does not support writing '{format}' format.");
+            }
+
+            if (Optional.IsDefined(AssociatedRouteTable))
+            {
+                writer.WritePropertyName("associatedRouteTable"u8);
+                ((IJsonModel<WritableSubResource>)AssociatedRouteTable).Write(writer, options);
+            }
+            if (Optional.IsDefined(PropagatedRouteTables))
+            {
+                writer.WritePropertyName("propagatedRouteTables"u8);
+                writer.WriteObjectValue(PropagatedRouteTables, options);
+            }
+            if (Optional.IsDefined(VnetRoutes))
+            {
+                writer.WritePropertyName("vnetRoutes"u8);
+                writer.WriteObjectValue(VnetRoutes, options);
+            }
+            if (Optional.IsDefined(InboundRouteMap))
+            {
+                writer.WritePropertyName("inboundRouteMap"u8);
+                ((IJsonModel<WritableSubResource>)InboundRouteMap).Write(writer, options);
+            }
+            if (Optional.IsDefined(OutboundRouteMap))
+            {
+                writer.WritePropertyName("outboundRouteMap"u8);
+                ((IJsonModel<WritableSubResource>)OutboundRouteMap).Write(writer, options);
+            }
+            if (options.Format != "W" && _serializedAdditionalRawData != null)
+            {
+                foreach (var item in _serializedAdditionalRawData)
                 {
-                    if (property.Value.ValueKind == JsonValueKind.Null)
+                    writer.WritePropertyName(item.Key);
+#if NET6_0_OR_GREATER
+				writer.WriteRawValue(item.Value);
+#else
+                    using (JsonDocument document = JsonDocument.Parse(item.Value, ModelSerializationExtensions.JsonDocumentOptions))
                     {
-                        property.ThrowNonNullablePropertyIsNull();
-                        continue;
+                        JsonSerializer.Serialize(writer, document.RootElement);
                     }
-                    associatedRouteTable = JsonSerializer.Deserialize<WritableSubResource>(property.Value.ToString());
-                    continue;
-                }
-                if (property.NameEquals("propagatedRouteTables"))
-                {
-                    if (property.Value.ValueKind == JsonValueKind.Null)
-                    {
-                        property.ThrowNonNullablePropertyIsNull();
-                        continue;
-                    }
-                    propagatedRouteTables = PropagatedRouteTable.DeserializePropagatedRouteTable(property.Value);
-                    continue;
-                }
-                if (property.NameEquals("vnetRoutes"))
-                {
-                    if (property.Value.ValueKind == JsonValueKind.Null)
-                    {
-                        property.ThrowNonNullablePropertyIsNull();
-                        continue;
-                    }
-                    vnetRoutes = VnetRoute.DeserializeVnetRoute(property.Value);
-                    continue;
+#endif
                 }
             }
-            return new RoutingConfiguration(associatedRouteTable, propagatedRouteTables.Value, vnetRoutes.Value);
         }
+
+        RoutingConfiguration IJsonModel<RoutingConfiguration>.Create(ref Utf8JsonReader reader, ModelReaderWriterOptions options)
+        {
+            var format = options.Format == "W" ? ((IPersistableModel<RoutingConfiguration>)this).GetFormatFromOptions(options) : options.Format;
+            if (format != "J")
+            {
+                throw new FormatException($"The model {nameof(RoutingConfiguration)} does not support reading '{format}' format.");
+            }
+
+            using JsonDocument document = JsonDocument.ParseValue(ref reader);
+            return DeserializeRoutingConfiguration(document.RootElement, options);
+        }
+
+        internal static RoutingConfiguration DeserializeRoutingConfiguration(JsonElement element, ModelReaderWriterOptions options = null)
+        {
+            options ??= ModelSerializationExtensions.WireOptions;
+
+            if (element.ValueKind == JsonValueKind.Null)
+            {
+                return null;
+            }
+            WritableSubResource associatedRouteTable = default;
+            PropagatedRouteTable propagatedRouteTables = default;
+            VnetRoute vnetRoutes = default;
+            WritableSubResource inboundRouteMap = default;
+            WritableSubResource outboundRouteMap = default;
+            IDictionary<string, BinaryData> serializedAdditionalRawData = default;
+            Dictionary<string, BinaryData> rawDataDictionary = new Dictionary<string, BinaryData>();
+            foreach (var property in element.EnumerateObject())
+            {
+                if (property.NameEquals("associatedRouteTable"u8))
+                {
+                    if (property.Value.ValueKind == JsonValueKind.Null)
+                    {
+                        continue;
+                    }
+                    associatedRouteTable = ModelReaderWriter.Read<WritableSubResource>(new BinaryData(Encoding.UTF8.GetBytes(property.Value.GetRawText())), options, AzureResourceManagerNetworkContext.Default);
+                    continue;
+                }
+                if (property.NameEquals("propagatedRouteTables"u8))
+                {
+                    if (property.Value.ValueKind == JsonValueKind.Null)
+                    {
+                        continue;
+                    }
+                    propagatedRouteTables = PropagatedRouteTable.DeserializePropagatedRouteTable(property.Value, options);
+                    continue;
+                }
+                if (property.NameEquals("vnetRoutes"u8))
+                {
+                    if (property.Value.ValueKind == JsonValueKind.Null)
+                    {
+                        continue;
+                    }
+                    vnetRoutes = VnetRoute.DeserializeVnetRoute(property.Value, options);
+                    continue;
+                }
+                if (property.NameEquals("inboundRouteMap"u8))
+                {
+                    if (property.Value.ValueKind == JsonValueKind.Null)
+                    {
+                        continue;
+                    }
+                    inboundRouteMap = ModelReaderWriter.Read<WritableSubResource>(new BinaryData(Encoding.UTF8.GetBytes(property.Value.GetRawText())), options, AzureResourceManagerNetworkContext.Default);
+                    continue;
+                }
+                if (property.NameEquals("outboundRouteMap"u8))
+                {
+                    if (property.Value.ValueKind == JsonValueKind.Null)
+                    {
+                        continue;
+                    }
+                    outboundRouteMap = ModelReaderWriter.Read<WritableSubResource>(new BinaryData(Encoding.UTF8.GetBytes(property.Value.GetRawText())), options, AzureResourceManagerNetworkContext.Default);
+                    continue;
+                }
+                if (options.Format != "W")
+                {
+                    rawDataDictionary.Add(property.Name, BinaryData.FromString(property.Value.GetRawText()));
+                }
+            }
+            serializedAdditionalRawData = rawDataDictionary;
+            return new RoutingConfiguration(
+                associatedRouteTable,
+                propagatedRouteTables,
+                vnetRoutes,
+                inboundRouteMap,
+                outboundRouteMap,
+                serializedAdditionalRawData);
+        }
+
+        BinaryData IPersistableModel<RoutingConfiguration>.Write(ModelReaderWriterOptions options)
+        {
+            var format = options.Format == "W" ? ((IPersistableModel<RoutingConfiguration>)this).GetFormatFromOptions(options) : options.Format;
+
+            switch (format)
+            {
+                case "J":
+                    return ModelReaderWriter.Write(this, options, AzureResourceManagerNetworkContext.Default);
+                default:
+                    throw new FormatException($"The model {nameof(RoutingConfiguration)} does not support writing '{options.Format}' format.");
+            }
+        }
+
+        RoutingConfiguration IPersistableModel<RoutingConfiguration>.Create(BinaryData data, ModelReaderWriterOptions options)
+        {
+            var format = options.Format == "W" ? ((IPersistableModel<RoutingConfiguration>)this).GetFormatFromOptions(options) : options.Format;
+
+            switch (format)
+            {
+                case "J":
+                    {
+                        using JsonDocument document = JsonDocument.Parse(data, ModelSerializationExtensions.JsonDocumentOptions);
+                        return DeserializeRoutingConfiguration(document.RootElement, options);
+                    }
+                default:
+                    throw new FormatException($"The model {nameof(RoutingConfiguration)} does not support reading '{options.Format}' format.");
+            }
+        }
+
+        string IPersistableModel<RoutingConfiguration>.GetFormatFromOptions(ModelReaderWriterOptions options) => "J";
     }
 }

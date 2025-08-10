@@ -1,5 +1,12 @@
 # Azure Time Series Insights client library for .NET
 
+---
+[//]: <> (This content is similar to https://github.com/MicrosoftDocs/azure-docs/blob/main/includes/tsi-retirement.md)
+
+**NOTE**
+>The Time Series Insights (TSI) service will no longer be supported after March 2025. Consider migrating existing TSI environments to alternative solutions as soon as possible. For more information on the deprecation and migration, visit our [documentation](https://aka.ms/tsi2adx).
+---
+
 Azure Time Series Insights provides data exploration and telemetry tools to help you improve operational analysis. It's a fully managed analytics, storage, and visualization service where you can explore and analyze billions of Internet of Things (IoT) events simultaneously.
 
 Azure Time Series Insights gives you a global view of your data, so you can quickly validate your IoT solution and avoid costly downtime to mission-critical devices. It can help you discover hidden trends, spot anomalies, and conduct root-cause analysis in near real time.
@@ -16,8 +23,8 @@ For the best development experience, developers should use the official Microsof
 
 Install the Azure Time Series Insights client library for .NET with NuGet:
 
-```PowerShell
-Install-Package Azure.IoT.TimeSeriesInsights
+```dotnetcli
+dotnet add package Azure.IoT.TimeSeriesInsights --prerelease
 ```
 
 View the package details at [nuget.org][tsi_nuget].
@@ -52,7 +59,7 @@ We guarantee that all client instance methods are thread-safe and independent of
 [Long-running operations](https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/core/Azure.Core/README.md#consuming-long-running-operations-using-operationt) |
 [Handling failures](https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/core/Azure.Core/README.md#reporting-errors-requestfailedexception) |
 [Diagnostics](https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/core/Azure.Core/samples/Diagnostics.md) |
-[Mocking](https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/core/Azure.Core/README.md#mocking) |
+[Mocking](https://learn.microsoft.com/dotnet/azure/sdk/unit-testing-mocking) |
 [Client lifetime](https://devblogs.microsoft.com/azure-sdk/lifetime-management-and-thread-safety-guarantees-of-azure-sdk-net-clients/)
 <!-- CLIENT COMMON BAR -->
 
@@ -141,20 +148,20 @@ For more information see the Code of Conduct FAQ or contact opencode@microsoft.c
 <!-- LINKS -->
 [microsoft_sdk_download]: https://azure.microsoft.com/downloads/?sdk=net
 [azure_sdk_target_frameworks]: https://github.com/azure/azure-sdk-for-net#target-frameworks
-[azure_cli]: https://docs.microsoft.com/cli/azure
+[azure_cli]: https://learn.microsoft.com/cli/azure
 [azure_sub]: https://azure.microsoft.com/free/dotnet/
 [package]: https://www.nuget.org/packages/Azure.IoT.TimeSeriesInsights
 [code_of_conduct]: https://opensource.microsoft.com/codeofconduct/
 [nuget]: https://www.nuget.org/
 [azure_portal]: https://portal.azure.com/
-[azure_rest_api]: https://docs.microsoft.com/rest/api/azure/
+[azure_rest_api]: https://learn.microsoft.com/rest/api/azure/
 [azure_core_library]: https://github.com/Azure/azure-sdk-for-net/tree/main/sdk/core/Azure.Core
-[token_credential]: https://docs.microsoft.com/dotnet/api/azure.core.tokencredential?view=azure-dotnet
-[azure_cli]: https://docs.microsoft.com/cli/azure/install-azure-cli?view=azure-cli-latest
+[token_credential]: https://learn.microsoft.com/dotnet/api/azure.core.tokencredential?view=azure-dotnet
+[azure_cli]: https://learn.microsoft.com/cli/azure/install-azure-cli?view=azure-cli-latest
 [iot_cli_extension]: https://github.com/Azure/azure-iot-cli-extension/releases
-[iot_cli_doc]: https://docs.microsoft.com/cli/azure/ext/azure-iot/dt?view=azure-cli-latest
-[http_status_code]: https://docs.microsoft.com/dotnet/api/system.net.httpstatuscode?view=netcore-3.1
+[iot_cli_doc]: https://learn.microsoft.com/cli/azure/ext/azure-iot/dt?view=azure-cli-latest
+[http_status_code]: https://learn.microsoft.com/dotnet/api/system.net.httpstatuscode?view=netcore-3.1
 [tsi_nuget]: https://www.nuget.org/packages/Azure.IoT.TimeSeriesInsights
 [tsi_client_src]: https://github.com/Azure/azure-sdk-for-net/tree/main/sdk/timeseriesinsights/Azure.IoT.TimeSeriesInsights/src
-[tsi_product_documentation]: https://docs.microsoft.com/azure/time-series-insights/
+[tsi_product_documentation]: https://learn.microsoft.com/azure/time-series-insights/
 [tsi_samples]: https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/timeseriesinsights/Azure.IoT.TimeSeriesInsights/samples/Readme.md

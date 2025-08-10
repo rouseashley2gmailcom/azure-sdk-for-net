@@ -30,11 +30,13 @@ namespace Azure.Storage.Blobs
             BlobHttpHeaders blobHttpHeaders,
             IDictionary<string, string> metadata,
             IDictionary<string, string> tags,
-            UploadTransactionalHashingOptions hashingOptions) : base(
+            UploadTransferValidationOptions transferValidation
+            ) : base(
                 position,
                 bufferSize,
                 progressHandler,
-                hashingOptions)
+                transferValidation
+                )
         {
             ValidateBufferSize(bufferSize);
             _blockBlobClient = blockBlobClient;
@@ -45,7 +47,10 @@ namespace Azure.Storage.Blobs
             _tags = tags;
         }
 
-        protected override async Task AppendInternal(bool async, CancellationToken cancellationToken)
+        protected override async Task AppendInternal(
+            UploadTransferValidationOptions validationOptions,
+            bool async,
+            CancellationToken cancellationToken)
         {
             if (_buffer.Length > 0)
             {
@@ -66,25 +71,21 @@ namespace Azure.Storage.Blobs
                 await _blockBlobClient.StageBlockInternal(
                     base64BlockId: blockId,
                     content: _buffer,
-                    new BlockBlobStageBlockOptions()
-                    {
-                        TransactionalHashingOptions = _hashingOptions,
-                        Conditions = conditions,
-                        ProgressHandler = _progressHandler
-                    },
+                    validationOptions,
+                    conditions: conditions,
+                    progressHandler: _progressHandler,
                     async: async,
                     cancellationToken: cancellationToken)
                     .ConfigureAwait(false);
 
                 _blockIds.Add(blockId);
-                _buffer.Clear();
             }
         }
 
-        protected override async Task FlushInternal(bool async, CancellationToken cancellationToken)
+        protected override async Task CommitInternal(
+            bool async,
+            CancellationToken cancellationToken)
         {
-            await AppendInternal(async, cancellationToken).ConfigureAwait(false);
-
             Response<BlobContentInfo> response = await _blockBlobClient.CommitBlockListInternal(
                 base64BlockIds: _blockIds,
                 blobHttpHeaders: _blobHttpHeaders,

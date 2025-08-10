@@ -15,25 +15,25 @@ namespace Azure.ResourceManager.CosmosDB.Models
     {
         private readonly string _value;
 
-        /// <summary> Determines if two <see cref="CompositePathSortOrder"/> values are the same. </summary>
+        /// <summary> Initializes a new instance of <see cref="CompositePathSortOrder"/>. </summary>
         /// <exception cref="ArgumentNullException"> <paramref name="value"/> is null. </exception>
         public CompositePathSortOrder(string value)
         {
             _value = value ?? throw new ArgumentNullException(nameof(value));
         }
 
-        private const string AscendingValue = "Ascending";
-        private const string DescendingValue = "Descending";
+        private const string AscendingValue = "ascending";
+        private const string DescendingValue = "descending";
 
-        /// <summary> Ascending. </summary>
+        /// <summary> ascending. </summary>
         public static CompositePathSortOrder Ascending { get; } = new CompositePathSortOrder(AscendingValue);
-        /// <summary> Descending. </summary>
+        /// <summary> descending. </summary>
         public static CompositePathSortOrder Descending { get; } = new CompositePathSortOrder(DescendingValue);
         /// <summary> Determines if two <see cref="CompositePathSortOrder"/> values are the same. </summary>
         public static bool operator ==(CompositePathSortOrder left, CompositePathSortOrder right) => left.Equals(right);
         /// <summary> Determines if two <see cref="CompositePathSortOrder"/> values are not the same. </summary>
         public static bool operator !=(CompositePathSortOrder left, CompositePathSortOrder right) => !left.Equals(right);
-        /// <summary> Converts a string to a <see cref="CompositePathSortOrder"/>. </summary>
+        /// <summary> Converts a <see cref="string"/> to a <see cref="CompositePathSortOrder"/>. </summary>
         public static implicit operator CompositePathSortOrder(string value) => new CompositePathSortOrder(value);
 
         /// <inheritdoc />
@@ -44,7 +44,7 @@ namespace Azure.ResourceManager.CosmosDB.Models
 
         /// <inheritdoc />
         [EditorBrowsable(EditorBrowsableState.Never)]
-        public override int GetHashCode() => _value?.GetHashCode() ?? 0;
+        public override int GetHashCode() => _value != null ? StringComparer.InvariantCultureIgnoreCase.GetHashCode(_value) : 0;
         /// <inheritdoc />
         public override string ToString() => _value;
     }

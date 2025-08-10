@@ -13,35 +13,20 @@ namespace Azure.Media.VideoAnalyzer.Edge.Models
     /// <summary> File sink allows for video and audio content to be recorded on the file system on the edge device. </summary>
     public partial class FileSink : SinkNodeBase
     {
-        /// <summary> Initializes a new instance of FileSink. </summary>
+        /// <summary> Initializes a new instance of <see cref="FileSink"/>. </summary>
         /// <param name="name"> Node name. Must be unique within the topology. </param>
         /// <param name="inputs"> An array of upstream node references within the topology to be used as inputs for this node. </param>
         /// <param name="baseDirectoryPath"> Absolute directory path where media files will be stored. </param>
         /// <param name="fileNamePattern"> File name pattern for creating new files when performing event based recording. The pattern must include at least one system variable. </param>
         /// <param name="maximumSizeMiB"> Maximum amount of disk space that can be used for storing files from this sink. Once this limit is reached, the oldest files from this sink will be automatically deleted. </param>
-        /// <exception cref="ArgumentNullException"> <paramref name="name"/>, <paramref name="inputs"/>, <paramref name="baseDirectoryPath"/>, <paramref name="fileNamePattern"/>, or <paramref name="maximumSizeMiB"/> is null. </exception>
+        /// <exception cref="ArgumentNullException"> <paramref name="name"/>, <paramref name="inputs"/>, <paramref name="baseDirectoryPath"/>, <paramref name="fileNamePattern"/> or <paramref name="maximumSizeMiB"/> is null. </exception>
         public FileSink(string name, IEnumerable<NodeInput> inputs, string baseDirectoryPath, string fileNamePattern, string maximumSizeMiB) : base(name, inputs)
         {
-            if (name == null)
-            {
-                throw new ArgumentNullException(nameof(name));
-            }
-            if (inputs == null)
-            {
-                throw new ArgumentNullException(nameof(inputs));
-            }
-            if (baseDirectoryPath == null)
-            {
-                throw new ArgumentNullException(nameof(baseDirectoryPath));
-            }
-            if (fileNamePattern == null)
-            {
-                throw new ArgumentNullException(nameof(fileNamePattern));
-            }
-            if (maximumSizeMiB == null)
-            {
-                throw new ArgumentNullException(nameof(maximumSizeMiB));
-            }
+            Argument.AssertNotNull(name, nameof(name));
+            Argument.AssertNotNull(inputs, nameof(inputs));
+            Argument.AssertNotNull(baseDirectoryPath, nameof(baseDirectoryPath));
+            Argument.AssertNotNull(fileNamePattern, nameof(fileNamePattern));
+            Argument.AssertNotNull(maximumSizeMiB, nameof(maximumSizeMiB));
 
             BaseDirectoryPath = baseDirectoryPath;
             FileNamePattern = fileNamePattern;
@@ -49,7 +34,7 @@ namespace Azure.Media.VideoAnalyzer.Edge.Models
             Type = "#Microsoft.VideoAnalyzer.FileSink";
         }
 
-        /// <summary> Initializes a new instance of FileSink. </summary>
+        /// <summary> Initializes a new instance of <see cref="FileSink"/>. </summary>
         /// <param name="type"> Type discriminator for the derived types. </param>
         /// <param name="name"> Node name. Must be unique within the topology. </param>
         /// <param name="inputs"> An array of upstream node references within the topology to be used as inputs for this node. </param>

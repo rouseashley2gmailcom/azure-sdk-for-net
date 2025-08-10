@@ -1,6 +1,8 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
+// Ignore Spelling: Accessor
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -30,6 +32,7 @@ namespace Azure.Messaging.EventHubs.Tests
         /// <summary>
         ///  The set of test cases for known described type properties.
         /// </summary>
+        ///
         public static IEnumerable<object[]> DescribedTypePropertyTestCases()
         {
             Func<object, object> TranslateValue = value =>
@@ -64,10 +67,22 @@ namespace Azure.Messaging.EventHubs.Tests
         }
 
         /// <summary>
-        ///  The set of test cases for optional idempotent publishing properties.
+        ///  The set of test cases for known described type properties.
         /// </summary>
         ///
-        public static IEnumerable<object[]> IdempotentPropertyTestCases()
+        public static IEnumerable<object[]> BinaryPropertyTestCases()
+        {
+            var contents = new byte[] { 0x55, 0x66, 0x99, 0xAA };
+
+            yield return new object[] { contents, contents };
+            yield return new object[] { new ArraySegment<byte>(contents), contents };
+        }
+
+        /// <summary>
+        ///  The set of test cases for optional publishing properties.
+        /// </summary>
+        ///
+        public static IEnumerable<object[]> PublisherPropertyTestCases()
         {
             // The values represent the test arguments:
             //   - Pending Sequence Number (int?)
@@ -213,10 +228,10 @@ namespace Azure.Messaging.EventHubs.Tests
         /// </summary>
         ///
         [Test]
-        [TestCaseSource(nameof(IdempotentPropertyTestCases))]
-        public void CreateMessageFromEventPopulatesIdempotentAnnotations(int? pendingSequenceNumber,
-                                                                         long? pendingGroupId,
-                                                                         short? pendingOwnerLevel)
+        [TestCaseSource(nameof(PublisherPropertyTestCases))]
+        public void CreateMessageFromEventPopulatesPublisherAnnotations(int? pendingSequenceNumber,
+                                                                        long? pendingGroupId,
+                                                                        short? pendingOwnerLevel)
         {
             var eventData = new EventData(new BinaryData(new byte[] { 0x11, 0x22, 0x33 }));
             eventData.PendingPublishSequenceNumber = pendingSequenceNumber;
@@ -323,6 +338,34 @@ namespace Azure.Messaging.EventHubs.Tests
         /// </summary>
         ///
         [Test]
+        [TestCaseSource(nameof(BinaryPropertyTestCases))]
+        public void CreateMessageFromEventTranslatesBinaryApplicationProperties(object property,
+                                                                                object contents)
+        {
+            var eventData = new EventData(
+                eventBody: new BinaryData(new byte[] { 0x11, 0x22, 0x33 }),
+                properties: new Dictionary<string, object> { { "TestProp", property } });
+
+            using AmqpMessage message = new AmqpMessageConverter().CreateMessageFromEvent(eventData);
+
+            Assert.That(message, Is.Not.Null, "The AMQP message should have been created.");
+            Assert.That(message.DataBody, Is.Not.Null, "The AMQP message should a body.");
+            Assert.That(message.ApplicationProperties, Is.Not.Null, "The AMQP message should have a set of application properties.");
+
+            var propertyKey = eventData.Properties.Keys.First();
+            var containsValue = message.ApplicationProperties.Map.TryGetValue(propertyKey, out object streamValue);
+
+            Assert.That(containsValue, Is.True, "The message properties did not contain the property.");
+            Assert.That(streamValue, Is.InstanceOf<ArraySegment<byte>>(), "The message property stream was not read correctly.");
+            Assert.That(((ArraySegment<byte>)streamValue).ToArray(), Is.EqualTo(contents), "The property value did not match.");
+        }
+
+        /// <summary>
+        ///   Verifies functionality of the <see cref="AmqpMessageConverter.CreateMessageFromEvent" />
+        ///   method.
+        /// </summary>
+        ///
+        [Test]
         public void CreateMessageFromEventFailsForUnknownApplicationPropertyType()
         {
             var eventData = new EventData(
@@ -376,7 +419,7 @@ namespace Azure.Messaging.EventHubs.Tests
         /// </summary>
         ///
         [Test]
-        public void CreateMessageFromEventDoesNotTriggerPropertiesInstantation()
+        public void CreateMessageFromEventDoesNotTriggerPropertiesInstantiation()
         {
             var eventData = new EventData(ReadOnlyMemory<byte>.Empty);
             using var message = new AmqpMessageConverter().CreateMessageFromEvent(eventData);
@@ -550,7 +593,7 @@ namespace Azure.Messaging.EventHubs.Tests
         [TestCase("")]
         public void CreateBatchFromEventsAllowsNoPartitionKey(string partitionKey)
         {
-            EventData[] events = new[] { new EventData(new BinaryData(new byte[] { 0x11, 0x22, 0x33 })) };
+            var events = new List<EventData> { new EventData(new BinaryData(new byte[] { 0x11, 0x22, 0x33 })) };
             Assert.That(() => new AmqpMessageConverter().CreateBatchFromEvents(events, partitionKey), Throws.Nothing);
         }
 
@@ -701,7 +744,7 @@ namespace Azure.Messaging.EventHubs.Tests
             var partitionKey = "sOmE-kEY";
             var firstEvent = new EventData(new BinaryData(new byte[] { 0x11, 0x22, 0x33 }));
             var secondEvent = new EventData(new byte[] { 0x44, 0x55, 0x66 });
-            EventData[] events = new[] { firstEvent, secondEvent };
+            var events = new[] { firstEvent, secondEvent };
             var converter = new AmqpMessageConverter();
 
             using AmqpMessage message = converter.CreateBatchFromEvents(events, partitionKey);
@@ -751,7 +794,9 @@ namespace Azure.Messaging.EventHubs.Tests
         public void CreateBatchFromMessagesAllowNoPartitionKey(string partitionKey)
         {
             var converter = new AmqpMessageConverter();
-            Assert.That(() => converter.CreateBatchFromMessages(new[] { AmqpMessage.Create() }, partitionKey), Throws.Nothing);
+
+            using var message = AmqpMessage.Create(new[] { new FramingData { Value = new ArraySegment<byte>(new byte[] { 0x11, 0x22 }) }});
+            Assert.That(() => converter.CreateBatchFromMessages(new List<AmqpMessage> { message }, partitionKey), Throws.Nothing);
         }
 
         /// <summary>
@@ -769,7 +814,7 @@ namespace Azure.Messaging.EventHubs.Tests
             var converter = new AmqpMessageConverter();
 
             using AmqpMessage source = converter.CreateMessageFromEvent(eventData);
-            using AmqpMessage batchEnvelope = converter.CreateBatchFromMessages(new[] { source }, partitionKey);
+            using AmqpMessage batchEnvelope = converter.CreateBatchFromMessages(new List<AmqpMessage> { source }, partitionKey);
             Assert.That(batchEnvelope, Is.Not.Null, "The batch envelope should have been created.");
             Assert.That(batchEnvelope.Batchable, Is.True, "The batch envelope should be set to batchable.");
             Assert.That(batchEnvelope.MessageFormat, Is.Null, "The batch envelope should be not be marked with a batchable format when created from one event.");
@@ -797,14 +842,15 @@ namespace Azure.Messaging.EventHubs.Tests
             var converter = new AmqpMessageConverter();
             using AmqpMessage first = converter.CreateMessageFromEvent(new EventData(new BinaryData(new byte[] { 0x11, 0x22, 0x33 })));
             using AmqpMessage second = converter.CreateMessageFromEvent(new EventData(new byte[] { 0x44, 0x55, 0x66 }));
-            AmqpMessage[] source = new[] { first, second };
 
+            var source = new List<AmqpMessage> { first, second };
             using AmqpMessage batchEnvelope = converter.CreateBatchFromMessages(source, partitionKey);
+
             Assert.That(batchEnvelope, Is.Not.Null, "The batch envelope should have been created.");
             Assert.That(batchEnvelope.Batchable, Is.True, "The batch envelope should be marked as batchable.");
             Assert.That(batchEnvelope.MessageFormat, Is.EqualTo(AmqpConstants.AmqpBatchedMessageFormat), "The batch envelope should be marked with a batchable format.");
             Assert.That(batchEnvelope.DataBody, Is.Not.Null, "The batch envelope should a body.");
-            Assert.That(batchEnvelope.DataBody.ToList().Count, Is.EqualTo(source.Length), "The batch envelope should contain each batch event in the body.");
+            Assert.That(batchEnvelope.DataBody.ToList().Count, Is.EqualTo(source.Count), "The batch envelope should contain each batch event in the body.");
             Assert.That(batchEnvelope.MessageAnnotations.Map.TryGetValue(AmqpProperty.PartitionKey, out string partitionKeyAnnotation), Is.EqualTo(!string.IsNullOrEmpty(partitionKey)), "There should be an annotation if a partition key was present.");
 
             if (!string.IsNullOrEmpty(partitionKey))
@@ -830,7 +876,7 @@ namespace Azure.Messaging.EventHubs.Tests
                 properties: new Dictionary<string, object> { { nameof(property), property } });
 
             using AmqpMessage source = converter.CreateMessageFromEvent(eventData);
-            using AmqpMessage batchEnvelope = converter.CreateBatchFromMessages(new[] { source }, "Something");
+            using AmqpMessage batchEnvelope = converter.CreateBatchFromMessages(new List<AmqpMessage> { source }, "Something");
             Assert.That(batchEnvelope, Is.Not.Null, "The batch envelope should have been created.");
             Assert.That(batchEnvelope.DataBody, Is.Not.Null, "The batch envelope should a body.");
 
@@ -865,14 +911,15 @@ namespace Azure.Messaging.EventHubs.Tests
 
             using AmqpMessage firstMessage = converter.CreateMessageFromEvent(firstEvent);
             using AmqpMessage secondMessage = converter.CreateMessageFromEvent(secondEvent);
-            AmqpMessage[] source = new[] { firstMessage, secondMessage };
 
+            var source = new List<AmqpMessage> { firstMessage, secondMessage };
             using AmqpMessage batchEnvelope = converter.CreateBatchFromMessages(source, null);
+
             Assert.That(batchEnvelope, Is.Not.Null, "The batch envelope should have been created.");
             Assert.That(batchEnvelope.DataBody, Is.Not.Null, "The batch envelope should a body.");
 
             var messageData = batchEnvelope.DataBody.ToList();
-            Assert.That(messageData.Count, Is.EqualTo(source.Length), "The batch envelope should contain each batch event in the body.");
+            Assert.That(messageData.Count, Is.EqualTo(source.Count), "The batch envelope should contain each batch event in the body.");
 
             // Reset the position for the stream properties, so that they
             // can be read for translation again.
@@ -880,7 +927,7 @@ namespace Azure.Messaging.EventHubs.Tests
             firstEventStream.Position = 0;
             secondEventStream.Position = 0;
 
-            for (var index = 0; index < source.Length; ++index)
+            for (var index = 0; index < source.Count; ++index)
             {
                 AmqpMessage eventMessage = source[index];
                 eventMessage.Batchable = true;
@@ -911,16 +958,16 @@ namespace Azure.Messaging.EventHubs.Tests
             using AmqpMessage firstMessage = converter.CreateMessageFromEvent(firstEvent, partitionKey);
             using AmqpMessage secondMessage = converter.CreateMessageFromEvent(secondEvent, partitionKey);
 
-            AmqpMessage[] source = new[] { firstMessage, secondMessage };
-
+            var source = new List<AmqpMessage> { firstMessage, secondMessage };
             using AmqpMessage batchEnvelope = converter.CreateBatchFromMessages(source, partitionKey);
+
             Assert.That(batchEnvelope, Is.Not.Null, "The batch envelope should have been created.");
             Assert.That(batchEnvelope.DataBody, Is.Not.Null, "The batch envelope should a body.");
 
             var messageData = batchEnvelope.DataBody.ToList();
-            Assert.That(messageData.Count, Is.EqualTo(source.Length), "The batch envelope should contain each batch event in the body.");
+            Assert.That(messageData.Count, Is.EqualTo(source.Count), "The batch envelope should contain each batch event in the body.");
 
-            for (var index = 0; index < source.Length; ++index)
+            for (var index = 0; index < source.Count; ++index)
             {
                 AmqpMessage eventMessage = source[index];
                 eventMessage.Batchable = true;
@@ -1169,7 +1216,7 @@ namespace Azure.Messaging.EventHubs.Tests
         [Test]
         public void CreateEventFromMessagePopulatesTypedSystemProperties()
         {
-            var offset = 123;
+            var offset = "123";
             var sequenceNumber = (long.MaxValue - 10);
             var enqueuedTime = DateTimeOffset.Parse("2015-10-27T12:00:00Z");
             var partitionKey = "OMG! partition!";
@@ -1180,7 +1227,7 @@ namespace Azure.Messaging.EventHubs.Tests
             message.ApplicationProperties.Map.Add("First", 1);
             message.ApplicationProperties.Map.Add("Second", "2");
 
-            message.MessageAnnotations.Map.Add(AmqpProperty.Offset, offset.ToString());
+            message.MessageAnnotations.Map.Add(AmqpProperty.Offset, offset);
             message.MessageAnnotations.Map.Add(AmqpProperty.SequenceNumber, sequenceNumber);
             message.MessageAnnotations.Map.Add(AmqpProperty.EnqueuedTime, enqueuedTime.Ticks);
             message.MessageAnnotations.Map.Add(AmqpProperty.PartitionKey, partitionKey);
@@ -1191,11 +1238,11 @@ namespace Azure.Messaging.EventHubs.Tests
             Assert.That(eventData, Is.Not.Null, "The event should have been created.");
             Assert.That(eventData.EventBody, Is.Not.Null, "The event should have a body.");
             Assert.That(eventData.Properties.Count, Is.EqualTo(message.ApplicationProperties.Map.Count()), "The event should have a set of properties.");
-            Assert.That(eventData.Offset, Is.EqualTo(offset), "The offset should match.");
+            Assert.That(eventData.OffsetString, Is.EqualTo(offset), "The offset should match.");
             Assert.That(eventData.SequenceNumber, Is.EqualTo(sequenceNumber), "The sequence number should match.");
             Assert.That(eventData.EnqueuedTime, Is.EqualTo(enqueuedTime), "The enqueue time should match.");
             Assert.That(eventData.PartitionKey, Is.EqualTo(partitionKey), "The partition key should match.");
-            Assert.That(eventData.LastPartitionOffset.HasValue, Is.False, "The last offset should not be set.");
+            Assert.That(eventData.LastPartitionOffset, Is.Null, "The last offset should not be set.");
             Assert.That(eventData.LastPartitionSequenceNumber.HasValue, Is.False, "The last sequence number should not be set.");
             Assert.That(eventData.LastPartitionEnqueuedTime.HasValue, Is.False, "The last enqueued time should not be set.");
             Assert.That(eventData.LastPartitionPropertiesRetrievalTime.HasValue, Is.False, "The last retrieval time should not be set.");
@@ -1246,8 +1293,8 @@ namespace Azure.Messaging.EventHubs.Tests
         [Test]
         public void CreateEventFromMessagePopulatesTypedSystemPropertiesAndMetrics()
         {
-            var offset = 123;
-            var lastOffset = 987;
+            string offset = "123";
+            var lastOffset = "987";
             var sequenceNumber = (long.MaxValue - 10);
             var lastSequenceNumber = (long.MaxValue - 100);
             var enqueuedTime = DateTimeOffset.Parse("2015-10-27T12:00:00Z");
@@ -1277,7 +1324,7 @@ namespace Azure.Messaging.EventHubs.Tests
             Assert.That(eventData, Is.Not.Null, "The event should have been created.");
             Assert.That(eventData.EventBody, Is.Not.Null, "The event should have a body.");
             Assert.That(eventData.Properties.Count, Is.EqualTo(message.ApplicationProperties.Map.Count()), "The event should have a set of properties.");
-            Assert.That(eventData.Offset, Is.EqualTo(offset), "The offset should match.");
+            Assert.That(eventData.OffsetString, Is.EqualTo(offset), "The offset should match.");
             Assert.That(eventData.SequenceNumber, Is.EqualTo(sequenceNumber), "The sequence number should match.");
             Assert.That(eventData.EnqueuedTime, Is.EqualTo(enqueuedTime), "The enqueue time should match.");
             Assert.That(eventData.PartitionKey, Is.EqualTo(partitionKey), "The partition key should match.");
@@ -1519,17 +1566,17 @@ namespace Azure.Messaging.EventHubs.Tests
         [Test]
         public void CreateEventFromMessageAllowsAnEmptyMessageWithProperties()
         {
-            var propertyValue = 1;
+            var propertyValue = "1";
 
             using var message = AmqpMessage.Create();
             message.ApplicationProperties.Map.Add("Test", propertyValue);
-            message.MessageAnnotations.Map.Add(AmqpProperty.Offset, propertyValue.ToString());
+            message.MessageAnnotations.Map.Add(AmqpProperty.Offset, propertyValue);
 
             var eventData = new AmqpMessageConverter().CreateEventFromMessage(message);
             Assert.That(eventData, Is.Not.Null, "The event should have been created.");
             Assert.That(eventData.Properties.Count, Is.EqualTo(message.ApplicationProperties.Map.Count()), "There should have been properties present.");
             Assert.That(eventData.Properties.First().Value, Is.EqualTo(propertyValue), "The application property should have been populated.");
-            Assert.That(eventData.Offset, Is.EqualTo(propertyValue), "The offset should have been populated.");
+            Assert.That(eventData.OffsetString, Is.EqualTo(propertyValue), "The offset should have been populated.");
         }
 
         /// <summary>
@@ -1650,11 +1697,11 @@ namespace Azure.Messaging.EventHubs.Tests
 
             // Properties
 
-            Assert.That(convertedMessage.Properties.AbsoluteExpiryTime, Is.EqualTo(sourceMessage.Properties.AbsoluteExpiryTime), "The expiry time should match.");
+            Assert.That(convertedMessage.Properties.AbsoluteExpiryTime!.Value.UtcDateTime, Is.EqualTo(tempMessage.Properties.CreationTime + sourceMessage.Header.TimeToLive), "The expiry time should be based on creation time and TimeToLive.");
             Assert.That(convertedMessage.Properties.ContentEncoding, Is.EqualTo(sourceMessage.Properties.ContentEncoding), "The content encoding should match.");
             Assert.That(convertedMessage.Properties.ContentType, Is.EqualTo(sourceMessage.Properties.ContentType), "The content type should match.");
             Assert.That(convertedMessage.Properties.CorrelationId, Is.EqualTo(sourceMessage.Properties.CorrelationId), "The correlation identifier should match.");
-            Assert.That(convertedMessage.Properties.CreationTime, Is.EqualTo(sourceMessage.Properties.CreationTime), "The creation time should match.");
+            Assert.That(convertedMessage.Properties.CreationTime!.Value.UtcDateTime, Is.EqualTo(tempMessage.Properties.CreationTime), "The creation time should match the computed creation time.");
             Assert.That(convertedMessage.Properties.GroupId, Is.EqualTo(sourceMessage.Properties.GroupId), "The group identifier should match.");
             Assert.That(convertedMessage.Properties.GroupSequence, Is.EqualTo(sourceMessage.Properties.GroupSequence), "The group sequence should match.");
             Assert.That(convertedMessage.Properties.MessageId, Is.EqualTo(sourceMessage.Properties.MessageId), "The message identifier should match.");
@@ -1712,6 +1759,31 @@ namespace Azure.Messaging.EventHubs.Tests
             Assert.That(sourceValue.Count, Is.EqualTo(1), "The source sequence should have one embedded list.");
             Assert.That(convertedValue.Count, Is.EqualTo(1), "The converted sequence should have one embedded list.");
             Assert.That(convertedValue.First(), Is.EquivalentTo(sourceValue.First()), "The sequence embedded list should match.");
+        }
+
+        /// <summary>
+        ///   Verifies functionality of the <see cref="AmqpMessageConverter.CreateMessageFromEvent" />
+        ///   method. Specifically, verifies that the TimeToLive property is respected when no AbsoluteExpiryTime is present.
+        /// </summary>
+        ///
+        [Test]
+        public void AnEventWithTimeToLiveCanBeTranslatedToItself()
+        {
+            var sourceValue = new Dictionary<string, string> { { "key", "value" } };
+            var sourceMessage = new AmqpAnnotatedMessage(AmqpMessageBody.FromValue(sourceValue));
+            sourceMessage.Header.TimeToLive = TimeSpan.FromDays(2);
+            var sourceEvent = new EventData(sourceMessage);
+
+            var converter = new AmqpMessageConverter();
+            using var tempMessage = converter.CreateMessageFromEvent(sourceEvent);
+            var convertedEvent = converter.CreateEventFromMessage(tempMessage);
+            var convertedMessage = convertedEvent.GetRawAmqpMessage();
+
+            Assert.That(tempMessage, Is.Not.Null, "The temporary AMQP message should have been created.");
+            Assert.That(convertedEvent, Is.Not.Null, "The translated event should have been created.");
+            Assert.That(convertedMessage.Body.TryGetValue(out var convertedValue), Is.True, "The message should have a value body.");
+            Assert.That(convertedValue, Is.EquivalentTo(sourceValue), "The value body should match.");
+            Assert.That(convertedMessage.Header.TimeToLive, Is.EqualTo(sourceMessage.Header.TimeToLive));
         }
 
         /// <summary>
@@ -1976,7 +2048,7 @@ namespace Azure.Messaging.EventHubs.Tests
             var partition = "55";
             var beginSequenceNumber = 555L;
             var lastSequenceNumber = 666L;
-            var lastOffset = 777L;
+            var lastOffset = "777L";
             var lastEnqueueTime = DateTimeOffset.Parse("2015-10-27T00:00:00z");
             var isEmpty = false;
             var converter = new AmqpMessageConverter();
@@ -1986,7 +2058,7 @@ namespace Azure.Messaging.EventHubs.Tests
                 { AmqpManagement.ResponseMap.PartitionIdentifier, partition },
                 { AmqpManagement.ResponseMap.PartitionBeginSequenceNumber, beginSequenceNumber },
                 { AmqpManagement.ResponseMap.PartitionLastEnqueuedSequenceNumber, lastSequenceNumber },
-                { AmqpManagement.ResponseMap.PartitionLastEnqueuedOffset, lastOffset.ToString() },
+                { AmqpManagement.ResponseMap.PartitionLastEnqueuedOffset, lastOffset },
                 { AmqpManagement.ResponseMap.PartitionLastEnqueuedTimeUtc, lastEnqueueTime.UtcDateTime },
                 { AmqpManagement.ResponseMap.PartitionRuntimeInfoPartitionIsEmpty, isEmpty }
             };
@@ -1999,9 +2071,103 @@ namespace Azure.Messaging.EventHubs.Tests
             Assert.That(properties.Id, Is.EqualTo(partition), "The partition should match");
             Assert.That(properties.BeginningSequenceNumber, Is.EqualTo(beginSequenceNumber), "The beginning sequence number should match");
             Assert.That(properties.LastEnqueuedSequenceNumber, Is.EqualTo(lastSequenceNumber), "The last sequence number should match");
-            Assert.That(properties.LastEnqueuedOffset, Is.EqualTo(lastOffset), "The offset should match");
+            Assert.That(properties.LastEnqueuedOffsetString, Is.EqualTo(lastOffset), "The offset should match");
             Assert.That(properties.LastEnqueuedTime, Is.EqualTo(lastEnqueueTime), "The last enqueued time should match");
             Assert.That(properties.IsEmpty, Is.EqualTo(isEmpty), "The empty flag should match");
+        }
+
+        /// <summary>
+        ///   Verifies functionality of the <see cref="AmqpMessageConverter.ApplyPublisherPropertiesToAmqpMessage" />
+        ///   method.
+        /// </summary>
+        ///
+        [Test]
+        [TestCaseSource(nameof(PublisherPropertyTestCases))]
+        public void ApplyPublisherPropertiesToAmqpMessageUpdatesTheMessage(int? sequenceNumber,
+                                                                          long? groupId,
+                                                                          short? ownerLevel)
+        {
+            var converter = new AmqpMessageConverter();
+
+            // Create an event and ensure that there are no pending publisher properties that would
+            // interfere with tests.
+
+            var eventData = new EventData(new BinaryData(new byte[] { 0x11, 0x22, 0x33 }));
+
+            Assert.That(eventData.PendingPublishSequenceNumber, Is.Null, "There should not be a pending sequence number on the event.");
+            Assert.That(eventData.PendingProducerGroupId, Is.Null, "There should not be a pending group id on the event.");
+            Assert.That(eventData.PendingProducerOwnerLevel, Is.Null, "There should not be a pending owner level on the event.");
+
+            // Translate the event to an AMQP message and ensure that it is in a valid form.
+
+            using AmqpMessage message = converter.CreateMessageFromEvent(eventData);
+
+            Assert.That(message, Is.Not.Null, "The AMQP message should have been created.");
+            Assert.That(message.DataBody, Is.Not.Null, "The AMQP message should a body.");
+            Assert.That(message.MessageAnnotations, Is.Not.Null, "The AMQP message annotations should be present.");
+            Assert.That(message.MessageAnnotations.Map.Any(item => item.Key.ToString() == AmqpProperty.ProducerSequenceNumber.Value), Is.False, "The publishing sequence number should not have been set.");
+            Assert.That(message.MessageAnnotations.Map.Any(item => item.Key.ToString() == AmqpProperty.ProducerGroupId.Value), Is.False, "The producer group should not have been set.");
+            Assert.That(message.MessageAnnotations.Map.Any(item => item.Key.ToString() == AmqpProperty.ProducerOwnerLevel.Value), Is.False, "The producer owner level should not have been set.");
+
+            // Apply the set of publisher properties and validate the outcome.
+
+            converter.ApplyPublisherPropertiesToAmqpMessage(message,sequenceNumber, groupId, ownerLevel);
+
+            if (sequenceNumber.HasValue)
+            {
+                Assert.That(message.MessageAnnotations.Map[AmqpProperty.ProducerSequenceNumber], Is.EqualTo(sequenceNumber.Value), "The publishing sequence number should have been set.");
+            }
+            else
+            {
+                Assert.That(message.MessageAnnotations.Map.Any(item => item.Key.ToString() == AmqpProperty.ProducerSequenceNumber.Value), Is.False, "The publishing sequence number should not have been set.");
+            }
+
+            if (groupId.HasValue)
+            {
+                Assert.That(message.MessageAnnotations.Map[AmqpProperty.ProducerGroupId], Is.EqualTo(groupId.Value), "The producer group should have been set.");
+            }
+            else
+            {
+                Assert.That(message.MessageAnnotations.Map.Any(item => item.Key.ToString() == AmqpProperty.ProducerGroupId.Value), Is.False, "The producer group should not have been set.");
+            }
+
+            if (ownerLevel.HasValue)
+            {
+                Assert.That(message.MessageAnnotations.Map[AmqpProperty.ProducerOwnerLevel], Is.EqualTo(ownerLevel.Value), "The producer owner level should have been set.");
+            }
+            else
+            {
+                Assert.That(message.MessageAnnotations.Map.Any(item => item.Key.ToString() == AmqpProperty.ProducerOwnerLevel.Value), Is.False, "The producer owner level should not have been set.");
+            }
+        }
+
+        /// <summary>
+        ///   Verifies functionality of the <see cref="AmqpMessageConverter.ApplyPublisherPropertiesToAmqpMessage" />
+        ///   method.
+        /// </summary>
+        ///
+        [Test]
+        public void RemovePublishingPropertiesFromAmqpMessageUpdatesTheMessage()
+        {
+            var converter = new AmqpMessageConverter();
+            var eventData = new EventData(new BinaryData(new byte[] { 0x11, 0x22, 0x33 }));
+
+            // Create a message and apply publishing properties.
+
+            using AmqpMessage message = converter.CreateMessageFromEvent(eventData);
+            converter.ApplyPublisherPropertiesToAmqpMessage(message, 77, 92, 4);
+
+            Assert.That(message.MessageAnnotations.Map.Any(item => item.Key.ToString() == AmqpProperty.ProducerSequenceNumber.Value), Is.True, "The publishing sequence number should have been set.");
+            Assert.That(message.MessageAnnotations.Map.Any(item => item.Key.ToString() == AmqpProperty.ProducerGroupId.Value), Is.True, "The producer group should have been set.");
+            Assert.That(message.MessageAnnotations.Map.Any(item => item.Key.ToString() == AmqpProperty.ProducerOwnerLevel.Value), Is.True, "The producer owner level should have been set.");
+
+            // Remove the publishing properties and verify.
+
+            converter.RemovePublishingPropertiesFromAmqpMessage(message);
+
+            Assert.That(message.MessageAnnotations.Map.Any(item => item.Key.ToString() == AmqpProperty.ProducerSequenceNumber.Value), Is.False, "The publishing sequence number should not be set.");
+            Assert.That(message.MessageAnnotations.Map.Any(item => item.Key.ToString() == AmqpProperty.ProducerGroupId.Value), Is.False, "The producer group should not be set.");
+            Assert.That(message.MessageAnnotations.Map.Any(item => item.Key.ToString() == AmqpProperty.ProducerOwnerLevel.Value), Is.False, "The producer owner level should not be set.");
         }
 
         /// <summary>

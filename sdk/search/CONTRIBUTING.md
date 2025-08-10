@@ -20,8 +20,8 @@ client libraries.  You can learn about these shared features in the
 
 ## Code Generation
 Please do not edit any of the code in the `/Generated` folders directly.  If
-you need to update a swagger file or change the generator, you can regenerate
-by running the `\sdk\search\generate.ps1` script.
+you need to update code in response to a swagger file change or a code generator update,
+you can regenerate the code by running `dotnet build /t:GenerateCode` in the `src` directory.
 
 ## Testing
 Please ensure all tests pass with any changes and additional tests are added to
@@ -60,8 +60,8 @@ The easiest way to run the tests is via Visual Studio's unit test runner.
 
 You can also run tests via the command line using `dotnet test`, but that will
 run tests for all supported platforms simultaneously and intermingle their
-output.  You can run the tests for just one platform with `dotnet test -f netcoreapp3.1`
-or `dotnet test -f net461`.
+output.  You can run the tests for just one platform with `dotnet test -f net8.0`
+or `dotnet test -f net462`.
 
 The recorded tests are run automatically on every pull request.  Live tests are
 run nightly.  Contributors with write access can ask Azure DevOps to run the
@@ -79,8 +79,6 @@ persisting these variables.
 Our samples are structured as unit tests so we can easily verify they're up to
 date and working correctly.  These tests make minimal use of test infrastructure
 to keep them easy to read.
-
-![Impressions](https://azure-sdk-impressions.azurewebsites.net/api/impressions/azure-sdk-for-net%2Fsdk%2Fsearch%2FCONTRIBUTING.png)
 
 <!-- LINKS -->
 [core_tests]: https://github.com/Azure/azure-sdk-for-net/tree/main/sdk/core/Azure.Core.TestFramework

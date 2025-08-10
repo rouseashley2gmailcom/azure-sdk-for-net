@@ -192,11 +192,13 @@ namespace Azure.Security.KeyVault.Secrets.Samples
         [Ignore("Used only for the migration guide")]
         private async Task MigrationGuide()
         {
+            {
             #region Snippet:Azure_Security_KeyVault_Secrets_Snippets_MigrationGuide_Create
             SecretClient client = new SecretClient(
                 new Uri("https://myvault.vault.azure.net"),
                 new DefaultAzureCredential());
             #endregion Snippet:Azure_Security_KeyVault_Secrets_Snippets_MigrationGuide_Create
+            }
 
             #region Snippet:Azure_Security_KeyVault_Secrets_Snippets_MigrationGuide_CreateWithOptions
             using (HttpClient httpClient = new HttpClient())
@@ -247,6 +249,22 @@ namespace Azure.Security.KeyVault.Secrets.Samples
                     KeyVaultSecret secret = client.GetSecret(item.Name);
                 }
                 #endregion Snippet:Azure_Security_KeyVault_Secrets_Snippets_MigrationGuide_ListSecrets
+            }
+
+            {
+                #region Snippet:Azure_Security_KeyVault_Secrets_Snippets_MigrationGuide_ListSecretVersions
+                // List all secrets asynchronously.
+                await foreach (SecretProperties item in client.GetPropertiesOfSecretVersionsAsync("secret-name"))
+                {
+                    KeyVaultSecret secret = await client.GetSecretAsync(item.Name, item.Version);
+                }
+
+                // List all secrets synchronously.
+                foreach (SecretProperties item in client.GetPropertiesOfSecretVersions("secret-name"))
+                {
+                    KeyVaultSecret secret = client.GetSecret(item.Name, item.Version);
+                }
+                #endregion Snippet:Azure_Security_KeyVault_Secrets_Snippets_MigrationGuide_ListSecretVersions
             }
 
             {

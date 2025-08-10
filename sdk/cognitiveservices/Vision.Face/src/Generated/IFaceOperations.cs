@@ -196,8 +196,8 @@ namespace Microsoft.Azure.CognitiveServices.Vision.Face
         /// largePersonGroupId should not be provided at the same time.
         /// </param>
         /// <param name='maxNumOfCandidatesReturned'>
-        /// The range of maxNumOfCandidatesReturned is between 1 and 5 (default
-        /// is 1).
+        /// The range of maxNumOfCandidatesReturned is between 1 and 100
+        /// (default is 1).
         /// </param>
         /// <param name='confidenceThreshold'>
         /// Confidence threshold of identification, used to judge whether one
@@ -273,8 +273,9 @@ namespace Microsoft.Azure.CognitiveServices.Vision.Face
         /// * Optional parameters include faceId, landmarks, and attributes.
         /// Attributes include age, gender, headPose, smile, facialHair,
         /// glasses, emotion, hair, makeup, occlusion, accessories, blur,
-        /// exposure, noise, and mask. Some of the results returned for
-        /// specific attributes may not be highly accurate.
+        /// exposure, noise, mask, and qualityForRecognition. Some of the
+        /// results returned for specific attributes may not be highly
+        /// accurate.
         /// * JPEG, PNG, GIF (the first frame), and BMP format are supported.
         /// The allowed image file size is from 1KB to 6MB.
         /// * Up to 100 faces can be returned for an image. Faces are ranked by
@@ -312,7 +313,8 @@ namespace Microsoft.Azure.CognitiveServices.Vision.Face
         /// </param>
         /// <param name='returnFaceId'>
         /// A value indicating whether the operation should return faceIds of
-        /// detected faces.
+        /// detected faces. Detecting with this value set to true requires
+        /// additional access approvals at https://aka.ms/facerecognition.
         /// </param>
         /// <param name='returnFaceLandmarks'>
         /// A value indicating whether the operation should return landmarks of
@@ -324,9 +326,12 @@ namespace Microsoft.Azure.CognitiveServices.Vision.Face
         /// available attributes depends on the 'detectionModel' specified.
         /// 'detection_01' supports age, gender, headPose, smile, facialHair,
         /// glasses, emotion, hair, makeup, occlusion, accessories, blur,
-        /// exposure, and noise. While 'detection_02' does not support any
-        /// attributes and 'detection_03' only supports mask. Note that each
-        /// face attribute analysis has additional computational and time cost.
+        /// exposure, noise, and qualityForRecognition. While 'detection_02'
+        /// does not support any attributes and 'detection_03' only supports
+        /// mask and qualityForRecognition. Additionally, qualityForRecognition
+        /// is only supported when the 'recognitionModel' is specified as
+        /// 'recognition_03' or 'recognition_04'. Note that each face attribute
+        /// analysis has additional computational and time cost.
         /// </param>
         /// <param name='recognitionModel'>
         /// Name of recognition model. Recognition model is used when the face
@@ -370,7 +375,7 @@ namespace Microsoft.Azure.CognitiveServices.Vision.Face
         /// <exception cref="Microsoft.Rest.ValidationException">
         /// Thrown when a required parameter is null
         /// </exception>
-        Task<HttpOperationResponse<IList<DetectedFace>>> DetectWithUrlWithHttpMessagesAsync(string url, bool? returnFaceId = true, bool? returnFaceLandmarks = false, IList<FaceAttributeType> returnFaceAttributes = default(IList<FaceAttributeType>), string recognitionModel = default(string), bool? returnRecognitionModel = false, string detectionModel = default(string), int? faceIdTimeToLive = 86400, Dictionary<string, List<string>> customHeaders = null, CancellationToken cancellationToken = default(CancellationToken));
+        Task<HttpOperationResponse<IList<DetectedFace>>> DetectWithUrlWithHttpMessagesAsync(string url, bool? returnFaceId = default(bool?), bool? returnFaceLandmarks = false, IList<FaceAttributeType> returnFaceAttributes = default(IList<FaceAttributeType>), string recognitionModel = default(string), bool? returnRecognitionModel = false, string detectionModel = default(string), int? faceIdTimeToLive = 86400, Dictionary<string, List<string>> customHeaders = null, CancellationToken cancellationToken = default(CancellationToken));
         /// <summary>
         /// Verify whether two faces belong to a same person. Compares a face
         /// Id with a Person Id
@@ -427,8 +432,9 @@ namespace Microsoft.Azure.CognitiveServices.Vision.Face
         /// * Optional parameters include faceId, landmarks, and attributes.
         /// Attributes include age, gender, headPose, smile, facialHair,
         /// glasses, emotion, hair, makeup, occlusion, accessories, blur,
-        /// exposure, noise, and mask. Some of the results returned for
-        /// specific attributes may not be highly accurate.
+        /// exposure, noise, mask, and qualityForRecognition. Some of the
+        /// results returned for specific attributes may not be highly
+        /// accurate.
         /// * JPEG, PNG, GIF (the first frame), and BMP format are supported.
         /// The allowed image file size is from 1KB to 6MB.
         /// * Up to 100 faces can be returned for an image. Faces are ranked by
@@ -465,7 +471,8 @@ namespace Microsoft.Azure.CognitiveServices.Vision.Face
         /// </param>
         /// <param name='returnFaceId'>
         /// A value indicating whether the operation should return faceIds of
-        /// detected faces.
+        /// detected faces. Detecting with this value set to true requires
+        /// additional access approvals at https://aka.ms/facerecognition.
         /// </param>
         /// <param name='returnFaceLandmarks'>
         /// A value indicating whether the operation should return landmarks of
@@ -477,9 +484,12 @@ namespace Microsoft.Azure.CognitiveServices.Vision.Face
         /// available attributes depends on the 'detectionModel' specified.
         /// 'detection_01' supports age, gender, headPose, smile, facialHair,
         /// glasses, emotion, hair, makeup, occlusion, accessories, blur,
-        /// exposure, and noise. While 'detection_02' does not support any
-        /// attributes and 'detection_03' only supports mask. Note that each
-        /// face attribute analysis has additional computational and time cost.
+        /// exposure, noise, and qualityForRecognition. While 'detection_02'
+        /// does not support any attributes and 'detection_03' only supports
+        /// mask and qualityForRecognition. Additionally, qualityForRecognition
+        /// is only supported when the 'recognitionModel' is specified as
+        /// 'recognition_03' or 'recognition_04'. Note that each face attribute
+        /// analysis has additional computational and time cost.
         /// </param>
         /// <param name='recognitionModel'>
         /// Name of recognition model. Recognition model is used when the face
@@ -523,6 +533,6 @@ namespace Microsoft.Azure.CognitiveServices.Vision.Face
         /// <exception cref="Microsoft.Rest.ValidationException">
         /// Thrown when a required parameter is null
         /// </exception>
-        Task<HttpOperationResponse<IList<DetectedFace>>> DetectWithStreamWithHttpMessagesAsync(Stream image, bool? returnFaceId = true, bool? returnFaceLandmarks = false, IList<FaceAttributeType> returnFaceAttributes = default(IList<FaceAttributeType>), string recognitionModel = default(string), bool? returnRecognitionModel = false, string detectionModel = default(string), int? faceIdTimeToLive = 86400, Dictionary<string, List<string>> customHeaders = null, CancellationToken cancellationToken = default(CancellationToken));
+        Task<HttpOperationResponse<IList<DetectedFace>>> DetectWithStreamWithHttpMessagesAsync(Stream image, bool? returnFaceId = default(bool?), bool? returnFaceLandmarks = false, IList<FaceAttributeType> returnFaceAttributes = default(IList<FaceAttributeType>), string recognitionModel = default(string), bool? returnRecognitionModel = false, string detectionModel = default(string), int? faceIdTimeToLive = 86400, Dictionary<string, List<string>> customHeaders = null, CancellationToken cancellationToken = default(CancellationToken));
     }
 }

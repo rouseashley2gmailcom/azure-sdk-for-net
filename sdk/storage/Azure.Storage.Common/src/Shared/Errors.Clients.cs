@@ -16,9 +16,6 @@ namespace Azure.Storage
         public static ArgumentException CannotBothBeNotNull(string param0, string param1)
             => new ArgumentException($"{param0} and {param1} cannot both be set");
 
-        public static ArgumentException InvalidArgument(string paramName)
-            => new ArgumentException($"{paramName} is invalid");
-
         public static ArgumentOutOfRangeException MustBeGreaterThanOrEqualTo(string paramName, long value)
             => new ArgumentOutOfRangeException(paramName, $"Value must be greater than or equal to {value}");
 
@@ -48,10 +45,16 @@ namespace Azure.Storage
             => new InvalidOperationException("Use of token credentials requires HTTPS");
 
         public static ArgumentException SasCredentialRequiresUriWithoutSas<TUriBuilder>(Uri uri)
-            => new ArgumentException(
-                $"You cannot use {nameof(AzureSasCredential)} when the resource URI also contains a Shared Access Signature: {uri}\n" +
+        {
+            UriBuilder uriBuilder = new UriBuilder(uri);
+            uriBuilder.Query = "[REDACTED]";
+            Uri redactedUri = uriBuilder.Uri;
+
+            return new ArgumentException(
+                $"You cannot use {nameof(AzureSasCredential)} when the resource URI also contains a Shared Access Signature: {redactedUri}\n" +
                 $"You can remove the shared access signature by creating a {typeof(TUriBuilder).Name}, setting {typeof(TUriBuilder).Name}.Sas to null," +
                 $" and calling {typeof(TUriBuilder).Name}.ToUri.");
+        }
 
         public static InvalidOperationException SasMissingData(string paramName)
             => new InvalidOperationException($"SAS is missing required parameter: {paramName}");
@@ -81,7 +84,7 @@ namespace Azure.Storage
             => new InvalidOperationException($"SAS Uri cannot be generated. {builderName}.{paramName} cannot be set to create a {sasType} SAS.");
 
         public static InvalidOperationException SasIncorrectResourceType(string builderName, string builderParam, string value, string clientName)
-            => new InvalidOperationException($"SAS Uri cannot be generated. Expected {builderName}.{builderParam} to be set to {value} to generate" +
+            => new InvalidOperationException($"SAS Uri cannot be generated. Expected {builderName}.{builderParam} to be set to {value} to generate " +
                 $"the respective SAS for the client, {clientName}");
 
         public static ArgumentException InvalidPermission(char s)
@@ -105,13 +108,8 @@ namespace Azure.Storage
         public static ArgumentException VersionNotSupported(string paramName)
             => new ArgumentException($"The version specified by {paramName} is not supported by this library.");
 
-        public static RequestFailedException ClientRequestIdMismatch(ClientDiagnostics clientDiagnostics, Response response, string echo, string original)
-            => clientDiagnostics.CreateRequestFailedExceptionWithContent(
-                response,
-                $"Response x-ms-client-request-id '{echo}' does not match the original expected request id, '{original}'.", errorCode: response.GetErrorCode(null));
-
-        public static ArgumentException CannotDeferTransactionalHashVerification()
-            => new ArgumentException("Cannot defer transactional hash verification. Returned hash is unavailable to caller.");
+        public static RequestFailedException ClientRequestIdMismatch(Response response, string echo, string original)
+            => new RequestFailedException(response.Status, $"Response x-ms-client-request-id '{echo}' does not match the original expected request id, '{original}'.", null);
 
         public static ArgumentException TransactionalHashingNotSupportedWithClientSideEncryption()
             => new ArgumentException("Client-side encryption and transactional hashing are not supported at the same time.");
@@ -126,6 +124,9 @@ namespace Azure.Storage
 
         public static class ClientSideEncryption
         {
+            public static ArgumentException UnrecognizedVersion()
+                => new ArgumentException($"Unrecognized ClientSideEncryptionVersion");
+
             public static InvalidOperationException ClientSideEncryptionVersionNotSupported(string versionString = default)
                 => new InvalidOperationException("This library does not support the given version of client-side encryption." +
                     versionString == default ? "" : $" Version ID = {versionString}");

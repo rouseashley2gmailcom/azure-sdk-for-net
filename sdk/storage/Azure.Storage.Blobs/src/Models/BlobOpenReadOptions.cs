@@ -17,7 +17,7 @@ namespace Azure.Storage.Blobs.Models
         public long Position { get; set; }
 
         /// <summary>
-        /// The buffer size to use when the stream downloads parts
+        /// The buffer size (in bytes) to use when the stream downloads parts
         /// of the blob.  Defaults to 4 MB.
         /// </summary>
         public int? BufferSize { get; set; }
@@ -29,9 +29,11 @@ namespace Azure.Storage.Blobs.Models
         public BlobRequestConditions Conditions { get; set; }
 
         /// <summary>
-        /// Optional transactional hashing options.
+        /// Optional override settings for this client's <see cref="BlobClientOptions.TransferValidation"/> settings.
+        /// This operation does not allow <see cref="DownloadTransferValidationOptions.AutoValidateChecksum"/>
+        /// to be set false.
         /// </summary>
-        public DownloadTransactionalHashingOptions TransactionalHashingOptions { get; set; }
+        public DownloadTransferValidationOptions TransferValidation { get; set; }
 
         internal bool AllowModifications { get; }
 

@@ -1,136 +1,157 @@
-// Copyright (c) Microsoft Corporation. All rights reserved.
+﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Azure.AI.Language.Conversations.Models;
 using Azure.Core;
 using Azure.Core.Pipeline;
 
 namespace Azure.AI.Language.Conversations
 {
-    /// <summary>
-    /// The <see cref="ConversationAnalysisClient"/> allows you analyze conversations.
-    /// </summary>
-    public class ConversationAnalysisClient
+    public partial class ConversationAnalysisClient
     {
-        internal const string AuthorizationHeader = "Ocp-Apim-Subscription-Key";
-
-        private readonly ConversationAnalysisRestClient _analysisRestClient;
-
         /// <summary>
-        /// Initializes a new instance of the <see cref="ConversationAnalysisClient"/> class.
+        /// Gets the service endpoint for this client.
         /// </summary>
-        /// <param name="endpoint">The Conversation Analysis endpoint on which to operate.</param>
-        /// <param name="credential">An <see cref="AzureKeyCredential"/> used to authenticate requests to the <paramref name="endpoint"/>.</param>
-        /// <exception cref="ArgumentNullException"><paramref name="endpoint"/> or <paramref name="credential"/> is null.</exception>
-        public ConversationAnalysisClient(Uri endpoint, AzureKeyCredential credential) : this(endpoint, credential, null)
-        {
-        }
+        public virtual Uri Endpoint => _endpoint;
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="ConversationAnalysisClient"/> class.
-        /// </summary>
-        /// <param name="endpoint">The Conversation Analysis endpoint on which to operate.</param>
-        /// <param name="credential">An <see cref="AzureKeyCredential"/> used to authenticate requests to the <paramref name="endpoint"/>.</param>
-        /// <param name="options">Optional <see cref="ConversationAnalysisClientOptions"/> to customize requests sent to the endpoint.</param>
-        /// <exception cref="ArgumentNullException"><paramref name="endpoint"/> or <paramref name="credential"/> is null.</exception>
-        public ConversationAnalysisClient(Uri endpoint, AzureKeyCredential credential, ConversationAnalysisClientOptions options)
+        private readonly TokenCredential _tokenCredential;
+
+        /// <summary> Initializes a new instance of ConversationAnalysisClient. </summary>
+        /// <param name="endpoint"> Supported Cognitive Services endpoint (e.g., https://&lt;resource-name&gt;.cognitiveservices.azure.com). </param>
+        /// <param name="credential"> A credential used to authenticate to an Azure Service. </param>
+        /// <param name="options"> The options for configuring the client. </param>
+        /// <exception cref="ArgumentNullException"> <paramref name="endpoint"/> or <paramref name="credential"/> is null. </exception>
+        public ConversationAnalysisClient(Uri endpoint, TokenCredential credential, ConversationsClientOptions options)
         {
             Argument.AssertNotNull(endpoint, nameof(endpoint));
             Argument.AssertNotNull(credential, nameof(credential));
+            options ??= new ConversationsClientOptions();
 
-            Endpoint = endpoint;
-            options ??= new ConversationAnalysisClientOptions();
+            var authorizationScope = $"{(string.IsNullOrEmpty(options.Audience?.ToString()) ? ConversationsAudience.AzurePublicCloud : options.Audience)}/.default";
 
-            Diagnostics = new ClientDiagnostics(options);
-            Pipeline = HttpPipelineBuilder.Build(
-                options,
-                new AzureKeyCredentialPolicy(credential, AuthorizationHeader));
+            _tokenCredential = credential;
 
-            _analysisRestClient = new(Diagnostics, Pipeline, Endpoint, options.Version);
+            ClientDiagnostics = new ClientDiagnostics(options, true);
+            _pipeline = HttpPipelineBuilder.Build(options, new HttpPipelinePolicy[] { new BearerTokenAuthenticationPolicy(credential, authorizationScope) }, Array.Empty<HttpPipelinePolicy>(), new ResponseClassifier());
+            _endpoint = endpoint;
+            _apiVersion = options.Version;
         }
 
         /// <summary>
-        /// Protected constructor to allow mocking.
+        /// Convenience method to submit an analysis long running operation for conversations and return the response once processed.
+        /// <param name="analyzeConversationOperationInput"> The input for the analyze conversations operation. </param>
+        /// <param name="cancellationToken"> The cancellation token to use. </param>
+        /// <exception cref="ArgumentNullException"> <paramref name="analyzeConversationOperationInput"/> is null. </exception>
+        /// <exception cref="RequestFailedException"> Service returned a non-success status code. </exception>
+        /// <returns> The <see cref="Response"/> representing the result of the long running operation on the service. </returns>
         /// </summary>
-        protected ConversationAnalysisClient()
+        public virtual Response<AnalyzeConversationOperationState> AnalyzeConversations(AnalyzeConversationOperationInput analyzeConversationOperationInput, CancellationToken cancellationToken = default)
         {
+            Argument.AssertNotNull(analyzeConversationOperationInput, nameof(analyzeConversationOperationInput));
+
+            using RequestContent content = analyzeConversationOperationInput.ToRequestContent();
+            RequestContext context = FromCancellationToken(cancellationToken);
+
+            Operation<BinaryData> operation = AnalyzeConversations(WaitUntil.Completed, content, context);
+            Response response = operation.GetRawResponse();
+            return Response.FromValue(AnalyzeConversationOperationState.FromResponse(response), response);
         }
 
         /// <summary>
-        /// Get the service endpoint for this client.
+        /// Convenience method to submit an analysis long running operation for conversations and return the response once processed.
+        /// <param name="analyzeConversationOperationInput"> The input for the analyze conversations operation. </param>
+        /// <param name="cancellationToken"> The cancellation token to use. </param>
+        /// <exception cref="ArgumentNullException"> <paramref name="analyzeConversationOperationInput"/> is null. </exception>
+        /// <exception cref="RequestFailedException"> Service returned a non-success status code. </exception>
+        /// <returns> The <see cref="Response"/> representing the result of the long running operation on the service. </returns>
         /// </summary>
-        public virtual Uri Endpoint { get; }
-
-        /// <summary>
-        /// Gets the <see cref="ClientDiagnostics"/> for this client.
-        /// </summary>
-        private protected virtual ClientDiagnostics Diagnostics { get; }
-
-        /// <summary>
-        /// Gets the <see cref="HttpPipeline"/> for this client.
-        /// </summary>
-        private protected virtual HttpPipeline Pipeline { get; }
-
-        /// <summary>Analyzes a conversational utterance.</summary>
-        /// <param name="utterance">The conversation utterance to be analyzed.</param>
-        /// <param name="project">The <see cref="ConversationsProject"/> used for conversation analysis.</param>
-        /// <param name="options">Optional <see cref="AnalyzeConversationOptions"/> with additional query options.</param>
-        /// <param name="cancellationToken">An optional <see cref="CancellationToken"/> to cancel the request.</param>
-        /// <exception cref="ArgumentNullException"><paramref name="project"/> or <paramref name="utterance"/> is null.</exception>
-        /// <exception cref="RequestFailedException">The service returned an error. The exception contains details of the service error.</exception>
-        public virtual async Task<Response<AnalyzeConversationResult>> AnalyzeConversationAsync(string utterance, ConversationsProject project, AnalyzeConversationOptions options = null, CancellationToken cancellationToken = default)
+        public virtual async Task<Response<AnalyzeConversationOperationState>> AnalyzeConversationsAsync(AnalyzeConversationOperationInput analyzeConversationOperationInput, CancellationToken cancellationToken = default)
         {
-            Argument.AssertNotNull(project, nameof(project));
-            Argument.AssertNotNull(utterance, nameof(utterance));
+            Argument.AssertNotNull(analyzeConversationOperationInput, nameof(analyzeConversationOperationInput));
 
-            options = options ?? new();
-            options.Utterance = utterance;
+            using RequestContent content = analyzeConversationOperationInput.ToRequestContent();
+            RequestContext context = FromCancellationToken(cancellationToken);
 
-            using DiagnosticScope scope = Diagnostics.CreateScope($"{nameof(ConversationAnalysisClient)}.{nameof(AnalyzeConversation)}");
-            scope.AddAttribute("projectName", project.ProjectName);
-            scope.AddAttribute("deploymentName", project.DeploymentName);
+            Operation<BinaryData> operation = await AnalyzeConversationsAsync(WaitUntil.Completed, content, context).ConfigureAwait(false);
+            Response response = operation.GetRawResponse();
+            return Response.FromValue(AnalyzeConversationOperationState.FromResponse(response), response);
+        }
+
+        /// <summary>
+        /// [Protocol Method] Submits an analysis long running operation for conversations and return the response once processed.
+        /// <list type="bullet">
+        /// <item>
+        /// <description>
+        /// This <see href="https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/core/Azure.Core/samples/ProtocolMethods.md">protocol method</see> allows explicit creation of the request and processing of the response for advanced scenarios.
+        /// </description>
+        /// </item>
+        /// <item>
+        /// <description>
+        /// Please try the simpler <see cref="AnalyzeConversations(AnalyzeConversationOperationInput,CancellationToken)"/> convenience overload with strongly typed models first.
+        /// </description>
+        /// </item>
+        /// </list>
+        /// </summary>
+        /// <param name="waitUntil"> <see cref="WaitUntil.Completed"/> if the method should wait to return until the long-running operation has completed on the service; <see cref="WaitUntil.Started"/> if it should return after starting the operation. For more information on long-running operations, please see <see href="https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/core/Azure.Core/samples/LongRunningOperations.md"> Azure.Core Long-Running Operation samples</see>. </param>
+        /// <param name="content"> The content to send as the body of the request. </param>
+        /// <param name="context"> The request context, which can override default behaviors of the client pipeline on a per-call basis. </param>
+        /// <exception cref="ArgumentNullException"> <paramref name="content"/> is null. </exception>
+        /// <exception cref="RequestFailedException"> Service returned a non-success status code. </exception>
+        /// <returns> The <see cref="Operation"/> representing an asynchronous operation on the service. </returns>
+        public virtual Operation<BinaryData> AnalyzeConversations(WaitUntil waitUntil, RequestContent content, RequestContext context = default)
+        {
+            using DiagnosticScope scope = ClientDiagnostics.CreateScope("ConversationAnalysisClient.AnalyzeConversations");
             scope.Start();
 
             try
             {
-                return await _analysisRestClient.AnalyzeConversationAsync(project.ProjectName, project.DeploymentName, options, cancellationToken).ConfigureAwait(false);
+                using HttpMessage message = CreateAnalyzeConversationSubmitOperationRequest(content, context);
+                return ProtocolOperationHelpers.ProcessMessage(_pipeline, message, ClientDiagnostics, "ConversationAnalysisClient.AnalyzeConversations", OperationFinalStateVia.OperationLocation, context, WaitUntil.Completed);
             }
-            catch (Exception ex)
+            catch (Exception e)
             {
-                scope.Failed(ex);
+                scope.Failed(e);
                 throw;
             }
         }
 
-        /// <summary>Analyzes a conversational utterance.</summary>
-        /// <param name="utterance">The conversation utterance to be analyzed.</param>
-        /// <param name="project">The <see cref="ConversationsProject"/> used for conversation analysis.</param>
-        /// <param name="options">Optional <see cref="AnalyzeConversationOptions"/> with additional query options.</param>
-        /// <param name="cancellationToken">An optional <see cref="CancellationToken"/> to cancel the request.</param>
-        /// <exception cref="ArgumentNullException"><paramref name="project"/> or <paramref name="utterance"/> is null.</exception>
-        /// <exception cref="RequestFailedException">The service returned an error. The exception contains details of the service error.</exception>
-        public virtual Response<AnalyzeConversationResult> AnalyzeConversation(string utterance, ConversationsProject project, AnalyzeConversationOptions options = null, CancellationToken cancellationToken = default)
+        /// <summary>
+        /// [Protocol Method] Submits an analysis long running operation for conversations and return the response once processed.
+        /// <list type="bullet">
+        /// <item>
+        /// <description>
+        /// This <see href="https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/core/Azure.Core/samples/ProtocolMethods.md">protocol method</see> allows explicit creation of the request and processing of the response for advanced scenarios.
+        /// </description>
+        /// </item>
+        /// <item>
+        /// <description>
+        /// Please try the simpler <see cref="AnalyzeConversationsAsync(AnalyzeConversationOperationInput,CancellationToken)"/> convenience overload with strongly typed models first.
+        /// </description>
+        /// </item>
+        /// </list>
+        /// </summary>
+        /// <param name="waitUntil"> <see cref="WaitUntil.Completed"/> if the method should wait to return until the long-running operation has completed on the service; <see cref="WaitUntil.Started"/> if it should return after starting the operation. For more information on long-running operations, please see <see href="https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/core/Azure.Core/samples/LongRunningOperations.md"> Azure.Core Long-Running Operation samples</see>. </param>
+        /// <param name="content"> The content to send as the body of the request. </param>
+        /// <param name="context"> The request context, which can override default behaviors of the client pipeline on a per-call basis. </param>
+        /// <exception cref="ArgumentNullException"> <paramref name="content"/> is null. </exception>
+        /// <exception cref="RequestFailedException"> Service returned a non-success status code. </exception>
+        /// <returns> The <see cref="Operation"/> representing an asynchronous operation on the service. </returns>
+        public virtual async Task<Operation<BinaryData>> AnalyzeConversationsAsync(WaitUntil waitUntil, RequestContent content, RequestContext context = default)
         {
-            Argument.AssertNotNull(project, nameof(project));
-            Argument.AssertNotNull(utterance, nameof(utterance));
-
-            options = options ?? new();
-            options.Utterance = utterance;
-
-            using DiagnosticScope scope = Diagnostics.CreateScope($"{nameof(ConversationAnalysisClient)}.{nameof(AnalyzeConversation)}");
-            scope.AddAttribute("projectName", project.ProjectName);
-            scope.AddAttribute("deploymentName", project.DeploymentName);
+            using DiagnosticScope scope = ClientDiagnostics.CreateScope("ConversationAnalysisClient.AnalyzeConversations");
             scope.Start();
 
             try
             {
-                return _analysisRestClient.AnalyzeConversation(project.ProjectName, project.DeploymentName, options, cancellationToken);
+                using HttpMessage message = CreateAnalyzeConversationSubmitOperationRequest(content, context);
+                return await ProtocolOperationHelpers.ProcessMessageAsync(_pipeline, message, ClientDiagnostics, "ConversationAnalysisClient.AnalyzeConversations", OperationFinalStateVia.OperationLocation, context, WaitUntil.Completed).ConfigureAwait(false);
             }
-            catch (Exception ex)
+            catch (Exception e)
             {
-                scope.Failed(ex);
+                scope.Failed(e);
                 throw;
             }
         }

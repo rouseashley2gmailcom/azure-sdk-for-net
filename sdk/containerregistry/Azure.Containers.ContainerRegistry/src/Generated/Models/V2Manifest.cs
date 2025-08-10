@@ -6,25 +6,24 @@
 #nullable disable
 
 using System.Collections.Generic;
-using Azure.Core;
 
 namespace Azure.Containers.ContainerRegistry
 {
     /// <summary> Returns the requested Docker V2 Manifest file. </summary>
     internal partial class V2Manifest : Manifest
     {
-        /// <summary> Initializes a new instance of V2Manifest. </summary>
-        public V2Manifest()
+        /// <summary> Initializes a new instance of <see cref="V2Manifest"/>. </summary>
+        internal V2Manifest()
         {
-            Layers = new ChangeTrackingList<Descriptor>();
+            Layers = new ChangeTrackingList<OciDescriptor>();
         }
 
-        /// <summary> Initializes a new instance of V2Manifest. </summary>
+        /// <summary> Initializes a new instance of <see cref="V2Manifest"/>. </summary>
         /// <param name="schemaVersion"> Schema version. </param>
         /// <param name="mediaType"> Media type for this Manifest. </param>
         /// <param name="config"> V2 image config descriptor. </param>
         /// <param name="layers"> List of V2 image layer information. </param>
-        internal V2Manifest(int? schemaVersion, string mediaType, Descriptor config, IList<Descriptor> layers) : base(schemaVersion)
+        internal V2Manifest(int? schemaVersion, string mediaType, OciDescriptor config, IReadOnlyList<OciDescriptor> layers) : base(schemaVersion)
         {
             MediaType = mediaType;
             Config = config;
@@ -32,10 +31,10 @@ namespace Azure.Containers.ContainerRegistry
         }
 
         /// <summary> Media type for this Manifest. </summary>
-        public string MediaType { get; set; }
+        public string MediaType { get; }
         /// <summary> V2 image config descriptor. </summary>
-        public Descriptor Config { get; set; }
+        public OciDescriptor Config { get; }
         /// <summary> List of V2 image layer information. </summary>
-        public IList<Descriptor> Layers { get; }
+        public IReadOnlyList<OciDescriptor> Layers { get; }
     }
 }

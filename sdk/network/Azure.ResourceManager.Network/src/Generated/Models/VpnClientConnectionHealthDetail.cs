@@ -5,22 +5,57 @@
 
 #nullable disable
 
+using System;
+using System.Collections.Generic;
+
 namespace Azure.ResourceManager.Network.Models
 {
     /// <summary> VPN client connection health detail. </summary>
     public partial class VpnClientConnectionHealthDetail
     {
-        /// <summary> Initializes a new instance of VpnClientConnectionHealthDetail. </summary>
+        /// <summary>
+        /// Keeps track of any properties unknown to the library.
+        /// <para>
+        /// To assign an object to the value of this property use <see cref="BinaryData.FromObjectAsJson{T}(T, System.Text.Json.JsonSerializerOptions?)"/>.
+        /// </para>
+        /// <para>
+        /// To assign an already formatted json string to this property use <see cref="BinaryData.FromString(string)"/>.
+        /// </para>
+        /// <para>
+        /// Examples:
+        /// <list type="bullet">
+        /// <item>
+        /// <term>BinaryData.FromObjectAsJson("foo")</term>
+        /// <description>Creates a payload of "foo".</description>
+        /// </item>
+        /// <item>
+        /// <term>BinaryData.FromString("\"foo\"")</term>
+        /// <description>Creates a payload of "foo".</description>
+        /// </item>
+        /// <item>
+        /// <term>BinaryData.FromObjectAsJson(new { key = "value" })</term>
+        /// <description>Creates a payload of { "key": "value" }.</description>
+        /// </item>
+        /// <item>
+        /// <term>BinaryData.FromString("{\"key\": \"value\"}")</term>
+        /// <description>Creates a payload of { "key": "value" }.</description>
+        /// </item>
+        /// </list>
+        /// </para>
+        /// </summary>
+        private IDictionary<string, BinaryData> _serializedAdditionalRawData;
+
+        /// <summary> Initializes a new instance of <see cref="VpnClientConnectionHealthDetail"/>. </summary>
         internal VpnClientConnectionHealthDetail()
         {
         }
 
-        /// <summary> Initializes a new instance of VpnClientConnectionHealthDetail. </summary>
+        /// <summary> Initializes a new instance of <see cref="VpnClientConnectionHealthDetail"/>. </summary>
         /// <param name="vpnConnectionId"> The vpn client Id. </param>
-        /// <param name="vpnConnectionDuration"> The duration time of a connected vpn client. </param>
-        /// <param name="vpnConnectionTime"> The start time of a connected vpn client. </param>
-        /// <param name="publicIpAddress"> The public Ip of a connected vpn client. </param>
-        /// <param name="privateIpAddress"> The assigned private Ip of a connected vpn client. </param>
+        /// <param name="vpnConnectionDurationInSeconds"> The duration time of a connected vpn client. </param>
+        /// <param name="vpnConnectionOn"> The start time of a connected vpn client. </param>
+        /// <param name="publicIPAddress"> The public Ip of a connected vpn client. </param>
+        /// <param name="privateIPAddress"> The assigned private Ip of a connected vpn client. </param>
         /// <param name="vpnUserName"> The user name of a connected vpn client. </param>
         /// <param name="maxBandwidth"> The max band width. </param>
         /// <param name="egressPacketsTransferred"> The egress packets per second. </param>
@@ -28,13 +63,14 @@ namespace Azure.ResourceManager.Network.Models
         /// <param name="ingressPacketsTransferred"> The ingress packets per second. </param>
         /// <param name="ingressBytesTransferred"> The ingress bytes per second. </param>
         /// <param name="maxPacketsPerSecond"> The max packets transferred per second. </param>
-        internal VpnClientConnectionHealthDetail(string vpnConnectionId, long? vpnConnectionDuration, string vpnConnectionTime, string publicIpAddress, string privateIpAddress, string vpnUserName, long? maxBandwidth, long? egressPacketsTransferred, long? egressBytesTransferred, long? ingressPacketsTransferred, long? ingressBytesTransferred, long? maxPacketsPerSecond)
+        /// <param name="serializedAdditionalRawData"> Keeps track of any properties unknown to the library. </param>
+        internal VpnClientConnectionHealthDetail(string vpnConnectionId, long? vpnConnectionDurationInSeconds, DateTimeOffset? vpnConnectionOn, string publicIPAddress, string privateIPAddress, string vpnUserName, long? maxBandwidth, long? egressPacketsTransferred, long? egressBytesTransferred, long? ingressPacketsTransferred, long? ingressBytesTransferred, long? maxPacketsPerSecond, IDictionary<string, BinaryData> serializedAdditionalRawData)
         {
             VpnConnectionId = vpnConnectionId;
-            VpnConnectionDuration = vpnConnectionDuration;
-            VpnConnectionTime = vpnConnectionTime;
-            PublicIpAddress = publicIpAddress;
-            PrivateIpAddress = privateIpAddress;
+            VpnConnectionDurationInSeconds = vpnConnectionDurationInSeconds;
+            VpnConnectionOn = vpnConnectionOn;
+            PublicIPAddress = publicIPAddress;
+            PrivateIPAddress = privateIPAddress;
             VpnUserName = vpnUserName;
             MaxBandwidth = maxBandwidth;
             EgressPacketsTransferred = egressPacketsTransferred;
@@ -42,18 +78,19 @@ namespace Azure.ResourceManager.Network.Models
             IngressPacketsTransferred = ingressPacketsTransferred;
             IngressBytesTransferred = ingressBytesTransferred;
             MaxPacketsPerSecond = maxPacketsPerSecond;
+            _serializedAdditionalRawData = serializedAdditionalRawData;
         }
 
         /// <summary> The vpn client Id. </summary>
         public string VpnConnectionId { get; }
         /// <summary> The duration time of a connected vpn client. </summary>
-        public long? VpnConnectionDuration { get; }
+        public long? VpnConnectionDurationInSeconds { get; }
         /// <summary> The start time of a connected vpn client. </summary>
-        public string VpnConnectionTime { get; }
+        public DateTimeOffset? VpnConnectionOn { get; }
         /// <summary> The public Ip of a connected vpn client. </summary>
-        public string PublicIpAddress { get; }
+        public string PublicIPAddress { get; }
         /// <summary> The assigned private Ip of a connected vpn client. </summary>
-        public string PrivateIpAddress { get; }
+        public string PrivateIPAddress { get; }
         /// <summary> The user name of a connected vpn client. </summary>
         public string VpnUserName { get; }
         /// <summary> The max band width. </summary>

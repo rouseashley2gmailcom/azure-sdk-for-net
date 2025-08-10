@@ -213,11 +213,12 @@ namespace Azure.Search.Documents.Tests
 
         #region Champion
         [Test]
+        [LiveOnly]
         public async Task Champion_OneShotUpload()
         {
             await using SearchResources resources = await SearchResources.CreateWithEmptyIndexAsync<SimpleDocument>(this);
             BatchingSearchClient client = GetBatchingSearchClient(resources);
-            SimpleDocument[] data = SimpleDocument.GetDocuments(50000);
+            SimpleDocument[] data = SimpleDocument.GetDocuments(10000);
 
             // Wrap in a block so we DisposeAsync before getting the Count below
             {
@@ -337,6 +338,7 @@ namespace Azure.Search.Documents.Tests
         }
 
         [Test]
+        [Ignore("https://github.com/Azure/azure-sdk-for-net/issues/25444")]
         public async Task Champion_BasicCheckpointing()
         {
             await using SearchResources resources = await SearchResources.CreateWithEmptyIndexAsync<SimpleDocument>(this);
@@ -688,6 +690,7 @@ namespace Azure.Search.Documents.Tests
         }
 
         [Test]
+        [Ignore("https://github.com/Azure/azure-sdk-for-net/issues/25727")]
         public async Task Flush_Blocks()
         {
             await using SearchResources resources = await SearchResources.CreateWithEmptyIndexAsync<SimpleDocument>(this);
@@ -735,6 +738,7 @@ namespace Azure.Search.Documents.Tests
         }
 
         [Test]
+        [Ignore("https://github.com/Azure/azure-sdk-for-net/issues/21515")]
         public async Task Dispose_Blocks()
         {
             await using SearchResources resources = await SearchResources.CreateWithEmptyIndexAsync<SimpleDocument>(this);
@@ -1265,7 +1269,7 @@ namespace Azure.Search.Documents.Tests
                     new SearchIndexingBufferedSenderOptions<SimpleDocument>()
                     {
                         MaxRetriesPerIndexAction = 5,
-                        MaxThrottlingDelay = TimeSpan.FromSeconds(1)
+                        MaxThrottlingDelay = Mode == RecordedTestMode.Playback ? TimeSpan.Zero : TimeSpan.FromSeconds(1)
                     });
 
             // Keep 503ing to count the retries
@@ -1294,7 +1298,7 @@ namespace Azure.Search.Documents.Tests
                     new SearchIndexingBufferedSenderOptions<SimpleDocument>()
                     {
                         MaxRetriesPerIndexAction = 1,
-                        ThrottlingDelay = TimeSpan.FromSeconds(3)
+                        ThrottlingDelay = Mode == RecordedTestMode.Playback ? TimeSpan.Zero : TimeSpan.FromSeconds(3)
                     });
 
             // Keep 503ing to trigger delays
@@ -1306,9 +1310,16 @@ namespace Azure.Search.Documents.Tests
             await indexer.FlushAsync();
             watch.Stop();
 
-            Assert.IsTrue(
-                2000 <= watch.ElapsedMilliseconds && watch.ElapsedMilliseconds <= 10000,
-                $"Expected a delay between 2000ms and 10000ms, not {watch.ElapsedMilliseconds}");
+            if (Mode != RecordedTestMode.Playback)
+            {
+                Assert.IsTrue(
+                    2000 <= watch.ElapsedMilliseconds && watch.ElapsedMilliseconds <= 10000,
+                    $"Expected a delay between 2000ms and 10000ms, not {watch.ElapsedMilliseconds}");
+            }
+            else
+            {
+                Assert.IsTrue(watch.ElapsedMilliseconds < 1000);
+            }
         }
 
         [Test]
@@ -1326,7 +1337,7 @@ namespace Azure.Search.Documents.Tests
                     new SearchIndexingBufferedSenderOptions<SimpleDocument>()
                     {
                         MaxRetriesPerIndexAction = 10,
-                        MaxThrottlingDelay = TimeSpan.FromSeconds(1)
+                        MaxThrottlingDelay = Mode == RecordedTestMode.Playback ? TimeSpan.Zero : TimeSpan.FromSeconds(1)
                     });
 
             // Keep 503ing to trigger delays

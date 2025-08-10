@@ -21,11 +21,13 @@ namespace Azure.Storage.Files.Shares
             long position,
             ShareFileRequestConditions conditions,
             IProgress<long> progressHandler,
-            UploadTransactionalHashingOptions hashingOptions) : base(
+            UploadTransferValidationOptions transferValidation
+            ) : base(
                 position,
                 bufferSize,
                 progressHandler,
-                hashingOptions)
+                transferValidation
+                )
         {
             ValidateBufferSize(bufferSize);
             _fileClient = fileClient;
@@ -33,7 +35,10 @@ namespace Azure.Storage.Files.Shares
             _writeIndex = position;
         }
 
-        protected override async Task AppendInternal(bool async, CancellationToken cancellationToken)
+        protected override async Task AppendInternal(
+            UploadTransferValidationOptions validationOptions,
+            bool async,
+            CancellationToken cancellationToken)
         {
             if (_buffer.Length > 0)
             {
@@ -44,23 +49,17 @@ namespace Azure.Storage.Files.Shares
                await _fileClient.UploadRangeInternal(
                     range: httpRange,
                     content: _buffer,
-                    options: new ShareFileUploadRangeOptions
-                    {
-                        TransactionalHashingOptions = _hashingOptions,
-                        ProgressHandler = _progressHandler,
-                        Conditions = _conditions
-                    },
+                    validationOptions,
+                    _progressHandler,
+                    _conditions,
+                    fileLastWrittenMode: null,
                     async: async,
                     cancellationToken: cancellationToken)
                     .ConfigureAwait(false);
 
                 _writeIndex += _buffer.Length;
-                _buffer.Clear();
             }
         }
-
-        protected override async Task FlushInternal(bool async, CancellationToken cancellationToken)
-            => await AppendInternal(async, cancellationToken).ConfigureAwait(false);
 
         protected override void ValidateBufferSize(long bufferSize)
         {

@@ -70,6 +70,11 @@ namespace Azure.Core.Tests
                 Assert.False(beforeTransportRan);
             }), HttpPipelinePosition.PerRetry);
 
+            // Intentionally add some null policies to ensure it does not break indexing
+            options.AddPolicy(null, HttpPipelinePosition.PerCall);
+            options.AddPolicy(null, HttpPipelinePosition.PerRetry);
+            options.AddPolicy(null, HttpPipelinePosition.BeforeTransport);
+
             options.AddPolicy(new CallbackPolicy(m =>
             {
                 beforeTransportRan = true;
@@ -110,10 +115,49 @@ namespace Azure.Core.Tests
             await pipeline.SendRequestAsync(request, CancellationToken.None);
 
             var informationalVersion = typeof(TestOptions).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>().InformationalVersion;
-            informationalVersion = informationalVersion.Substring(0, informationalVersion.IndexOf('+'));
+            var i = informationalVersion.IndexOf('+');
+            if (i > 0)
+            {
+                informationalVersion = informationalVersion.Substring(0, i);
+            }
 
             Assert.True(request.Headers.TryGetValue("User-Agent", out string value));
             StringAssert.StartsWith($"azsdk-net-Core.Tests/{informationalVersion} ", value);
+        }
+
+        [Test]
+        public async Task UsesAssemblyNameAndInformationalVersionForTelemetryPolicySettingsWithSetTelemetryPackageInfo()
+        {
+            var transport = new MockTransport(new MockResponse(503), new MockResponse(200));
+            var options = new TestOptions
+            {
+                Transport = transport
+            };
+
+            HttpPipeline pipeline = HttpPipelineBuilder.Build(options);
+
+            var message = pipeline.CreateMessage();
+            var userAgent = new TelemetryDetails(typeof(string).Assembly, default);
+            userAgent.Apply(message);
+            using Request request = message.Request;
+            request.Method = RequestMethod.Get;
+            request.Uri.Reset(new Uri("http://example.com"));
+
+            await pipeline.SendAsync(message, CancellationToken.None);
+
+            var informationalVersion = typeof(string).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>().InformationalVersion;
+            var i = informationalVersion.IndexOf('+');
+            if (i > 0)
+            {
+                informationalVersion = informationalVersion.Substring(0, i);
+            }
+
+            Assert.True(request.Headers.TryGetValue("User-Agent", out string value));
+#if NETFRAMEWORK
+            StringAssert.StartsWith($"azsdk-net-mscorlib/{informationalVersion} ", value);
+#else
+            StringAssert.StartsWith($"azsdk-net-System.Private.CoreLib/{informationalVersion} ", value);
+#endif
         }
 
         [Test]
@@ -138,7 +182,7 @@ namespace Azure.Core.Tests
             policy.Setup(p => p.OnSendingRequest(It.IsAny<HttpMessage>()))
                 .Callback<HttpMessage>(message =>
                 {
-                    Assert.AreEqual("ExternalClientId",message.Request.ClientRequestId);
+                    Assert.AreEqual("ExternalClientId", message.Request.ClientRequestId);
                     Assert.True(message.Request.TryGetHeader("x-ms-client-request-id", out string requestId));
                     Assert.AreEqual("ExternalClientId", requestId);
                 }).Verifiable();
@@ -206,18 +250,15 @@ namespace Azure.Core.Tests
             List<EventWrittenEventArgs> events = new();
 
             using var listener = new AzureEventSourceListener(
-                (args, s) =>
-                {
-                    events.Add(args);
-                },
+                events.Add,
                 EventLevel.Verbose);
 
             var pipeline = HttpPipelineBuilder.Build(
                 options,
                 Array.Empty<HttpPipelinePolicy>(),
                 Array.Empty<HttpPipelinePolicy>(),
-                new ResponseClassifier(),
-                new HttpPipelineTransportOptions());
+                new HttpPipelineTransportOptions(),
+                ResponseClassifier.Shared);
 
             HttpPipelineTransport transportField = pipeline.GetType().GetField("_transport", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.GetField).GetValue(pipeline) as HttpPipelineTransport;
             if (isCustomTransportSet)
@@ -231,6 +272,48 @@ namespace Azure.Core.Tests
             else
             {
                 Assert.That(transportField, Is.Not.TypeOf<MockTransport>());
+            }
+        }
+
+        [Test]
+        public async Task TransportOptionsIsClientRedirectEnabledIsOverriddenByClientOptions(
+            [Values(true, false, null)] bool? transportOptionsIsClientRedirectEnabled)
+        {
+            using var testListener = new TestEventListener();
+            testListener.EnableEvents(AzureCoreEventSource.Singleton, EventLevel.Verbose);
+
+            var transport = new MockTransport(
+                new MockResponse(300).AddHeader("Location", "https://new.host/"),
+                new MockResponse(200));
+
+            var options = new TestOptions
+            {
+                Transport = transport
+            };
+
+            var pipeline = HttpPipelineBuilder.Build(new HttpPipelineOptions(options)
+            {
+                ResponseClassifier = ResponseClassifier.Shared
+            }, transportOptionsIsClientRedirectEnabled.HasValue ?
+                new HttpPipelineTransportOptions() { IsClientRedirectEnabled = transportOptionsIsClientRedirectEnabled.Value } :
+                new HttpPipelineTransportOptions());
+
+            using (Request request = pipeline.CreateRequest())
+            {
+                request.Method = RequestMethod.Get;
+                request.Uri.Reset(new Uri("http://example.com"));
+                var response = await pipeline.SendRequestAsync(request, CancellationToken.None);
+
+                if (transportOptionsIsClientRedirectEnabled ?? false)
+                {
+                    Assert.AreEqual(200, response.Status);
+                    Assert.AreEqual(2, transport.Requests.Count);
+                }
+                else
+                {
+                    Assert.AreEqual(300, response.Status);
+                    Assert.AreEqual(1, transport.Requests.Count);
+                }
             }
         }
 

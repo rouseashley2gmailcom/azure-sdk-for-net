@@ -70,6 +70,30 @@ namespace Azure.Storage.Tests
             Assert.IsTrue(classifier.IsRetriableResponse(message));
         }
 
+        [Test]
+        [TestCase(Constants.ErrorCodes.ServerBusy)]
+        [TestCase(Constants.ErrorCodes.InternalError)]
+        [TestCase(Constants.ErrorCodes.OperationTimedOut)]
+        public void IsRetriableResponse_CopySourceErrors(string errorCode)
+        {
+            var response = new MockResponse(Constants.HttpStatusCode.NotFound);
+            response.AddHeader(new HttpHeader(Constants.HeaderNames.CopySourceErrorCode, errorCode));
+            HttpMessage message = BuildMessage(response);
+            Assert.IsTrue(classifier.IsRetriableResponse(message));
+        }
+
+        [Test]
+        [TestCase(Constants.ErrorCodes.ServerBusy)]
+        [TestCase(Constants.ErrorCodes.InternalError)]
+        [TestCase(Constants.ErrorCodes.OperationTimedOut)]
+        public void IsRetriableResponse_CopySourceErrors_SecondaryUri(string errorCode)
+        {
+            var response = new MockResponse(Constants.HttpStatusCode.NotFound);
+            response.AddHeader(new HttpHeader(Constants.HeaderNames.CopySourceErrorCode, errorCode));
+            HttpMessage message = BuildMessage(response, MockSecondaryUri);
+            Assert.IsTrue(classifier.IsRetriableResponse(message));
+        }
+
         [TestCase("ContainerAlreadyExists", "If-Match", false)]
         [TestCase("ContainerAlreadyExists","If-None-Match", false)]
         [TestCase("ContainerAlreadyExists","If-Unmodified-Since", false)]
@@ -83,11 +107,13 @@ namespace Azure.Storage.Tests
         public void IsError_409_ConditionalResponse(string code, string header, bool isError)
         {
             var mockRequest = new MockRequest();
-            mockRequest.Headers.Add("x-ms-error-code", code);
             mockRequest.Headers.Add(header, "value");
             var httpMessage = new HttpMessage(mockRequest, new ResponseClassifier());
 
-            httpMessage.Response = new MockResponse(409);
+            var mockResponse = new MockResponse(409);
+            mockResponse.AddHeader("x-ms-error-code", code);
+            httpMessage.Response = mockResponse;
+
             Assert.AreEqual(isError, classifier.IsErrorResponse(httpMessage));
         }
 

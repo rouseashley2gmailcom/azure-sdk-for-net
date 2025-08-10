@@ -6,18 +6,35 @@ using System.Threading;
 using Azure.Communication.Pipeline;
 using Azure.Communication.Tests;
 using Azure.Core.TestFramework;
+using Azure.Core.TestFramework.Models;
 using Azure.Identity;
 
 namespace Azure.Communication.PhoneNumbers.Tests
 {
     public class PhoneNumbersClientLiveTestBase : RecordedTestBase<PhoneNumbersClientTestEnvironment>
     {
+        private const string PhoneNumberRegEx = @"((?:\\u002B)[0-9]{11,})|((?:\%2B)[0-9]{11,})|((?:[+]?)[0-9]{11,})";
         protected const string UnauthorizedNumber = "+14255550123";
+        protected const string UnknownPhoneNumberSearchResultId = "01234567-0123-0123-0123-0123456789AB";
+        private const string URIDomainNameReplacerRegEx = @"https://([^/?]+)";
+
         public PhoneNumbersClientLiveTestBase(bool isAsync) : base(isAsync)
-            => Sanitizer = new PhoneNumbersClientRecordedTestSanitizer();
+        {
+            HeaderRegexSanitizers.Add(new HeaderRegexSanitizer("location")
+            {
+                Regex = PhoneNumberRegEx
+            });
+            BodyRegexSanitizers.Add(new BodyRegexSanitizer(PhoneNumberRegEx));
+            UriRegexSanitizers.Add(new UriRegexSanitizer(PhoneNumberRegEx));
+            UriRegexSanitizers.Add(new UriRegexSanitizer(URIDomainNameReplacerRegEx) { Value = "https://sanitized.communication.azure.com" });
+            SanitizedHeaders.Add("x-ms-content-sha256");
+        }
 
         public bool SkipPhoneNumberLiveTests
             => TestEnvironment.Mode != RecordedTestMode.Playback && Environment.GetEnvironmentVariable("SKIP_PHONENUMBER_LIVE_TESTS") == "TRUE";
+
+        public bool SkipUpdateCapabilitiesLiveTest
+            => TestEnvironment.Mode != RecordedTestMode.Playback && Environment.GetEnvironmentVariable("SKIP_UPDATE_CAPABILITIES_LIVE_TESTS") == "TRUE";
 
         /// <summary>
         /// Creates a <see cref="PhoneNumbersClient" /> with the connectionstring via environment
@@ -83,9 +100,13 @@ namespace Azure.Communication.PhoneNumbers.Tests
 
         protected string GetTestPhoneNumber()
         {
-            return TestEnvironment.Mode == RecordedTestMode.Playback
-                ? RecordedTestSanitizer.SanitizeValue
-                : TestEnvironment.CommunicationTestPhoneNumber;
+            if (TestEnvironment.Mode == RecordedTestMode.Playback)
+                return SanitizeValue;
+
+            if (!SkipUpdateCapabilitiesLiveTest)
+                return TestEnvironment.TestAgentPhoneNumber;
+
+            return TestEnvironment.DefaultTestPhoneNumber;
         }
 
         protected void SleepIfNotInPlaybackMode()
@@ -98,6 +119,7 @@ namespace Azure.Communication.PhoneNumbers.Tests
         {
             PhoneNumbersClientOptions phoneNumbersClientOptions = new PhoneNumbersClientOptions();
             phoneNumbersClientOptions.Diagnostics.LoggedHeaderNames.Add("MS-CV");
+            phoneNumbersClientOptions.AcceptedLanguage = "en-US";
             return InstrumentClientOptions(phoneNumbersClientOptions);
         }
     }

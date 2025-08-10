@@ -9,14 +9,11 @@ To interact with Spark jobs running on Azure Synapse, you need to instantiate a 
 ```C# Snippet:CreateSparkBatchClient
 // Replace the strings below with the spark, endpoint, and file system information
 string sparkPoolName = "<my-spark-pool-name>";
-
 string endpoint = "<my-endpoint-url>";
-
 string storageAccount = "<my-storage-account-name>";
-
 string fileSystem = "<my-storage-filesystem-name>";
 
-SparkBatchClient client = new SparkBatchClient(new Uri(endpoint), sparkPoolName, new DefaultAzureCredential());
+SparkBatchClient client = new SparkBatchClient(new Uri(endpoint), "2019-11-01-preview", sparkPoolName, new DefaultAzureCredential());
 ```
 
 ## Submitting Spark jobs
@@ -55,7 +52,7 @@ SparkBatchJob jobCreated = createOperation.Value;
 To retrieve the details of a Spark job call `StartGetSparkBatchJob`, passing in the Spark job ID.
 
 ```C# Snippet:GetSparkBatchJob
-SparkBatchJob retrievedJob = client.GetSparkBatchJob (jobCreated.Id);
+SparkBatchJob retrievedJob = client.GetSparkBatchJob(jobCreated.Id);
 Debug.WriteLine($"Job is returned with name {retrievedJob.Name} and state {retrievedJob.State}");
 ```
 

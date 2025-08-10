@@ -16,7 +16,7 @@ namespace Azure.Security.KeyVault.Certificates
         /// For more information, see
         /// <see href="https://docs.microsoft.com/rest/api/keyvault/key-vault-versions">Key Vault versions</see>.
         /// </summary>
-        internal const ServiceVersion LatestVersion = ServiceVersion.V7_3_Preview;
+        internal const ServiceVersion LatestVersion = ServiceVersion.V7_6;
 
         /// <summary>
         /// The versions of Azure Key Vault supported by this client
@@ -41,9 +41,24 @@ namespace Azure.Security.KeyVault.Certificates
             V7_2 = 2,
 
             /// <summary>
-            /// The Key Vault API version 7.3-preview.
+            /// The Key Vault API version 7.3.
             /// </summary>
-            V7_3_Preview = 3,
+            V7_3 = 3,
+
+            /// <summary>
+            /// The Key Vault API version 7.4.
+            /// </summary>
+            V7_4 = 4,
+
+            /// <summary>
+            /// The Key Vault API version 7.5.
+            /// </summary>
+            V7_5 = 5,
+
+            /// <summary>
+            /// The Key Vault API version 7.6 preview 2.
+            /// </summary>
+            V7_6 = 6,
 #pragma warning restore CA1707 // Identifiers should not contain underscores
         }
 
@@ -69,6 +84,11 @@ namespace Azure.Security.KeyVault.Certificates
             this.ConfigureLogging();
         }
 
+        /// <summary>
+        /// Gets or sets whether to disable verification that the authentication challenge resource matches the Key Vault domain.
+        /// </summary>
+        public bool DisableChallengeResourceVerification { get; set; }
+
         internal string GetVersionString()
         {
             return Version switch
@@ -76,7 +96,10 @@ namespace Azure.Security.KeyVault.Certificates
                 ServiceVersion.V7_0 => "7.0",
                 ServiceVersion.V7_1 => "7.1",
                 ServiceVersion.V7_2 => "7.2",
-                ServiceVersion.V7_3_Preview => "7.3-preview",
+                ServiceVersion.V7_3 => "7.3",
+                ServiceVersion.V7_4 => "7.4",
+                ServiceVersion.V7_5 => "7.5",
+                ServiceVersion.V7_6 => "7.6",
                 _ => throw new ArgumentException(Version.ToString()),
             };
         }

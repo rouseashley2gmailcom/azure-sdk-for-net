@@ -67,7 +67,23 @@ namespace Azure.Data.Tables.Tests
             tableSasBuilder.SetPermissions(permissions);
 
             Assert.AreEqual(permissionsString.ToLowerInvariant(), tableSasBuilder.Permissions);
-            Assert.AreEqual(tableName.ToLowerInvariant(), tableSasBuilder.TableName);
+            Assert.AreEqual(tableName, tableSasBuilder.TableName);
+        }
+
+        [Test]
+        public void UseParameterlessCtor()
+        {
+            var now = DateTimeOffset.Now;
+            var tableSasBuilder = new TableSasBuilder
+            {
+                TableName = "table",
+                ExpiresOn = now.AddHours(1)
+            };
+            tableSasBuilder.SetPermissions(TableSasPermissions.Read);
+
+            Assert.AreEqual("table", tableSasBuilder.TableName);
+            Assert.AreEqual("r", tableSasBuilder.Permissions);
+            Assert.AreEqual(now.AddHours(1), tableSasBuilder.ExpiresOn);
         }
     }
 }

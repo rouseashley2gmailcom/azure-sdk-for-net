@@ -4,9 +4,12 @@ Run `dotnet build /t:GenerateCode` to generate code.
 
 ``` yaml
 input-file:
-    - https://raw.githubusercontent.com/Azure/azure-rest-api-specs/4a93ab078fba7f087116283c8ed169f9b8e30397/specification/storage/data-plane/Microsoft.StorageDataLake/stable/2020-06-12/DataLakeStorage.json
+    - https://raw.githubusercontent.com/Azure/azure-rest-api-specs/a936baeb45003f1d31ce855084b2e54365af78af/specification/storage/data-plane/Azure.Storage.Files.DataLake/stable/2025-01-05/DataLakeStorage.json
+generation1-convenience-client: true
 modelerfour:
     seal-single-value-enum-by-default: true
+
+helper-namespace: Azure.Storage.Common
 ```
 
 ### Don't include file system or path in path - we have direct URIs.
@@ -60,6 +63,9 @@ directive:
     delete $.SourceIfNoneMatch["x-ms-parameter-grouping"];
     delete $.SourceIfUnmodifiedSince["x-ms-parameter-grouping"];
     delete $.SourceLeaseId["x-ms-parameter-grouping"];
+    delete $.EncryptionKey["x-ms-parameter-grouping"];
+    delete $.EncryptionKeySha256["x-ms-parameter-grouping"];
+    delete $.EncryptionAlgorithm["x-ms-parameter-grouping"];
 ```
 
 ### Fix Path
@@ -75,6 +81,10 @@ directive:
     };
     delete $.Path.properties.isDirectory;
     $.Path.properties.isDirectory = {
+        "type": "string"
+    };
+    delete $.Path.properties.eTag;
+    $.Path.properties.etag = {
         "type": "string"
     };
 ```
@@ -130,4 +140,30 @@ directive:
             delete $[oldName];
         }
     }
+```
+
+### Fix EncryptionAlgorithm
+``` yaml
+directive:
+- from: swagger-document
+  where: $.parameters
+  transform: >
+    delete $.EncryptionAlgorithm.enum;
+    $.EncryptionAlgorithm.enum = [
+      "None",
+      "AES256"
+    ];
+```
+
+### Rename LeaseAction
+``` yaml
+directive:
+- from: swagger-document
+  where: $.parameters
+  transform: >
+    delete $.LeaseAction["x-ms-enum"];
+    $.LeaseAction["x-ms-enum"] = {
+        "name": "DataLakeLeaseAction",
+        "modelAsString": false
+    };
 ```

@@ -3,9 +3,11 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Azure.Core;
+using Azure.Core.Serialization;
 
 namespace Azure.Messaging
 {
@@ -13,6 +15,8 @@ namespace Azure.Messaging
     /// A custom converter that attributes the <see cref="CloudEvent"/> type.
     /// This allows System.Text.Json to serialize and deserialize CloudEvents by default.
     /// </summary>
+    [RequiresUnreferencedCode(DynamicData.SerializationRequiresUnreferencedCode)]
+    [RequiresDynamicCode(DynamicData.SerializationRequiresUnreferencedCode)]
     internal class CloudEventConverter : JsonConverter<CloudEvent>
     {
         /// <summary>
@@ -22,7 +26,7 @@ namespace Azure.Messaging
         /// <inheritdoc cref="JsonConverter{CloudEvent}.Read(ref Utf8JsonReader, Type, JsonSerializerOptions)"/>
         public override CloudEvent Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
-            JsonDocument requestDocument = JsonDocument.ParseValue(ref reader);
+            using JsonDocument requestDocument = JsonDocument.ParseValue(ref reader);
             return DeserializeCloudEvent(requestDocument.RootElement, skipValidation: false);
         }
 

@@ -21,11 +21,13 @@ namespace Azure.Storage.Blobs
             long position,
             AppendBlobRequestConditions conditions,
             IProgress<long> progressHandler,
-            UploadTransactionalHashingOptions hashingOptions) : base(
+            UploadTransferValidationOptions transferValidation
+            ) : base(
                 position,
                 bufferSize,
                 progressHandler,
-                hashingOptions)
+                transferValidation
+                )
         {
             ValidateBufferSize(bufferSize);
             _appendBlobClient = appendBlobClient;
@@ -33,6 +35,7 @@ namespace Azure.Storage.Blobs
         }
 
         protected override async Task AppendInternal(
+            UploadTransferValidationOptions validationOptions,
             bool async,
             CancellationToken cancellationToken)
         {
@@ -42,24 +45,16 @@ namespace Azure.Storage.Blobs
 
                 Response<BlobAppendInfo> response = await _appendBlobClient.AppendBlockInternal(
                     content: _buffer,
-                    new AppendBlobAppendBlockOptions()
-                    {
-                        TransactionalHashingOptions = _hashingOptions,
-                        Conditions = _conditions,
-                        ProgressHandler = _progressHandler
-                    },
+                    validationOptions,
+                    _conditions,
+                    _progressHandler,
                     async: async,
                     cancellationToken: cancellationToken)
                     .ConfigureAwait(false);
 
                 _conditions.IfMatch = response.Value.ETag;
-
-                _buffer.Clear();
             }
         }
-
-        protected override async Task FlushInternal(bool async, CancellationToken cancellationToken)
-            => await AppendInternal(async, cancellationToken).ConfigureAwait(false);
 
         protected override void ValidateBufferSize(long bufferSize)
         {

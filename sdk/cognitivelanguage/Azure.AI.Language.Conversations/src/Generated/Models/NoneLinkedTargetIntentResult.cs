@@ -5,27 +5,35 @@
 
 #nullable disable
 
-namespace Azure.AI.Language.Conversations
+using System;
+using System.Collections.Generic;
+
+namespace Azure.AI.Language.Conversations.Models
 {
     /// <summary> A wrap up of non-linked intent response. </summary>
     public partial class NoneLinkedTargetIntentResult : TargetIntentResult
     {
-        /// <summary> Initializes a new instance of NoneLinkedTargetIntentResult. </summary>
-        /// <param name="confidenceScore"> The prediction score and it ranges from 0.0 to 1.0. </param>
-        internal NoneLinkedTargetIntentResult(double confidenceScore) : base(confidenceScore)
+        /// <summary> Initializes a new instance of <see cref="NoneLinkedTargetIntentResult"/>. </summary>
+        /// <param name="confidence"> The prediction score and it ranges from 0.0 to 1.0. </param>
+        internal NoneLinkedTargetIntentResult(double confidence) : base(confidence)
         {
-            TargetKind = TargetKind.NonLinked;
+            TargetProjectKind = TargetProjectKind.NonLinked;
         }
 
-        /// <summary> Initializes a new instance of NoneLinkedTargetIntentResult. </summary>
-        /// <param name="targetKind"> This discriminator property specifies the type of the target project that returns the response. </param>
+        /// <summary> Initializes a new instance of <see cref="NoneLinkedTargetIntentResult"/>. </summary>
+        /// <param name="targetProjectKind"> This is the base class of an intent prediction. </param>
         /// <param name="apiVersion"> The API version used to call a target service. </param>
-        /// <param name="confidenceScore"> The prediction score and it ranges from 0.0 to 1.0. </param>
+        /// <param name="confidence"> The prediction score and it ranges from 0.0 to 1.0. </param>
+        /// <param name="serializedAdditionalRawData"> Keeps track of any properties unknown to the library. </param>
         /// <param name="result"> The actual response from a Conversation project. </param>
-        internal NoneLinkedTargetIntentResult(TargetKind targetKind, string apiVersion, double confidenceScore, ConversationResult result) : base(targetKind, apiVersion, confidenceScore)
+        internal NoneLinkedTargetIntentResult(TargetProjectKind targetProjectKind, string apiVersion, double confidence, IDictionary<string, BinaryData> serializedAdditionalRawData, ConversationResult result) : base(targetProjectKind, apiVersion, confidence, serializedAdditionalRawData)
         {
             Result = result;
-            TargetKind = targetKind;
+        }
+
+        /// <summary> Initializes a new instance of <see cref="NoneLinkedTargetIntentResult"/> for deserialization. </summary>
+        internal NoneLinkedTargetIntentResult()
+        {
         }
 
         /// <summary> The actual response from a Conversation project. </summary>

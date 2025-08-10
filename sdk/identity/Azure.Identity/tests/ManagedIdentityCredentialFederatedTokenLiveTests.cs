@@ -26,11 +26,11 @@ namespace Azure.Identity.Tests
         public void ClearDiscoveryCache()
         {
             StaticCachesUtilities.ClearStaticMetadataProviderCache();
-            StaticCachesUtilities.ClearAuthorityEndpointResolutionManagerCache();
         }
 
         [NonParallelizable]
         [Test]
+        [Ignore("https://github.com/Azure/azure-sdk-for-net/issues/43401")]
         public async Task VerifyViaMockK8TokenExchangeEnvironment()
         {
             var tenantId = TestEnvironment.ServicePrincipalTenantId;
@@ -43,7 +43,11 @@ namespace Azure.Identity.Tests
             assertionAudienceBuilder.AppendPath("/oauth2/v2.0/token", escape: false);
             var assertionAudience = assertionAudienceBuilder.ToString();
 
+#if NET9_0_OR_GREATER
+            var assertionCert = X509CertificateLoader.LoadCertificateFromFile(TestEnvironment.ServicePrincipalCertificatePfxPath);
+#else
             var assertionCert = new X509Certificate2(TestEnvironment.ServicePrincipalCertificatePfxPath);
+#endif
 
             string tokenFilePath = Path.Combine(Path.GetTempPath(), Path.GetTempFileName());
 
@@ -80,7 +84,7 @@ namespace Azure.Identity.Tests
             }
         }
 
-        private static string CreateClientAssertionJWT(string clientId, string audience, X509Certificate2 clientCertificate)
+        public static string CreateClientAssertionJWT(string clientId, string audience, X509Certificate2 clientCertificate)
         {
             var headerBuff = new ArrayBufferWriter<byte>();
 

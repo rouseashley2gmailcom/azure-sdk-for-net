@@ -2,36 +2,35 @@
   <PropertyGroup>
     <Description>An OpenTelemetry .NET exporter that exports to Azure Monitor</Description>
     <AssemblyTitle>AzureMonitor OpenTelemetry Exporter</AssemblyTitle>
-    <Version>1.0.0-beta.4</Version>
-    <PackageTags>Azure Monitor OpenTelemetry Exporter</PackageTags>
+    <Version>1.5.0-beta.1</Version>
+    <!--The ApiCompatVersion is managed automatically and should not generally be modified manually.-->
+    <ApiCompatVersion>1.4.0</ApiCompatVersion>
+    <PackageTags>Azure Monitor OpenTelemetry Exporter ApplicationInsights</PackageTags>
     <TargetFrameworks>$(RequiredTargetFrameworks)</TargetFrameworks>
+    <IncludeOperationsSharedSource>true</IncludeOperationsSharedSource>
+    <DefineConstants>$(DefineConstants);AZURE_MONITOR_EXPORTER;</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Versions are defined in eng/Packages.Data.props -->
+    <!-- Whenever updating OpenTelemetry dependencies, confirm that Test dependencies are also updated. -->
     <PackageReference Include="Azure.Core" />
-    <PackageReference Include="System.Text.Json" />
     <PackageReference Include="OpenTelemetry" />
+    <PackageReference Include="OpenTelemetry.PersistentStorage.FileSystem" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
   </ItemGroup>
 
   <!-- Shared source from Azure.Core -->
   <ItemGroup>
-    <Compile Include="$(AzureCoreSharedSources)AppContextSwitchHelper.cs" LinkBase="Shared" />
     <Compile Include="$(AzureCoreSharedSources)ArrayBufferWriter.cs" LinkBase="Shared" />
-    <Compile Include="$(AzureCoreSharedSources)ClientDiagnostics.cs" LinkBase="Shared" />
     <Compile Include="$(AzureCoreSharedSources)ConnectionString.cs" LinkBase="Shared" />
-    <Compile Include="$(AzureCoreSharedSources)ContentTypeUtilities.cs" LinkBase="Shared" />
-    <Compile Include="$(AzureCoreSharedSources)DiagnosticScope.cs" LinkBase="Shared" />
-    <Compile Include="$(AzureCoreSharedSources)DiagnosticScopeFactory.cs" LinkBase="Shared" />
-    <Compile Include="$(AzureCoreSharedSources)HttpMessageSanitizer.cs" LinkBase="Shared" />
-    <Compile Include="$(AzureCoreSharedSources)TaskExtensions.cs" LinkBase="Shared" />
-    <Compile Include="$(AzureCoreSharedSources)OperationHelpers.cs" LinkBase="Shared" />
     <Compile Include="$(AzureCoreSharedSources)EventSourceEventFormatting.cs" LinkBase="Shared" />
   </ItemGroup>
 
-  <PropertyGroup>
-    <!-- TODO: As part of release process, this PropertyGroup can be removed once RP is approved for namespace
-      https://github.com/Azure/azure-sdk-for-net/issues/17155 -->
-    <NoWarn>$(NoWarn);AZC0001;CS0108;CS1591</NoWarn>
-  </PropertyGroup>
+  <!-- Shared sources from Azure.Monitor.OpenTelemetry.LiveMetrics -->
+  <ItemGroup>
+    <Compile Include="..\..\Azure.Monitor.OpenTelemetry.LiveMetrics\src\**\*.cs" Exclude="..\..\Azure.Monitor.OpenTelemetry.LiveMetrics\src\Generated\Models\AzureMonitorOpenTelemetryLiveMetricsContext.cs" LinkBase="Shared\LiveMetrics" />
+    <Compile Remove="..\..\Azure.Monitor.OpenTelemetry.LiveMetrics\src\Properties\AssemblyInfo.cs" />
+  </ItemGroup>
 
 </Project>

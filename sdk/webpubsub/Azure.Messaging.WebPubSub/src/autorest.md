@@ -9,10 +9,11 @@ Run `dotnet build /t:GenerateCode` to generate code.
 ``` yaml
 title: WebPubSubServiceClient
 input-file:
-- https://github.com/Azure/azure-rest-api-specs/blob/39c7d63c21b9a29efe3907d9b949d1c77b021907/specification/webpubsub/data-plane/WebPubSub/stable/2021-10-01/webpubsub.json
-low-level-client: true
+- https://github.com/Azure/azure-rest-api-specs/blob/a67a8c166cdbcb357ac3e56cbc1c1e285b52706a/specification/webpubsub/data-plane/WebPubSub/stable/2024-12-01/webpubsub.json
+
 credential-types: AzureKeyCredential
 credential-header-name: Ocp-Apim-Subscription-Key
+keep-non-overloadable-protocol-signature: true
 ```
 
 ### Make WebPubSubPermission a regular enum
@@ -21,6 +22,67 @@ directive:
 - from: swagger-document
   where: $..[?(@.name=="WebPubSubPermission")]
   transform: $.modelAsString = false;
+```
+
+### Restore the "host" parameter to be a string instead of a URL to avoid breaking change
+``` yaml
+directive:
+- from: swagger-document
+  where: $.x-ms-parameterized-host.parameters[0].format
+  transform: return "string";
+```
+
+### Remove "messageTtlSeconds" parameter from all operations as the generated sample uses a invalid value for it.
+``` yaml
+directive:
+- where-operation: WebPubSub_SendToConnection
+  remove-parameter:
+    debug: true
+    in: query
+    name: messageTtlSeconds
+- where-operation: WebPubSub_SendToGroup
+  remove-parameter:
+    debug: true
+    in: query
+    name: messageTtlSeconds
+- where-operation: WebPubSub_SendToUser
+  remove-parameter:
+    debug: true
+    in: query
+    name: messageTtlSeconds
+- where-operation: WebPubSub_SendToAll
+  remove-parameter:
+    debug: true
+    in: query
+    name: messageTtlSeconds
+```
+
+### AddConnectionsToGroupsAsyncImpl
+``` yaml
+directive:
+- from: swagger-document
+  where: $.paths["/api/hubs/{hub}/:addToGroups"].post.operationId
+  transform: return "WebPubSubService_AddConnectionsToGroups";
+- from: swagger-document
+  where: $.paths["/api/hubs/{hub}/:addToGroups"].post.parameters["0"]
+  transform: $["x-ms-parameter-location"] = "client"
+- from: swagger-document
+  where: $.paths["/api/hubs/{hub}/:addToGroups"].post
+  transform: $["x-accessibility"] = "internal"
+```
+
+### RemoveConnectionsFromGroups
+``` yaml
+directive:
+- from: swagger-document
+  where: $.paths["/api/hubs/{hub}/:removeFromGroups"].post.operationId
+  transform: return "WebPubSubService_RemoveConnectionsFromGroups";
+- from: swagger-document
+  where: $.paths["/api/hubs/{hub}/:removeFromGroups"].post.parameters["0"]
+  transform: $["x-ms-parameter-location"] = "client"
+- from: swagger-document
+  where: $.paths["/api/hubs/{hub}/:removeFromGroups"].post
+  transform: $["x-accessibility"] = "internal"
 ```
 
 ### GenerateClientTokenImpl
@@ -271,4 +333,29 @@ directive:
 - from: swagger-document
   where: $.paths["/api/hubs/{hub}/users/{userId}/:closeConnections"].post.parameters["0"]
   transform: $["x-ms-parameter-location"] = "client"
+```
+
+### RemoveConnectionFromAllGroups
+``` yaml
+directive:
+- from: swagger-document
+  where: $.paths["/api/hubs/{hub}/connections/{connectionId}/groups"].delete.operationId
+  transform: return "WebPubSubService_RemoveConnectionFromAllGroups";
+- from: swagger-document
+  where: $.paths["/api/hubs/{hub}/connections/{connectionId}/groups"].delete.parameters["0"]
+  transform: $["x-ms-parameter-location"] = "client"
+```
+
+### ListConnectionsInGroup
+``` yaml
+directive:
+- from: swagger-document
+  where: $.paths["/api/hubs/{hub}/groups/{group}/connections"].get.operationId
+  transform: return "WebPubSubService_ListConnectionsInGroup";
+- from: swagger-document
+  where: $.paths["/api/hubs/{hub}/groups/{group}/connections"].get.parameters["0"]
+  transform: $["x-ms-parameter-location"] = "client"
+- from: swagger-document
+  where: $.paths["/api/hubs/{hub}/groups/{group}/connections"].get
+  transform: $["x-accessibility"] = "internal"
 ```

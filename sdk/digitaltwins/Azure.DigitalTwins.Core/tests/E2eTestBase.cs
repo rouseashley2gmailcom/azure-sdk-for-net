@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Threading.Tasks;
+using Azure.Core;
 using Azure.Core.TestFramework;
 using NUnit.Framework;
 
@@ -21,24 +22,28 @@ namespace Azure.DigitalTwins.Core.Tests
         // Based on testing, the max length of models can be 27 only and works well for other resources as well. This can be updated when required.
         protected static readonly int MaxIdLength = 27;
 
+        internal const string FAKE_HOST = "fakeHost.api.wus2.digitaltwins.azure.net";
+
         public E2eTestBase(bool isAsync)
          : base(isAsync, TestSettings.Instance.TestMode)
         {
-            Sanitizer = new TestUrlSanitizer();
+            ReplacementHost = FAKE_HOST;
         }
 
         [SetUp]
         public virtual void SetupE2eTestBase()
         {
             // TODO: set via client options and pipeline instead
+#if NETFRAMEWORK
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+#endif
         }
 
         protected DigitalTwinsClient GetClient(DigitalTwinsClientOptions options = null)
         {
             if (options == null)
             {
-                options = new DigitalTwinsClientOptions();
+                options = new DigitalTwinsClientOptions(){ Retry = { Delay = TimeSpan.Zero, Mode = RetryMode.Fixed}};
             }
 
             return InstrumentClient(
@@ -65,6 +70,11 @@ namespace Azure.DigitalTwins.Core.Tests
         public async Task<string> GetUniqueTwinIdAsync(DigitalTwinsClient dtClient, string baseName)
         {
             return await GetUniqueIdAsync(baseName, (twinId) => dtClient.GetDigitalTwinAsync<BasicDigitalTwin>(twinId)).ConfigureAwait(false);
+        }
+
+        public async Task<string> GetUniqueJobIdAsync(DigitalTwinsClient dtClient, string baseName)
+        {
+            return await GetUniqueIdAsync(baseName, (jobId) => dtClient.GetImportJobAsync(jobId)).ConfigureAwait(false);
         }
 
         private async Task<string> GetUniqueIdAsync(string baseName, Func<string, Task> getResource)
@@ -114,7 +124,7 @@ namespace Azure.DigitalTwins.Core.Tests
         /// <param name="delayDuration">Delay duration.</param>
         protected async Task WaitIfLiveAsync(TimeSpan delayDuration)
         {
-            if (TestEnvironment.Mode == RecordedTestMode.Live)
+            if (TestEnvironment.Mode == RecordedTestMode.Live || TestEnvironment.Mode == RecordedTestMode.Record)
             {
                 await Task.Delay(delayDuration);
             }

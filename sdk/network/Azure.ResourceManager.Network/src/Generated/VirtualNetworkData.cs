@@ -5,6 +5,7 @@
 
 #nullable disable
 
+using System;
 using System.Collections.Generic;
 using Azure.Core;
 using Azure.ResourceManager.Network.Models;
@@ -12,23 +13,28 @@ using Azure.ResourceManager.Resources.Models;
 
 namespace Azure.ResourceManager.Network
 {
-    /// <summary> A class representing the VirtualNetwork data model. </summary>
-    public partial class VirtualNetworkData : Resource
+    /// <summary>
+    /// A class representing the VirtualNetwork data model.
+    /// Virtual Network resource.
+    /// </summary>
+    public partial class VirtualNetworkData : NetworkTrackedResourceData
     {
-        /// <summary> Initializes a new instance of VirtualNetworkData. </summary>
+        /// <summary> Initializes a new instance of <see cref="VirtualNetworkData"/>. </summary>
         public VirtualNetworkData()
         {
             Subnets = new ChangeTrackingList<SubnetData>();
             VirtualNetworkPeerings = new ChangeTrackingList<VirtualNetworkPeeringData>();
-            IpAllocations = new ChangeTrackingList<WritableSubResource>();
+            IPAllocations = new ChangeTrackingList<WritableSubResource>();
+            FlowLogs = new ChangeTrackingList<FlowLogData>();
         }
 
-        /// <summary> Initializes a new instance of VirtualNetworkData. </summary>
+        /// <summary> Initializes a new instance of <see cref="VirtualNetworkData"/>. </summary>
         /// <param name="id"> Resource ID. </param>
         /// <param name="name"> Resource name. </param>
-        /// <param name="type"> Resource type. </param>
+        /// <param name="resourceType"> Resource type. </param>
         /// <param name="location"> Resource location. </param>
         /// <param name="tags"> Resource tags. </param>
+        /// <param name="serializedAdditionalRawData"> Keeps track of any properties unknown to the library. </param>
         /// <param name="extendedLocation"> The extended location of the virtual network. </param>
         /// <param name="etag"> A unique read-only string that changes whenever the resource is updated. </param>
         /// <param name="addressSpace"> The AddressSpace that contains an array of IP address ranges that can be used by subnets. </param>
@@ -42,11 +48,15 @@ namespace Azure.ResourceManager.Network
         /// <param name="enableVmProtection"> Indicates if VM protection is enabled for all the subnets in the virtual network. </param>
         /// <param name="ddosProtectionPlan"> The DDoS protection plan associated with the virtual network. </param>
         /// <param name="bgpCommunities"> Bgp Communities sent over ExpressRoute with each route corresponding to a prefix in this VNET. </param>
+        /// <param name="encryption"> Indicates if encryption is enabled on virtual network and if VM without encryption is allowed in encrypted VNet. </param>
         /// <param name="ipAllocations"> Array of IpAllocation which reference this VNET. </param>
-        internal VirtualNetworkData(string id, string name, string type, string location, IDictionary<string, string> tags, ExtendedLocation extendedLocation, string etag, AddressSpace addressSpace, DhcpOptions dhcpOptions, int? flowTimeoutInMinutes, IList<SubnetData> subnets, IList<VirtualNetworkPeeringData> virtualNetworkPeerings, string resourceGuid, ProvisioningState? provisioningState, bool? enableDdosProtection, bool? enableVmProtection, WritableSubResource ddosProtectionPlan, VirtualNetworkBgpCommunities bgpCommunities, IList<WritableSubResource> ipAllocations) : base(id, name, type, location, tags)
+        /// <param name="flowLogs"> A collection of references to flow log resources. </param>
+        /// <param name="privateEndpointVnetPolicy"> Private Endpoint VNet Policies. </param>
+        /// <param name="defaultPublicNatGateway"> A reference to the default public nat gateway being used by this virtual network resource. </param>
+        internal VirtualNetworkData(ResourceIdentifier id, string name, ResourceType? resourceType, AzureLocation? location, IDictionary<string, string> tags, IDictionary<string, BinaryData> serializedAdditionalRawData, ExtendedLocation extendedLocation, ETag? etag, VirtualNetworkAddressSpace addressSpace, DhcpOptions dhcpOptions, int? flowTimeoutInMinutes, IList<SubnetData> subnets, IList<VirtualNetworkPeeringData> virtualNetworkPeerings, Guid? resourceGuid, NetworkProvisioningState? provisioningState, bool? enableDdosProtection, bool? enableVmProtection, WritableSubResource ddosProtectionPlan, VirtualNetworkBgpCommunities bgpCommunities, VirtualNetworkEncryption encryption, IList<WritableSubResource> ipAllocations, IReadOnlyList<FlowLogData> flowLogs, PrivateEndpointVnetPolicy? privateEndpointVnetPolicy, WritableSubResource defaultPublicNatGateway) : base(id, name, resourceType, location, tags, serializedAdditionalRawData)
         {
             ExtendedLocation = extendedLocation;
-            Etag = etag;
+            ETag = etag;
             AddressSpace = addressSpace;
             DhcpOptions = dhcpOptions;
             FlowTimeoutInMinutes = flowTimeoutInMinutes;
@@ -58,17 +68,32 @@ namespace Azure.ResourceManager.Network
             EnableVmProtection = enableVmProtection;
             DdosProtectionPlan = ddosProtectionPlan;
             BgpCommunities = bgpCommunities;
-            IpAllocations = ipAllocations;
+            Encryption = encryption;
+            IPAllocations = ipAllocations;
+            FlowLogs = flowLogs;
+            PrivateEndpointVnetPolicy = privateEndpointVnetPolicy;
+            DefaultPublicNatGateway = defaultPublicNatGateway;
         }
 
         /// <summary> The extended location of the virtual network. </summary>
         public ExtendedLocation ExtendedLocation { get; set; }
         /// <summary> A unique read-only string that changes whenever the resource is updated. </summary>
-        public string Etag { get; }
+        public ETag? ETag { get; }
         /// <summary> The AddressSpace that contains an array of IP address ranges that can be used by subnets. </summary>
-        public AddressSpace AddressSpace { get; set; }
+        public VirtualNetworkAddressSpace AddressSpace { get; set; }
         /// <summary> The dhcpOptions that contains an array of DNS servers available to VMs deployed in the virtual network. </summary>
-        public DhcpOptions DhcpOptions { get; set; }
+        internal DhcpOptions DhcpOptions { get; set; }
+        /// <summary> The list of DNS servers IP addresses. </summary>
+        public IList<string> DhcpOptionsDnsServers
+        {
+            get
+            {
+                if (DhcpOptions is null)
+                    DhcpOptions = new DhcpOptions();
+                return DhcpOptions.DnsServers;
+            }
+        }
+
         /// <summary> The FlowTimeout value (in minutes) for the Virtual Network. </summary>
         public int? FlowTimeoutInMinutes { get; set; }
         /// <summary> A list of subnets in a Virtual Network. </summary>
@@ -76,18 +101,43 @@ namespace Azure.ResourceManager.Network
         /// <summary> A list of peerings in a Virtual Network. </summary>
         public IList<VirtualNetworkPeeringData> VirtualNetworkPeerings { get; }
         /// <summary> The resourceGuid property of the Virtual Network resource. </summary>
-        public string ResourceGuid { get; }
+        public Guid? ResourceGuid { get; }
         /// <summary> The provisioning state of the virtual network resource. </summary>
-        public ProvisioningState? ProvisioningState { get; }
+        public NetworkProvisioningState? ProvisioningState { get; }
         /// <summary> Indicates if DDoS protection is enabled for all the protected resources in the virtual network. It requires a DDoS protection plan associated with the resource. </summary>
         public bool? EnableDdosProtection { get; set; }
         /// <summary> Indicates if VM protection is enabled for all the subnets in the virtual network. </summary>
         public bool? EnableVmProtection { get; set; }
         /// <summary> The DDoS protection plan associated with the virtual network. </summary>
-        public WritableSubResource DdosProtectionPlan { get; set; }
+        internal WritableSubResource DdosProtectionPlan { get; set; }
+        /// <summary> Gets or sets Id. </summary>
+        public ResourceIdentifier DdosProtectionPlanId
+        {
+            get => DdosProtectionPlan is null ? default : DdosProtectionPlan.Id;
+            set
+            {
+                if (DdosProtectionPlan is null)
+                    DdosProtectionPlan = new WritableSubResource();
+                DdosProtectionPlan.Id = value;
+            }
+        }
+
         /// <summary> Bgp Communities sent over ExpressRoute with each route corresponding to a prefix in this VNET. </summary>
         public VirtualNetworkBgpCommunities BgpCommunities { get; set; }
+        /// <summary> Indicates if encryption is enabled on virtual network and if VM without encryption is allowed in encrypted VNet. </summary>
+        public VirtualNetworkEncryption Encryption { get; set; }
         /// <summary> Array of IpAllocation which reference this VNET. </summary>
-        public IList<WritableSubResource> IpAllocations { get; }
+        public IList<WritableSubResource> IPAllocations { get; }
+        /// <summary> A collection of references to flow log resources. </summary>
+        public IReadOnlyList<FlowLogData> FlowLogs { get; }
+        /// <summary> Private Endpoint VNet Policies. </summary>
+        public PrivateEndpointVnetPolicy? PrivateEndpointVnetPolicy { get; set; }
+        /// <summary> A reference to the default public nat gateway being used by this virtual network resource. </summary>
+        internal WritableSubResource DefaultPublicNatGateway { get; }
+        /// <summary> Gets or sets Id. </summary>
+        public ResourceIdentifier DefaultPublicNatGatewayId
+        {
+            get => DefaultPublicNatGateway?.Id;
+        }
     }
 }

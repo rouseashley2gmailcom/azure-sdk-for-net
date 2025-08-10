@@ -76,6 +76,10 @@ Function Save-PkgDep($PkgDeps, $TargetFramework, $DepName, $DepVersion) {
 }
 
 Function Save-Locked($Locked, $DepName, $DepVersion, $Condition) {
+  if (!$DepVersion) {
+    Write-Warning "$DepName in $LockfilePath does not contain a Version property so skipping it."
+    return
+  }
   if (-Not $Locked[$DepName]) {
     $Locked[$DepName] = @{ }
   }
@@ -164,7 +168,7 @@ foreach ($PkgFile in (Get-ChildItem "$PackagesPath/*.nupkg")) {
       }
     } else {
       $Pkgs[$LibraryName]["Deps"].Add(@{name = $DepName; version = ($DepVersions.Keys | Select-Object -first 1) }) | Out-Null
-    }
+    } 
   }
 }
 
@@ -249,7 +253,11 @@ if ($DumpPath) {
   Write-Host "Generating JSONP data export..."
   $Internal = $Pkgs.Keys | ForEach-Object ToString
   $DumpData = Get-PackageExport $Pkgs $Internal
-  "const data = " + (ConvertTo-Json -InputObject $DumpData -Compress -Depth 10) + ";" | Out-File -FilePath $DumpPath
+  Write-Host $DumpData
+  $DumpDataJson = ConvertTo-Json -InputObject $DumpData -Compress -Depth 10
+  Write-Host $DumpDataJson
+  $DumpDataJson | Out-File -FilePath "${DumpPath}/arcdata.json"
+  "const data = " + $DumpDataJson + ";" | Out-File -FilePath "${DumpPath}/data.js"
 }
 
 exit $ExitCode

@@ -5,24 +5,59 @@
 
 #nullable disable
 
+using System;
 using System.Collections.Generic;
-using Azure.Core;
 
 namespace Azure.ResourceManager.Sql.Models
 {
     /// <summary> The Elastic Pool performance level capability. </summary>
     public partial class ElasticPoolPerformanceLevelCapability
     {
-        /// <summary> Initializes a new instance of ElasticPoolPerformanceLevelCapability. </summary>
+        /// <summary>
+        /// Keeps track of any properties unknown to the library.
+        /// <para>
+        /// To assign an object to the value of this property use <see cref="BinaryData.FromObjectAsJson{T}(T, System.Text.Json.JsonSerializerOptions?)"/>.
+        /// </para>
+        /// <para>
+        /// To assign an already formatted json string to this property use <see cref="BinaryData.FromString(string)"/>.
+        /// </para>
+        /// <para>
+        /// Examples:
+        /// <list type="bullet">
+        /// <item>
+        /// <term>BinaryData.FromObjectAsJson("foo")</term>
+        /// <description>Creates a payload of "foo".</description>
+        /// </item>
+        /// <item>
+        /// <term>BinaryData.FromString("\"foo\"")</term>
+        /// <description>Creates a payload of "foo".</description>
+        /// </item>
+        /// <item>
+        /// <term>BinaryData.FromObjectAsJson(new { key = "value" })</term>
+        /// <description>Creates a payload of { "key": "value" }.</description>
+        /// </item>
+        /// <item>
+        /// <term>BinaryData.FromString("{\"key\": \"value\"}")</term>
+        /// <description>Creates a payload of { "key": "value" }.</description>
+        /// </item>
+        /// </list>
+        /// </para>
+        /// </summary>
+        private IDictionary<string, BinaryData> _serializedAdditionalRawData;
+
+        /// <summary> Initializes a new instance of <see cref="ElasticPoolPerformanceLevelCapability"/>. </summary>
         internal ElasticPoolPerformanceLevelCapability()
         {
             SupportedLicenseTypes = new ChangeTrackingList<LicenseTypeCapability>();
             SupportedMaxSizes = new ChangeTrackingList<MaxSizeRangeCapability>();
             SupportedPerDatabaseMaxSizes = new ChangeTrackingList<MaxSizeRangeCapability>();
             SupportedPerDatabaseMaxPerformanceLevels = new ChangeTrackingList<ElasticPoolPerDatabaseMaxPerformanceLevelCapability>();
+            SupportedMaintenanceConfigurations = new ChangeTrackingList<MaintenanceConfigurationCapability>();
+            SupportedMinCapacities = new ChangeTrackingList<MinCapacityCapability>();
+            SupportedZones = new ChangeTrackingList<ZonePinningCapability>();
         }
 
-        /// <summary> Initializes a new instance of ElasticPoolPerformanceLevelCapability. </summary>
+        /// <summary> Initializes a new instance of <see cref="ElasticPoolPerformanceLevelCapability"/>. </summary>
         /// <param name="performanceLevel"> The performance level for the pool. </param>
         /// <param name="sku"> The sku. </param>
         /// <param name="supportedLicenseTypes"> List of supported license types. </param>
@@ -31,10 +66,16 @@ namespace Azure.ResourceManager.Sql.Models
         /// <param name="supportedMaxSizes"> The list of supported max sizes. </param>
         /// <param name="supportedPerDatabaseMaxSizes"> The list of supported per database max sizes. </param>
         /// <param name="supportedPerDatabaseMaxPerformanceLevels"> The list of supported per database max performance levels. </param>
-        /// <param name="zoneRedundant"> Whether or not zone redundancy is supported for the performance level. </param>
+        /// <param name="isZoneRedundant"> Whether or not zone redundancy is supported for the performance level. </param>
+        /// <param name="supportedMaintenanceConfigurations"> List of supported maintenance configurations. </param>
+        /// <param name="supportedMinCapacities"> List of supported min capacities. </param>
+        /// <param name="supportedAutoPauseDelay"> Supported time range for auto pause delay. </param>
+        /// <param name="supportedPerDatabaseAutoPauseDelay"> Supported time range for per database auto pause delay. </param>
+        /// <param name="supportedZones"> List of supported availability zones. </param>
         /// <param name="status"> The status of the capability. </param>
         /// <param name="reason"> The reason for the capability not being available. </param>
-        internal ElasticPoolPerformanceLevelCapability(PerformanceLevelCapability performanceLevel, Sku sku, IReadOnlyList<LicenseTypeCapability> supportedLicenseTypes, int? maxDatabaseCount, MaxSizeCapability includedMaxSize, IReadOnlyList<MaxSizeRangeCapability> supportedMaxSizes, IReadOnlyList<MaxSizeRangeCapability> supportedPerDatabaseMaxSizes, IReadOnlyList<ElasticPoolPerDatabaseMaxPerformanceLevelCapability> supportedPerDatabaseMaxPerformanceLevels, bool? zoneRedundant, CapabilityStatus? status, string reason)
+        /// <param name="serializedAdditionalRawData"> Keeps track of any properties unknown to the library. </param>
+        internal ElasticPoolPerformanceLevelCapability(PerformanceLevelCapability performanceLevel, SqlSku sku, IReadOnlyList<LicenseTypeCapability> supportedLicenseTypes, int? maxDatabaseCount, MaxSizeCapability includedMaxSize, IReadOnlyList<MaxSizeRangeCapability> supportedMaxSizes, IReadOnlyList<MaxSizeRangeCapability> supportedPerDatabaseMaxSizes, IReadOnlyList<ElasticPoolPerDatabaseMaxPerformanceLevelCapability> supportedPerDatabaseMaxPerformanceLevels, bool? isZoneRedundant, IReadOnlyList<MaintenanceConfigurationCapability> supportedMaintenanceConfigurations, IReadOnlyList<MinCapacityCapability> supportedMinCapacities, AutoPauseDelayTimeRange supportedAutoPauseDelay, PerDatabaseAutoPauseDelayTimeRange supportedPerDatabaseAutoPauseDelay, IReadOnlyList<ZonePinningCapability> supportedZones, SqlCapabilityStatus? status, string reason, IDictionary<string, BinaryData> serializedAdditionalRawData)
         {
             PerformanceLevel = performanceLevel;
             Sku = sku;
@@ -44,32 +85,64 @@ namespace Azure.ResourceManager.Sql.Models
             SupportedMaxSizes = supportedMaxSizes;
             SupportedPerDatabaseMaxSizes = supportedPerDatabaseMaxSizes;
             SupportedPerDatabaseMaxPerformanceLevels = supportedPerDatabaseMaxPerformanceLevels;
-            ZoneRedundant = zoneRedundant;
+            IsZoneRedundant = isZoneRedundant;
+            SupportedMaintenanceConfigurations = supportedMaintenanceConfigurations;
+            SupportedMinCapacities = supportedMinCapacities;
+            SupportedAutoPauseDelay = supportedAutoPauseDelay;
+            SupportedPerDatabaseAutoPauseDelay = supportedPerDatabaseAutoPauseDelay;
+            SupportedZones = supportedZones;
             Status = status;
             Reason = reason;
+            _serializedAdditionalRawData = serializedAdditionalRawData;
         }
 
         /// <summary> The performance level for the pool. </summary>
+        [WirePath("performanceLevel")]
         public PerformanceLevelCapability PerformanceLevel { get; }
         /// <summary> The sku. </summary>
-        public Sku Sku { get; }
+        [WirePath("sku")]
+        public SqlSku Sku { get; }
         /// <summary> List of supported license types. </summary>
+        [WirePath("supportedLicenseTypes")]
         public IReadOnlyList<LicenseTypeCapability> SupportedLicenseTypes { get; }
         /// <summary> The maximum number of databases supported. </summary>
+        [WirePath("maxDatabaseCount")]
         public int? MaxDatabaseCount { get; }
         /// <summary> The included (free) max size for this performance level. </summary>
+        [WirePath("includedMaxSize")]
         public MaxSizeCapability IncludedMaxSize { get; }
         /// <summary> The list of supported max sizes. </summary>
+        [WirePath("supportedMaxSizes")]
         public IReadOnlyList<MaxSizeRangeCapability> SupportedMaxSizes { get; }
         /// <summary> The list of supported per database max sizes. </summary>
+        [WirePath("supportedPerDatabaseMaxSizes")]
         public IReadOnlyList<MaxSizeRangeCapability> SupportedPerDatabaseMaxSizes { get; }
         /// <summary> The list of supported per database max performance levels. </summary>
+        [WirePath("supportedPerDatabaseMaxPerformanceLevels")]
         public IReadOnlyList<ElasticPoolPerDatabaseMaxPerformanceLevelCapability> SupportedPerDatabaseMaxPerformanceLevels { get; }
         /// <summary> Whether or not zone redundancy is supported for the performance level. </summary>
-        public bool? ZoneRedundant { get; }
+        [WirePath("zoneRedundant")]
+        public bool? IsZoneRedundant { get; }
+        /// <summary> List of supported maintenance configurations. </summary>
+        [WirePath("supportedMaintenanceConfigurations")]
+        public IReadOnlyList<MaintenanceConfigurationCapability> SupportedMaintenanceConfigurations { get; }
+        /// <summary> List of supported min capacities. </summary>
+        [WirePath("supportedMinCapacities")]
+        public IReadOnlyList<MinCapacityCapability> SupportedMinCapacities { get; }
+        /// <summary> Supported time range for auto pause delay. </summary>
+        [WirePath("supportedAutoPauseDelay")]
+        public AutoPauseDelayTimeRange SupportedAutoPauseDelay { get; }
+        /// <summary> Supported time range for per database auto pause delay. </summary>
+        [WirePath("supportedPerDatabaseAutoPauseDelay")]
+        public PerDatabaseAutoPauseDelayTimeRange SupportedPerDatabaseAutoPauseDelay { get; }
+        /// <summary> List of supported availability zones. </summary>
+        [WirePath("supportedZones")]
+        public IReadOnlyList<ZonePinningCapability> SupportedZones { get; }
         /// <summary> The status of the capability. </summary>
-        public CapabilityStatus? Status { get; }
+        [WirePath("status")]
+        public SqlCapabilityStatus? Status { get; }
         /// <summary> The reason for the capability not being available. </summary>
+        [WirePath("reason")]
         public string Reason { get; }
     }
 }

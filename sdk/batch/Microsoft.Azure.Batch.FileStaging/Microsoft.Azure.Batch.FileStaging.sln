@@ -1,4 +1,4 @@
-Microsoft Visual Studio Solution File, Format Version 12.00
+﻿Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.26403.7
 MinimumVisualStudioVersion = 10.0.40219.1
@@ -24,6 +24,14 @@ Global
 		{48215D6D-DB21-48B8-AB03-1297A94DF696}.Net45-Debug|Any CPU.Build.0 = Debug|Any CPU
 		{48215D6D-DB21-48B8-AB03-1297A94DF696}.Net45-Release|Any CPU.ActiveCfg = Release|Any CPU
 		{48215D6D-DB21-48B8-AB03-1297A94DF696}.Net45-Release|Any CPU.Build.0 = Release|Any CPU
+		{FFC821E1-F687-4919-AC7C-EE45CCE286F6}.Net45-Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FFC821E1-F687-4919-AC7C-EE45CCE286F6}.Net45-Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FFC821E1-F687-4919-AC7C-EE45CCE286F6}.Net45-Release|Any CPU.ActiveCfg = Debug|Any CPU
+		{FFC821E1-F687-4919-AC7C-EE45CCE286F6}.Net45-Release|Any CPU.Build.0 = Debug|Any CPU
+		{55A44430-7D2B-4F25-9B8D-75722985336A}.Net45-Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{55A44430-7D2B-4F25-9B8D-75722985336A}.Net45-Debug|Any CPU.Build.0 = Debug|Any CPU
+		{55A44430-7D2B-4F25-9B8D-75722985336A}.Net45-Release|Any CPU.ActiveCfg = Debug|Any CPU
+		{55A44430-7D2B-4F25-9B8D-75722985336A}.Net45-Release|Any CPU.Build.0 = Debug|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

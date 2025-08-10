@@ -5,17 +5,17 @@ To get started, make sure you have satisfied all the prerequisites and got all t
 
 ## Create an AnomalyDetectorClient
 
-To create a new `AnomalyDetectorClient` you need the endpoint and credentials from your resource. In the sample below you'll use an Anomaly Detector API key credential by creating an `AzureKeyCredential` object.
+To create a new `AnomalyDetectorClient` you need the endpoint, apiVersion, and credentials from your resource. In the sample below you'll use an Anomaly Detector API key credential by creating an `AzureKeyCredential` object.
 
 You can set `endpoint` and `apiKey` based on an environment variable, a configuration setting, or any way that works for your application.
 
-```C# Snippet:CreateAnomalyDetectorClient
+```C# Snippet:CreateAnomalyDetectorClientEntire
 //read endpoint and apiKey
 string endpoint = TestEnvironment.Endpoint;
 string apiKey = TestEnvironment.ApiKey;
 
-var endpointUri = new Uri(endpoint);
-var credential = new AzureKeyCredential(apiKey);
+Uri endpointUri = new Uri(endpoint);
+AzureKeyCredential credential = new AzureKeyCredential(apiKey);
 
 //create client
 AnomalyDetectorClient client = new AnomalyDetectorClient(endpointUri, credential);
@@ -40,42 +40,49 @@ List<TimeSeriesPoint> list = File.ReadAllLines(datapath, Encoding.UTF8)
     .Select(e => new TimeSeriesPoint(float.Parse(e[1])){ Timestamp = DateTime.Parse(e[0])}).ToList();
 
 //create request
-DetectRequest request = new DetectRequest(list)
+UnivariateDetectionOptions request = new UnivariateDetectionOptions(list)
 {
     Granularity = TimeGranularity.Daily
 };
 ```
 
 ## Detect anomalies of the entire series
-Call the client's `DetectEntireSeriesAsync` method with the `DetectRequest` object and await the response as an `EntireDetectResponse` object. Iterate through the response's `IsAnomaly` values and print any that are true. These values correspond to the index of anomalous data points, if any were found.
+Call the client's `DetectUnivariateEntireSeries` method with the `DetectRequest` object and await the response as an `EntireDetectResponse` object. Iterate through the response's `IsAnomaly` values and print any that are true. These values correspond to the index of anomalous data points, if any were found.
 
 ```C# Snippet:DetectEntireSeriesAnomaly
 //detect
 Console.WriteLine("Detecting anomalies in the entire time series.");
 
-EntireDetectResponse result = await client.DetectEntireSeriesAsync(request).ConfigureAwait(false);
-
-if (result.IsAnomaly.Contains(true))
+try
 {
-    Console.WriteLine("An anomaly was detected at index:");
+    Response response = client.GetUnivariateClient().DetectUnivariateEntireSeries(request.ToRequestContent());
+    JsonElement result = JsonDocument.Parse(response.ContentStream).RootElement;
+
+    bool hasAnomaly = false;
     for (int i = 0; i < request.Series.Count; ++i)
     {
-        if (result.IsAnomaly[i])
+        if (result.GetProperty("isAnomaly")[i].GetBoolean())
         {
-            Console.Write(i);
-            Console.Write(" ");
+            Console.WriteLine($"An anomaly was detected at index: {i}.");
+            hasAnomaly = true;
         }
     }
-    Console.WriteLine();
+    if (!hasAnomaly)
+    {
+        Console.WriteLine("No anomalies detected in the series.");
+    }
 }
-else
+catch (RequestFailedException ex)
 {
-    Console.WriteLine(" No anomalies detected in the series.");
+    Console.WriteLine($"Entire detection failed: {ex.Message}");
+    throw;
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Detection error. {ex.Message}");
+    throw;
 }
 ```
-To see the full example source files, see:
-
-* [Detect Entire Series Anomaly](https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/anomalydetector/Azure.AI.AnomalyDetector/tests/samples/Sample1_DetectEntireSeriesAnomaly.cs)
 
 [README]: https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/anomalydetector/Azure.AI.AnomalyDetector/README.md
 [SampleData]: https://github.com/Azure/azure-sdk-for-net/tree/main/sdk/anomalydetector/Azure.AI.AnomalyDetector/tests/samples/data/request-data.csv

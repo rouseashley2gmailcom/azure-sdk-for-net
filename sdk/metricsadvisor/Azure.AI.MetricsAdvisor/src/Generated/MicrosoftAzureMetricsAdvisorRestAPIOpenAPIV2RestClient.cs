@@ -9,7 +9,6 @@ using System;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Azure;
 using Azure.AI.MetricsAdvisor.Administration;
 using Azure.AI.MetricsAdvisor.Models;
 using Azure.Core;
@@ -19,20 +18,22 @@ namespace Azure.AI.MetricsAdvisor
 {
     internal partial class MicrosoftAzureMetricsAdvisorRestAPIOpenAPIV2RestClient
     {
-        private string endpoint;
-        private ClientDiagnostics _clientDiagnostics;
-        private HttpPipeline _pipeline;
+        private readonly HttpPipeline _pipeline;
+        private readonly string _endpoint;
+
+        /// <summary> The ClientDiagnostics is used to provide tracing support for the client library. </summary>
+        internal ClientDiagnostics ClientDiagnostics { get; }
 
         /// <summary> Initializes a new instance of MicrosoftAzureMetricsAdvisorRestAPIOpenAPIV2RestClient. </summary>
         /// <param name="clientDiagnostics"> The handler for diagnostic messaging in the client. </param>
         /// <param name="pipeline"> The HTTP pipeline for sending and receiving REST requests and responses. </param>
         /// <param name="endpoint"> Supported Cognitive Services endpoints (protocol and hostname, for example: https://&lt;resource-name&gt;.cognitiveservices.azure.com). </param>
-        /// <exception cref="ArgumentNullException"> <paramref name="endpoint"/> is null. </exception>
+        /// <exception cref="ArgumentNullException"> <paramref name="clientDiagnostics"/>, <paramref name="pipeline"/> or <paramref name="endpoint"/> is null. </exception>
         public MicrosoftAzureMetricsAdvisorRestAPIOpenAPIV2RestClient(ClientDiagnostics clientDiagnostics, HttpPipeline pipeline, string endpoint)
         {
-            this.endpoint = endpoint ?? throw new ArgumentNullException(nameof(endpoint));
-            _clientDiagnostics = clientDiagnostics;
-            _pipeline = pipeline;
+            ClientDiagnostics = clientDiagnostics ?? throw new ArgumentNullException(nameof(clientDiagnostics));
+            _pipeline = pipeline ?? throw new ArgumentNullException(nameof(pipeline));
+            _endpoint = endpoint ?? throw new ArgumentNullException(nameof(endpoint));
         }
 
         internal HttpMessage CreateGetActiveSeriesCountRequest()
@@ -41,7 +42,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/stats/latest", false);
             request.Uri = uri;
@@ -60,12 +61,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         UsageStats value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = UsageStats.DeserializeUsageStats(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -80,12 +81,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         UsageStats value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = UsageStats.DeserializeUsageStats(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -95,7 +96,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/alert/anomaly/configurations/", false);
             uri.AppendPath(configurationId, true);
@@ -116,12 +117,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AnomalyAlertConfiguration value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = AnomalyAlertConfiguration.DeserializeAnomalyAlertConfiguration(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -137,12 +138,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AnomalyAlertConfiguration value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = AnomalyAlertConfiguration.DeserializeAnomalyAlertConfiguration(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -152,7 +153,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Patch;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/alert/anomaly/configurations/", false);
             uri.AppendPath(configurationId, true);
@@ -184,12 +185,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AnomalyAlertConfiguration value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = AnomalyAlertConfiguration.DeserializeAnomalyAlertConfiguration(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -212,12 +213,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AnomalyAlertConfiguration value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = AnomalyAlertConfiguration.DeserializeAnomalyAlertConfiguration(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -227,7 +228,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Delete;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/alert/anomaly/configurations/", false);
             uri.AppendPath(configurationId, true);
@@ -248,7 +249,7 @@ namespace Azure.AI.MetricsAdvisor
                 case 204:
                     return message.Response;
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -264,7 +265,7 @@ namespace Azure.AI.MetricsAdvisor
                 case 204:
                     return message.Response;
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -274,7 +275,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/alert/anomaly/configurations", false);
             request.Uri = uri;
@@ -305,7 +306,7 @@ namespace Azure.AI.MetricsAdvisor
                 case 201:
                     return ResponseWithHeaders.FromValue(headers, message.Response);
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -328,7 +329,7 @@ namespace Azure.AI.MetricsAdvisor
                 case 201:
                     return ResponseWithHeaders.FromValue(headers, message.Response);
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -338,7 +339,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/alert/anomaly/configurations/", false);
             uri.AppendPath(configurationId, true);
@@ -381,12 +382,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AlertResultList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = AlertResultList.DeserializeAlertResultList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -411,12 +412,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AlertResultList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = AlertResultList.DeserializeAlertResultList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -426,7 +427,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/alert/anomaly/configurations/", false);
             uri.AppendPath(configurationId, true);
@@ -467,12 +468,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AnomalyResultList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = AnomalyResultList.DeserializeAnomalyResultList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -497,12 +498,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AnomalyResultList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = AnomalyResultList.DeserializeAnomalyResultList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -512,7 +513,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/alert/anomaly/configurations/", false);
             uri.AppendPath(configurationId, true);
@@ -553,12 +554,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         IncidentResultList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = IncidentResultList.DeserializeIncidentResultList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -583,12 +584,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         IncidentResultList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = IncidentResultList.DeserializeIncidentResultList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -598,7 +599,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/enrichment/anomalyDetection/configurations/", false);
             uri.AppendPath(configurationId, true);
@@ -619,12 +620,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AnomalyDetectionConfiguration value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = AnomalyDetectionConfiguration.DeserializeAnomalyDetectionConfiguration(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -640,12 +641,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AnomalyDetectionConfiguration value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = AnomalyDetectionConfiguration.DeserializeAnomalyDetectionConfiguration(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -655,7 +656,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Patch;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/enrichment/anomalyDetection/configurations/", false);
             uri.AppendPath(configurationId, true);
@@ -687,12 +688,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AnomalyDetectionConfiguration value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = AnomalyDetectionConfiguration.DeserializeAnomalyDetectionConfiguration(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -715,12 +716,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AnomalyDetectionConfiguration value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = AnomalyDetectionConfiguration.DeserializeAnomalyDetectionConfiguration(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -730,7 +731,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Delete;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/enrichment/anomalyDetection/configurations/", false);
             uri.AppendPath(configurationId, true);
@@ -751,7 +752,7 @@ namespace Azure.AI.MetricsAdvisor
                 case 204:
                     return message.Response;
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -767,7 +768,7 @@ namespace Azure.AI.MetricsAdvisor
                 case 204:
                     return message.Response;
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -777,7 +778,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/enrichment/anomalyDetection/configurations", false);
             request.Uri = uri;
@@ -808,7 +809,7 @@ namespace Azure.AI.MetricsAdvisor
                 case 201:
                     return ResponseWithHeaders.FromValue(headers, message.Response);
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -831,7 +832,7 @@ namespace Azure.AI.MetricsAdvisor
                 case 201:
                     return ResponseWithHeaders.FromValue(headers, message.Response);
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -841,7 +842,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/enrichment/anomalyDetection/configurations/", false);
             uri.AppendPath(configurationId, true);
@@ -873,12 +874,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AnomalyAlertingConfigurationList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = AnomalyAlertingConfigurationList.DeserializeAnomalyAlertingConfigurationList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -896,12 +897,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AnomalyAlertingConfigurationList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = AnomalyAlertingConfigurationList.DeserializeAnomalyAlertingConfigurationList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -911,7 +912,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/enrichment/anomalyDetection/configurations/", false);
             uri.AppendPath(configurationId, true);
@@ -944,12 +945,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         SeriesResultList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = SeriesResultList.DeserializeSeriesResultList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -972,12 +973,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         SeriesResultList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = SeriesResultList.DeserializeSeriesResultList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -987,7 +988,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/enrichment/anomalyDetection/configurations/", false);
             uri.AppendPath(configurationId, true);
@@ -1030,12 +1031,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AnomalyResultList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = AnomalyResultList.DeserializeAnomalyResultList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1060,12 +1061,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AnomalyResultList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = AnomalyResultList.DeserializeAnomalyResultList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1075,7 +1076,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/enrichment/anomalyDetection/configurations/", false);
             uri.AppendPath(configurationId, true);
@@ -1118,12 +1119,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AnomalyDimensionList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = AnomalyDimensionList.DeserializeAnomalyDimensionList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1148,12 +1149,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AnomalyDimensionList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = AnomalyDimensionList.DeserializeAnomalyDimensionList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1163,7 +1164,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/enrichment/anomalyDetection/configurations/", false);
             uri.AppendPath(configurationId, true);
@@ -1201,12 +1202,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         IncidentResultList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = IncidentResultList.DeserializeIncidentResultList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1230,12 +1231,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         IncidentResultList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = IncidentResultList.DeserializeIncidentResultList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1245,7 +1246,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/enrichment/anomalyDetection/configurations/", false);
             uri.AppendPath(configurationId, true);
@@ -1277,12 +1278,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         IncidentResultList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = IncidentResultList.DeserializeIncidentResultList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1300,12 +1301,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         IncidentResultList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = IncidentResultList.DeserializeIncidentResultList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1315,7 +1316,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/enrichment/anomalyDetection/configurations/", false);
             uri.AppendPath(configurationId, true);
@@ -1346,12 +1347,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         RootCauseList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = RootCauseList.DeserializeRootCauseList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1374,12 +1375,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         RootCauseList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = RootCauseList.DeserializeRootCauseList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1389,7 +1390,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/credentials", false);
             request.Uri = uri;
@@ -1420,7 +1421,7 @@ namespace Azure.AI.MetricsAdvisor
                 case 201:
                     return ResponseWithHeaders.FromValue(headers, message.Response);
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1443,7 +1444,7 @@ namespace Azure.AI.MetricsAdvisor
                 case 201:
                     return ResponseWithHeaders.FromValue(headers, message.Response);
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1453,7 +1454,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/credentials", false);
             if (skip != null)
@@ -1482,12 +1483,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         DataSourceCredentialList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = DataSourceCredentialList.DeserializeDataSourceCredentialList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1504,12 +1505,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         DataSourceCredentialList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = DataSourceCredentialList.DeserializeDataSourceCredentialList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1519,7 +1520,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Patch;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/credentials/", false);
             uri.AppendPath(credentialId, true);
@@ -1551,12 +1552,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         DataSourceCredentialEntity value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = DataSourceCredentialEntity.DeserializeDataSourceCredentialEntity(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1579,12 +1580,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         DataSourceCredentialEntity value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = DataSourceCredentialEntity.DeserializeDataSourceCredentialEntity(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1594,7 +1595,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Delete;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/credentials/", false);
             uri.AppendPath(credentialId, true);
@@ -1615,7 +1616,7 @@ namespace Azure.AI.MetricsAdvisor
                 case 204:
                     return message.Response;
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1631,7 +1632,7 @@ namespace Azure.AI.MetricsAdvisor
                 case 204:
                     return message.Response;
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1641,7 +1642,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/credentials/", false);
             uri.AppendPath(credentialId, true);
@@ -1662,12 +1663,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         DataSourceCredentialEntity value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = DataSourceCredentialEntity.DeserializeDataSourceCredentialEntity(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1683,12 +1684,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         DataSourceCredentialEntity value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = DataSourceCredentialEntity.DeserializeDataSourceCredentialEntity(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1698,7 +1699,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/dataFeeds", false);
             if (dataFeedName != null)
@@ -1752,12 +1753,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         DataFeedList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = DataFeedList.DeserializeDataFeedList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1779,12 +1780,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         DataFeedList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = DataFeedList.DeserializeDataFeedList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1794,7 +1795,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/dataFeeds", false);
             request.Uri = uri;
@@ -1825,7 +1826,7 @@ namespace Azure.AI.MetricsAdvisor
                 case 201:
                     return ResponseWithHeaders.FromValue(headers, message.Response);
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1848,7 +1849,7 @@ namespace Azure.AI.MetricsAdvisor
                 case 201:
                     return ResponseWithHeaders.FromValue(headers, message.Response);
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1858,7 +1859,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/dataFeeds/", false);
             uri.AppendPath(dataFeedId, true);
@@ -1879,12 +1880,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         DataFeedDetail value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = DataFeedDetail.DeserializeDataFeedDetail(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1900,12 +1901,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         DataFeedDetail value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = DataFeedDetail.DeserializeDataFeedDetail(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1915,7 +1916,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Patch;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/dataFeeds/", false);
             uri.AppendPath(dataFeedId, true);
@@ -1947,12 +1948,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         DataFeedDetail value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = DataFeedDetail.DeserializeDataFeedDetail(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1975,12 +1976,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         DataFeedDetail value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = DataFeedDetail.DeserializeDataFeedDetail(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1990,7 +1991,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Delete;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/dataFeeds/", false);
             uri.AppendPath(dataFeedId, true);
@@ -2011,7 +2012,7 @@ namespace Azure.AI.MetricsAdvisor
                 case 204:
                     return message.Response;
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -2027,7 +2028,7 @@ namespace Azure.AI.MetricsAdvisor
                 case 204:
                     return message.Response;
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -2037,7 +2038,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/feedback/metric/", false);
             uri.AppendPath(feedbackId, true);
@@ -2058,12 +2059,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         MetricFeedback value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = MetricFeedback.DeserializeMetricFeedback(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -2079,12 +2080,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         MetricFeedback value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = MetricFeedback.DeserializeMetricFeedback(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -2094,7 +2095,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/feedback/metric/query", false);
             if (skip != null)
@@ -2134,12 +2135,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         MetricFeedbackList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = MetricFeedbackList.DeserializeMetricFeedbackList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -2163,12 +2164,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         MetricFeedbackList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = MetricFeedbackList.DeserializeMetricFeedbackList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -2178,7 +2179,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/feedback/metric", false);
             request.Uri = uri;
@@ -2209,7 +2210,7 @@ namespace Azure.AI.MetricsAdvisor
                 case 201:
                     return ResponseWithHeaders.FromValue(headers, message.Response);
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -2232,7 +2233,7 @@ namespace Azure.AI.MetricsAdvisor
                 case 201:
                     return ResponseWithHeaders.FromValue(headers, message.Response);
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -2242,7 +2243,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/hooks", false);
             if (hookName != null)
@@ -2276,12 +2277,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         HookList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = HookList.DeserializeHookList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -2299,12 +2300,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         HookList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = HookList.DeserializeHookList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -2314,7 +2315,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/hooks", false);
             request.Uri = uri;
@@ -2345,7 +2346,7 @@ namespace Azure.AI.MetricsAdvisor
                 case 201:
                     return ResponseWithHeaders.FromValue(headers, message.Response);
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -2368,7 +2369,7 @@ namespace Azure.AI.MetricsAdvisor
                 case 201:
                     return ResponseWithHeaders.FromValue(headers, message.Response);
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -2378,7 +2379,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/hooks/", false);
             uri.AppendPath(hookId, true);
@@ -2399,12 +2400,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         NotificationHook value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = NotificationHook.DeserializeNotificationHook(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -2420,12 +2421,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         NotificationHook value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = NotificationHook.DeserializeNotificationHook(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -2435,7 +2436,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Patch;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/hooks/", false);
             uri.AppendPath(hookId, true);
@@ -2467,12 +2468,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         NotificationHook value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = NotificationHook.DeserializeNotificationHook(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -2495,12 +2496,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         NotificationHook value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = NotificationHook.DeserializeNotificationHook(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -2510,7 +2511,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Delete;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/hooks/", false);
             uri.AppendPath(hookId, true);
@@ -2531,7 +2532,7 @@ namespace Azure.AI.MetricsAdvisor
                 case 204:
                     return message.Response;
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -2547,7 +2548,7 @@ namespace Azure.AI.MetricsAdvisor
                 case 204:
                     return message.Response;
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -2557,7 +2558,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/dataFeeds/", false);
             uri.AppendPath(dataFeedId, true);
@@ -2600,12 +2601,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         IngestionStatusList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = IngestionStatusList.DeserializeIngestionStatusList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -2630,12 +2631,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         IngestionStatusList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = IngestionStatusList.DeserializeIngestionStatusList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -2645,7 +2646,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/dataFeeds/", false);
             uri.AppendPath(dataFeedId, true);
@@ -2678,7 +2679,7 @@ namespace Azure.AI.MetricsAdvisor
                 case 204:
                     return message.Response;
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -2701,7 +2702,7 @@ namespace Azure.AI.MetricsAdvisor
                 case 204:
                     return message.Response;
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -2711,7 +2712,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/dataFeeds/", false);
             uri.AppendPath(dataFeedId, true);
@@ -2733,12 +2734,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         DataFeedIngestionProgress value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = DataFeedIngestionProgress.DeserializeDataFeedIngestionProgress(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -2754,12 +2755,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         DataFeedIngestionProgress value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = DataFeedIngestionProgress.DeserializeDataFeedIngestionProgress(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -2769,7 +2770,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/metrics/", false);
             uri.AppendPath(metricId, true);
@@ -2802,12 +2803,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         MetricDataList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = MetricDataList.DeserializeMetricDataList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -2830,12 +2831,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         MetricDataList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = MetricDataList.DeserializeMetricDataList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -2845,7 +2846,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/metrics/", false);
             uri.AppendPath(metricId, true);
@@ -2888,12 +2889,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         MetricSeriesList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = MetricSeriesList.DeserializeMetricSeriesList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -2918,12 +2919,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         MetricSeriesList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = MetricSeriesList.DeserializeMetricSeriesList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -2933,7 +2934,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/metrics/", false);
             uri.AppendPath(metricId, true);
@@ -2976,12 +2977,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         MetricDimensionList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = MetricDimensionList.DeserializeMetricDimensionList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -3006,12 +3007,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         MetricDimensionList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = MetricDimensionList.DeserializeMetricDimensionList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -3021,7 +3022,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/metrics/", false);
             uri.AppendPath(metricId, true);
@@ -3053,12 +3054,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AnomalyDetectionConfigurationList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = AnomalyDetectionConfigurationList.DeserializeAnomalyDetectionConfigurationList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -3076,12 +3077,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AnomalyDetectionConfigurationList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = AnomalyDetectionConfigurationList.DeserializeAnomalyDetectionConfigurationList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -3091,7 +3092,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/metrics/", false);
             uri.AppendPath(metricId, true);
@@ -3134,12 +3135,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         EnrichmentStatusList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = EnrichmentStatusList.DeserializeEnrichmentStatusList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -3164,12 +3165,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         EnrichmentStatusList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = EnrichmentStatusList.DeserializeEnrichmentStatusList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -3179,7 +3180,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/", false);
             uri.AppendRawNextLink(nextLink, false);
@@ -3215,12 +3216,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AlertResultList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = AlertResultList.DeserializeAlertResultList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -3247,12 +3248,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AlertResultList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = AlertResultList.DeserializeAlertResultList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -3262,7 +3263,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/", false);
             uri.AppendRawNextLink(nextLink, false);
@@ -3298,12 +3299,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AnomalyResultList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = AnomalyResultList.DeserializeAnomalyResultList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -3330,12 +3331,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AnomalyResultList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = AnomalyResultList.DeserializeAnomalyResultList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -3345,7 +3346,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/", false);
             uri.AppendRawNextLink(nextLink, false);
@@ -3381,12 +3382,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AnomalyDimensionList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = AnomalyDimensionList.DeserializeAnomalyDimensionList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -3413,12 +3414,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AnomalyDimensionList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = AnomalyDimensionList.DeserializeAnomalyDimensionList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -3428,7 +3429,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/", false);
             uri.AppendRawNextLink(nextLink, false);
@@ -3464,12 +3465,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         MetricFeedbackList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = MetricFeedbackList.DeserializeMetricFeedbackList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -3496,12 +3497,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         MetricFeedbackList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = MetricFeedbackList.DeserializeMetricFeedbackList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -3511,7 +3512,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/", false);
             uri.AppendRawNextLink(nextLink, false);
@@ -3547,12 +3548,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         IngestionStatusList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = IngestionStatusList.DeserializeIngestionStatusList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -3579,12 +3580,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         IngestionStatusList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = IngestionStatusList.DeserializeIngestionStatusList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -3594,7 +3595,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/", false);
             uri.AppendRawNextLink(nextLink, false);
@@ -3630,12 +3631,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         MetricSeriesList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = MetricSeriesList.DeserializeMetricSeriesList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -3662,12 +3663,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         MetricSeriesList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = MetricSeriesList.DeserializeMetricSeriesList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -3677,7 +3678,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/", false);
             uri.AppendRawNextLink(nextLink, false);
@@ -3713,12 +3714,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         MetricDimensionList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = MetricDimensionList.DeserializeMetricDimensionList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -3745,12 +3746,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         MetricDimensionList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = MetricDimensionList.DeserializeMetricDimensionList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -3760,7 +3761,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendPath("/", false);
             uri.AppendRawNextLink(nextLink, false);
@@ -3796,12 +3797,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         EnrichmentStatusList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = EnrichmentStatusList.DeserializeEnrichmentStatusList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -3828,12 +3829,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         EnrichmentStatusList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = EnrichmentStatusList.DeserializeEnrichmentStatusList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -3843,7 +3844,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendRawNextLink(nextLink, false);
             request.Uri = uri;
@@ -3877,12 +3878,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AlertResultList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = AlertResultList.DeserializeAlertResultList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -3912,12 +3913,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AlertResultList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = AlertResultList.DeserializeAlertResultList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -3927,7 +3928,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendRawNextLink(nextLink, false);
             request.Uri = uri;
@@ -3961,12 +3962,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AnomalyResultList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = AnomalyResultList.DeserializeAnomalyResultList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -3996,12 +3997,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AnomalyResultList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = AnomalyResultList.DeserializeAnomalyResultList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -4011,7 +4012,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendRawNextLink(nextLink, false);
             request.Uri = uri;
@@ -4045,12 +4046,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         IncidentResultList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = IncidentResultList.DeserializeIncidentResultList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -4080,12 +4081,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         IncidentResultList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = IncidentResultList.DeserializeIncidentResultList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -4095,7 +4096,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendRawNextLink(nextLink, false);
             request.Uri = uri;
@@ -4124,12 +4125,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AnomalyAlertingConfigurationList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = AnomalyAlertingConfigurationList.DeserializeAnomalyAlertingConfigurationList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -4154,12 +4155,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AnomalyAlertingConfigurationList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = AnomalyAlertingConfigurationList.DeserializeAnomalyAlertingConfigurationList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -4169,7 +4170,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendRawNextLink(nextLink, false);
             request.Uri = uri;
@@ -4203,12 +4204,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AnomalyResultList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = AnomalyResultList.DeserializeAnomalyResultList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -4238,12 +4239,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AnomalyResultList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = AnomalyResultList.DeserializeAnomalyResultList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -4253,7 +4254,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendRawNextLink(nextLink, false);
             request.Uri = uri;
@@ -4287,12 +4288,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AnomalyDimensionList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = AnomalyDimensionList.DeserializeAnomalyDimensionList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -4322,12 +4323,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AnomalyDimensionList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = AnomalyDimensionList.DeserializeAnomalyDimensionList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -4337,7 +4338,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendRawNextLink(nextLink, false);
             request.Uri = uri;
@@ -4370,12 +4371,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         IncidentResultList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = IncidentResultList.DeserializeIncidentResultList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -4404,12 +4405,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         IncidentResultList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = IncidentResultList.DeserializeIncidentResultList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -4419,7 +4420,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendRawNextLink(nextLink, false);
             request.Uri = uri;
@@ -4448,12 +4449,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         IncidentResultList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = IncidentResultList.DeserializeIncidentResultList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -4478,12 +4479,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         IncidentResultList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = IncidentResultList.DeserializeIncidentResultList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -4493,7 +4494,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendRawNextLink(nextLink, false);
             request.Uri = uri;
@@ -4521,12 +4522,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         DataSourceCredentialList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = DataSourceCredentialList.DeserializeDataSourceCredentialList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -4550,12 +4551,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         DataSourceCredentialList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = DataSourceCredentialList.DeserializeDataSourceCredentialList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -4565,7 +4566,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendRawNextLink(nextLink, false);
             request.Uri = uri;
@@ -4598,12 +4599,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         DataFeedList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = DataFeedList.DeserializeDataFeedList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -4632,12 +4633,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         DataFeedList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = DataFeedList.DeserializeDataFeedList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -4647,7 +4648,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendRawNextLink(nextLink, false);
             request.Uri = uri;
@@ -4680,12 +4681,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         MetricFeedbackList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = MetricFeedbackList.DeserializeMetricFeedbackList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -4714,12 +4715,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         MetricFeedbackList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = MetricFeedbackList.DeserializeMetricFeedbackList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -4729,7 +4730,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendRawNextLink(nextLink, false);
             request.Uri = uri;
@@ -4758,12 +4759,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         HookList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = HookList.DeserializeHookList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -4788,12 +4789,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         HookList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = HookList.DeserializeHookList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -4803,7 +4804,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendRawNextLink(nextLink, false);
             request.Uri = uri;
@@ -4837,12 +4838,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         IngestionStatusList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = IngestionStatusList.DeserializeIngestionStatusList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -4872,12 +4873,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         IngestionStatusList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = IngestionStatusList.DeserializeIngestionStatusList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -4887,7 +4888,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendRawNextLink(nextLink, false);
             request.Uri = uri;
@@ -4921,12 +4922,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         MetricSeriesList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = MetricSeriesList.DeserializeMetricSeriesList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -4956,12 +4957,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         MetricSeriesList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = MetricSeriesList.DeserializeMetricSeriesList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -4971,7 +4972,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendRawNextLink(nextLink, false);
             request.Uri = uri;
@@ -5005,12 +5006,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         MetricDimensionList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = MetricDimensionList.DeserializeMetricDimensionList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -5040,12 +5041,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         MetricDimensionList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = MetricDimensionList.DeserializeMetricDimensionList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -5055,7 +5056,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendRawNextLink(nextLink, false);
             request.Uri = uri;
@@ -5084,12 +5085,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AnomalyDetectionConfigurationList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = AnomalyDetectionConfigurationList.DeserializeAnomalyDetectionConfigurationList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -5114,12 +5115,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         AnomalyDetectionConfigurationList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = AnomalyDetectionConfigurationList.DeserializeAnomalyDetectionConfigurationList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -5129,7 +5130,7 @@ namespace Azure.AI.MetricsAdvisor
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRaw("/metricsadvisor/v1.0", false);
             uri.AppendRawNextLink(nextLink, false);
             request.Uri = uri;
@@ -5163,12 +5164,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         EnrichmentStatusList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = EnrichmentStatusList.DeserializeEnrichmentStatusList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -5198,12 +5199,12 @@ namespace Azure.AI.MetricsAdvisor
                 case 200:
                     {
                         EnrichmentStatusList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = EnrichmentStatusList.DeserializeEnrichmentStatusList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
     }

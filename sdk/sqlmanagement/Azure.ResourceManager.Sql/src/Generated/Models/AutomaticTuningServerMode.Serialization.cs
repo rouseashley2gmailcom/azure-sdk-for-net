@@ -13,17 +13,17 @@ namespace Azure.ResourceManager.Sql.Models
     {
         public static string ToSerialString(this AutomaticTuningServerMode value) => value switch
         {
+            AutomaticTuningServerMode.Unspecified => "Unspecified",
             AutomaticTuningServerMode.Custom => "Custom",
             AutomaticTuningServerMode.Auto => "Auto",
-            AutomaticTuningServerMode.Unspecified => "Unspecified",
             _ => throw new ArgumentOutOfRangeException(nameof(value), value, "Unknown AutomaticTuningServerMode value.")
         };
 
         public static AutomaticTuningServerMode ToAutomaticTuningServerMode(this string value)
         {
-            if (string.Equals(value, "Custom", StringComparison.InvariantCultureIgnoreCase)) return AutomaticTuningServerMode.Custom;
-            if (string.Equals(value, "Auto", StringComparison.InvariantCultureIgnoreCase)) return AutomaticTuningServerMode.Auto;
-            if (string.Equals(value, "Unspecified", StringComparison.InvariantCultureIgnoreCase)) return AutomaticTuningServerMode.Unspecified;
+            if (StringComparer.OrdinalIgnoreCase.Equals(value, "Unspecified")) return AutomaticTuningServerMode.Unspecified;
+            if (StringComparer.OrdinalIgnoreCase.Equals(value, "Custom")) return AutomaticTuningServerMode.Custom;
+            if (StringComparer.OrdinalIgnoreCase.Equals(value, "Auto")) return AutomaticTuningServerMode.Auto;
             throw new ArgumentOutOfRangeException(nameof(value), value, "Unknown AutomaticTuningServerMode value.");
         }
     }

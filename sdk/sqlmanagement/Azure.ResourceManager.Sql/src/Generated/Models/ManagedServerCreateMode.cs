@@ -12,20 +12,16 @@ namespace Azure.ResourceManager.Sql.Models
 {
     /// <summary>
     /// Specifies the mode of database creation.
-    /// 
-    /// 
-    /// 
+    ///
     /// Default: Regular instance creation.
-    /// 
-    /// 
-    /// 
+    ///
     /// Restore: Creates an instance by restoring a set of backups to specific point in time. RestorePointInTime and SourceManagedInstanceId must be specified.
     /// </summary>
     public readonly partial struct ManagedServerCreateMode : IEquatable<ManagedServerCreateMode>
     {
         private readonly string _value;
 
-        /// <summary> Determines if two <see cref="ManagedServerCreateMode"/> values are the same. </summary>
+        /// <summary> Initializes a new instance of <see cref="ManagedServerCreateMode"/>. </summary>
         /// <exception cref="ArgumentNullException"> <paramref name="value"/> is null. </exception>
         public ManagedServerCreateMode(string value)
         {
@@ -43,7 +39,7 @@ namespace Azure.ResourceManager.Sql.Models
         public static bool operator ==(ManagedServerCreateMode left, ManagedServerCreateMode right) => left.Equals(right);
         /// <summary> Determines if two <see cref="ManagedServerCreateMode"/> values are not the same. </summary>
         public static bool operator !=(ManagedServerCreateMode left, ManagedServerCreateMode right) => !left.Equals(right);
-        /// <summary> Converts a string to a <see cref="ManagedServerCreateMode"/>. </summary>
+        /// <summary> Converts a <see cref="string"/> to a <see cref="ManagedServerCreateMode"/>. </summary>
         public static implicit operator ManagedServerCreateMode(string value) => new ManagedServerCreateMode(value);
 
         /// <inheritdoc />
@@ -54,7 +50,7 @@ namespace Azure.ResourceManager.Sql.Models
 
         /// <inheritdoc />
         [EditorBrowsable(EditorBrowsableState.Never)]
-        public override int GetHashCode() => _value?.GetHashCode() ?? 0;
+        public override int GetHashCode() => _value != null ? StringComparer.InvariantCultureIgnoreCase.GetHashCode(_value) : 0;
         /// <inheritdoc />
         public override string ToString() => _value;
     }

@@ -16,7 +16,8 @@ namespace Azure.Storage.Blobs.ChangeFeed
         private readonly BlobContainerClient _containerClient;
 
         public ChangeFeedFactory(
-            BlobServiceClient blobServiceClient)
+            BlobServiceClient blobServiceClient,
+            long? maxTransferSize)
         {
             _containerClient = blobServiceClient.GetBlobContainerClient(Constants.ChangeFeed.ChangeFeedContainerName);
             _segmentFactory = new SegmentFactory(
@@ -26,7 +27,8 @@ namespace Azure.Storage.Blobs.ChangeFeed
                     new ChunkFactory(
                         _containerClient,
                         new LazyLoadingBlobStreamFactory(),
-                        new AvroReaderFactory())));
+                        new AvroReaderFactory(),
+                        maxTransferSize)));
         }
 
         public ChangeFeedFactory(
@@ -81,37 +83,24 @@ namespace Azure.Storage.Blobs.ChangeFeed
                 throw new ArgumentException("Change Feed hasn't been enabled on this account, or is currently being enabled.");
             }
 
-            // Get last consumable
-            BlobClient blobClient = _containerClient.GetBlobClient(Constants.ChangeFeed.MetaSegmentsPath);
-            BlobDownloadStreamingResult blobDownloadInfo;
-            if (async)
-            {
-                blobDownloadInfo = await blobClient.DownloadStreamingAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-            }
-            else
-            {
-                blobDownloadInfo = blobClient.DownloadStreaming(cancellationToken: cancellationToken);
-            }
-
-            JsonDocument jsonMetaSegment;
-            if (async)
-            {
-                jsonMetaSegment = await JsonDocument.ParseAsync(
-                    blobDownloadInfo.Content,
-                    cancellationToken: cancellationToken
-                    ).ConfigureAwait(false);
-            }
-            else
-            {
-                jsonMetaSegment = JsonDocument.Parse(blobDownloadInfo.Content);
-            }
-
-            lastConsumable = jsonMetaSegment.RootElement.GetProperty("lastConsumable").GetDateTimeOffset();
-
-            // Get year paths
-            years = await GetYearPathsInternal(
+            DateTimeOffset? lastConsumableNullable = await GetLastConsumableInternal(
+                _containerClient,
                 async,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken)
+                .ConfigureAwait(false);
+            if (lastConsumableNullable.HasValue)
+            {
+                lastConsumable = lastConsumableNullable.Value;
+            }
+            else
+            {
+                return ChangeFeed.Empty();
+            }
+
+                // Get year paths
+                years = await GetYearPathsInternal(
+                    async,
+                    cancellationToken).ConfigureAwait(false);
 
             // Dequeue any years that occur before start time
             if (startTime.HasValue)
@@ -212,6 +201,53 @@ namespace Azure.Storage.Blobs.ChangeFeed
                 }
             }
             return new Queue<string>(list);
+        }
+
+        internal static async Task<DateTimeOffset?> GetLastConsumableInternal(
+            BlobContainerClient containerClient,
+            bool async,
+            CancellationToken cancellationToken)
+        {
+            // Get last consumable
+            BlobClient blobClient = containerClient.GetBlobClient(Constants.ChangeFeed.MetaSegmentsPath);
+            BlobDownloadStreamingResult blobDownloadInfo;
+            try
+            {
+                if (async)
+                {
+                    blobDownloadInfo = await blobClient.DownloadStreamingAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    blobDownloadInfo = blobClient.DownloadStreaming(cancellationToken: cancellationToken);
+                }
+            }
+            catch (RequestFailedException e) when (e.ErrorCode == BlobErrorCode.BlobNotFound)
+            {
+                return null;
+            }
+
+            JsonDocument jsonMetaSegment = null;
+            try
+            {
+                if (async)
+                {
+                    jsonMetaSegment = await JsonDocument.ParseAsync(
+                        blobDownloadInfo.Content,
+                        cancellationToken: cancellationToken
+                        ).ConfigureAwait(false);
+                }
+                else
+                {
+                    jsonMetaSegment = JsonDocument.Parse(blobDownloadInfo.Content);
+                }
+
+                return jsonMetaSegment.RootElement.GetProperty("lastConsumable").GetDateTimeOffset();
+            }
+            finally
+            {
+                jsonMetaSegment?.Dispose();
+            }
         }
     }
 }

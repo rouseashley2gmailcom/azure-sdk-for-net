@@ -13,6 +13,8 @@ using Microsoft.Azure.WebJobs.Host.Executors;
 using Microsoft.Azure.WebPubSub.Common;
 using Microsoft.Extensions.Logging;
 
+using NewtonsoftJsonLinq = Newtonsoft.Json.Linq;
+
 namespace Microsoft.Azure.WebJobs.Extensions.WebPubSub
 {
     internal class WebPubSubTriggerDispatcher : IWebPubSubTriggerDispatcher
@@ -51,9 +53,7 @@ namespace Microsoft.Azure.WebJobs.Extensions.WebPubSub
 
             var tcs = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-            var function = GetFunctionName(context);
-
-            if (_listeners.TryGetValue(function, out var executor))
+            if (TryResolveListener(context, out var executor))
             {
                 if (!context.IsValidSignature(executor.ValidationOptions))
                 {
@@ -68,10 +68,10 @@ namespace Microsoft.Azure.WebJobs.Extensions.WebPubSub
 
                 BinaryData data = null;
                 WebPubSubDataType dataType = WebPubSubDataType.Text;
-                IDictionary<string, string[]> claims = null;
-                IDictionary<string, string[]> query = null;
-                IList<string> subprotocols = null;
-                IList<WebPubSubClientCertificate> certificates = null;
+                IReadOnlyDictionary<string, string[]> claims = null;
+                IReadOnlyDictionary<string, string[]> query = null;
+                IReadOnlyList<string> subprotocols = null;
+                IReadOnlyList<WebPubSubClientCertificate> certificates = null;
                 string reason = null;
                 WebPubSubEventRequest eventRequest = null;
 
@@ -81,15 +81,37 @@ namespace Microsoft.Azure.WebJobs.Extensions.WebPubSub
                     case RequestType.Connect:
                         {
                             var content = await req.Content.ReadAsStringAsync().ConfigureAwait(false);
-                            var request = JsonSerializer.Deserialize<ConnectEventRequest>(content);
-                            eventRequest = new ConnectEventRequest(context, request.Claims, request.Query, request.Subprotocols, request.ClientCertificates);
+                            if (context is MqttConnectionContext mqttContext)
+                            {
+                                var request = JsonSerializer.Deserialize<MqttConnectEventRequestContent>(content);
+                                eventRequest = new MqttConnectEventRequest(mqttContext, request.Claims, request.Query, request.ClientCertificates, request.Headers, request.Mqtt);
+                            }
+                            else
+                            {
+                                var request = JsonSerializer.Deserialize<ConnectEventRequest>(content);
+                                eventRequest = new ConnectEventRequest(context, request.Claims, request.Query, request.Subprotocols, request.ClientCertificates, request.Headers);
+                            }
+                            var connectEventRequest = (ConnectEventRequest)eventRequest;
+                            claims = connectEventRequest.Claims;
+                            query = connectEventRequest.Query;
+                            subprotocols = connectEventRequest.Subprotocols;
+                            certificates = connectEventRequest.ClientCertificates;
                             break;
                         }
                     case RequestType.Disconnected:
                         {
                             var content = await req.Content.ReadAsStringAsync().ConfigureAwait(false);
-                            var request = JsonSerializer.Deserialize<DisconnectedEventRequest>(content);
-                            eventRequest = new DisconnectedEventRequest(context, request.Reason);
+                            if (context is MqttConnectionContext mqttContext)
+                            {
+                                var requestBody = JsonSerializer.Deserialize<MqttDisconnectedEventRequestContent>(content);
+                                eventRequest = new MqttDisconnectedEventRequest(mqttContext, requestBody.Reason, requestBody.Mqtt);
+                            }
+                            else
+                            {
+                                var request = JsonSerializer.Deserialize<DisconnectedEventRequest>(content);
+                                eventRequest = new DisconnectedEventRequest(context, request.Reason);
+                            }
+                            reason = ((DisconnectedEventRequest)eventRequest).Reason;
                             break;
                         }
                     case RequestType.User:
@@ -146,18 +168,27 @@ namespace Microsoft.Azure.WebJobs.Extensions.WebPubSub
                             // Skip no returns
                             if (response != null)
                             {
-                                var validResponse = Utilities.BuildValidResponse(response, requestType, context);
-
-                                if (validResponse != null)
+                                if (response is WebPubSubEventResponse wpsResponse)
                                 {
-                                    return validResponse;
+                                    return Utilities.BuildValidResponse(wpsResponse, requestType, context);
                                 }
+                                if (response is NewtonsoftJsonLinq.JToken jResponse)
+                                {
+                                    return Utilities.BuildValidResponse(jResponse, requestType, context);
+                                }
+
                                 _logger.LogWarning($"Invalid response type {response.GetType()} regarding current request: {requestType}");
                             }
                         }
                     }
                     catch (Exception ex)
                     {
+                        if (context is MqttConnectionContext mqttContext && requestType == RequestType.Connect)
+                        {
+                            var mqttProtocolVersion = ((MqttConnectEventRequest)eventRequest).Mqtt.ProtocolVersion;
+                            var errorResponse = ((MqttConnectEventRequest)eventRequest).CreateErrorResponse(WebPubSubErrorCode.ServerError, ex.Message);
+                            return Utilities.BuildErrorResponse(errorResponse);
+                        }
                         var error = new EventErrorResponse(WebPubSubErrorCode.ServerError, ex.Message);
                         return Utilities.BuildErrorResponse(error);
                     }
@@ -177,13 +208,13 @@ namespace Microsoft.Azure.WebJobs.Extensions.WebPubSub
                 var hub = request.Headers.GetValues(Constants.Headers.CloudEvents.Hub).SingleOrDefault();
                 var eventType = Utilities.GetEventType(request.Headers.GetValues(Constants.Headers.CloudEvents.Type).SingleOrDefault());
                 var eventName = request.Headers.GetValues(Constants.Headers.CloudEvents.EventName).SingleOrDefault();
-                var origin = request.Headers.GetValues(Constants.Headers.WebHookRequestOrigin).SingleOrDefault();
+                var origin = string.Join(",", request.Headers.GetValues(Constants.Headers.WebHookRequestOrigin));
                 var headers = request.Headers.ToDictionary(x => x.Key, v => v.Value.ToArray(), StringComparer.OrdinalIgnoreCase);
                 string signature = null;
                 // Signature is optional and binding with validation parameter.
                 if (request.Headers.TryGetValues(Constants.Headers.CloudEvents.Signature, out var val))
                 {
-                    signature = val.SingleOrDefault();
+                    signature = string.Join(",", val);
                 }
                 string userId = null;
                 // UserId is optional, e.g. connect
@@ -191,25 +222,43 @@ namespace Microsoft.Azure.WebJobs.Extensions.WebPubSub
                 {
                     userId = values.SingleOrDefault();
                 }
-                Dictionary<string, object> states = null;
+                Dictionary<string, BinaryData> states = null;
                 if (request.Headers.TryGetValues(Constants.Headers.CloudEvents.State, out var connectionStates))
                 {
                     states = connectionStates.SingleOrDefault().DecodeConnectionStates();
+                }
+                if (request.Headers.TryGetValues(Constants.Headers.CloudEvents.Subprotocol, out var subprotocols) && subprotocols.Contains(Constants.MqttWebSocketSubprotocolValue)
+                    && request.Headers.TryGetValues(Constants.Headers.CloudEvents.MqttPhysicalConnectionId, out var physicalConnectionId))
+                {
+                    var hasSessionId = request.Headers.TryGetValues(Constants.Headers.CloudEvents.MqttSessionId, out var sessionId);
+                    context = new MqttConnectionContext(eventType, eventName, hub, connectionId, physicalConnectionId.First(), hasSessionId ? sessionId.First() : null, userId, signature, origin, states, headers);
+                    return true;
                 }
 
                 context = new WebPubSubConnectionContext(eventType, eventName, hub, connectionId, userId, signature, origin, states, headers);
                 return true;
             }
-            catch (Exception)
+            catch
             {
                 context = null;
                 return false;
             }
         }
 
-        private static string GetFunctionName(WebPubSubConnectionContext context)
+        private bool TryResolveListener(WebPubSubConnectionContext context, out WebPubSubListener listener)
         {
-            return $"{context.Hub}.{context.EventType}.{context.EventName}";
+            // Try to match a listener for specified client protocol
+            var key = Utilities.GetFunctionKey(context.Hub, context.EventType, context.EventName, (context is MqttConnectionContext ? WebPubSubTriggerAcceptedClientProtocols.Mqtt : WebPubSubTriggerAcceptedClientProtocols.WebPubSub));
+            if (_listeners.TryGetValue(key, out listener))
+            {
+                return true;
+            }
+            key = $"{context.Hub}.{context.EventType}.{context.EventName}.{WebPubSubTriggerAcceptedClientProtocols.All}"; // match all client protocols
+            if (_listeners.TryGetValue(key, out listener))
+            {
+                return true;
+            }
+            return false;
         }
 
         private static HttpResponseMessage RespondToServiceAbuseCheck(IList<string> requestHosts, WebPubSubValidationOptions options)

@@ -14,7 +14,7 @@ namespace Azure.Communication.Identity
         /// <summary>
         /// The latest version of the identity service.
         /// </summary>
-        internal const ServiceVersion LatestVersion = ServiceVersion.V2021_10_31_preview;
+        internal const ServiceVersion LatestVersion = ServiceVersion.V2025_03_02_PREVIEW;
 
         internal string ApiVersion { get; }
 
@@ -26,8 +26,11 @@ namespace Azure.Communication.Identity
             ApiVersion = version switch
             {
                 ServiceVersion.V2021_03_07 => "2021-03-07",
-                ServiceVersion.V2021_10_31_preview => "2021-10-31-preview",
-                _ => throw new ArgumentOutOfRangeException(nameof(version)),
+                ServiceVersion.V2022_06_01 => "2022-06-01",
+                ServiceVersion.V2022_10_01 => "2022-10-01",
+                ServiceVersion.V2023_10_01 => "2023-10-01",
+                ServiceVersion.V2025_03_02_PREVIEW => "2025-03-02-preview",
+                _ => throw new ArgumentOutOfRangeException(nameof(version))
             };
         }
 
@@ -41,12 +44,22 @@ namespace Azure.Communication.Identity
             /// </summary>
 #pragma warning disable CA1707 // Identifiers should not contain underscores
             V2021_03_07 = 1,
-#pragma warning disable AZC0016 // Invalid ServiceVersion member name.
             /// <summary>
-            /// The V2021_10_31_preview of the identity service.
+            /// The V2022_06_01 of the identity service.
             /// </summary>
-            V2021_10_31_preview = 2,
-#pragma warning restore AZC0016 // Invalid ServiceVersion member name.
+            V2022_06_01 = 2,
+            /// <summary>
+            /// The V2022_10_01 of the identity service.
+            /// </summary>
+            V2022_10_01 = 3,
+            /// <summary>
+            /// The V2023_10_01 of the identity service.
+            /// </summary>
+            V2023_10_01 = 4,
+            /// <summary>
+            /// The V2025_04_01_PREVIEW of the identity service.
+            /// </summary>
+            V2025_03_02_PREVIEW = 5,
 #pragma warning restore CA1707 // Identifiers should not contain underscores
         }
     }

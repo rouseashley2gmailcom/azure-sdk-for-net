@@ -541,7 +541,8 @@ namespace Microsoft.Azure.CognitiveServices.Vision.Face
         /// should not be provided at the same time.
         /// </param>
         /// <param name='maxNumOfCandidatesReturned'>
-        /// The range of maxNumOfCandidatesReturned is between 1 and 5 (default is 1).
+        /// The range of maxNumOfCandidatesReturned is between 1 and 100 (default is
+        /// 1).
         /// </param>
         /// <param name='confidenceThreshold'>
         /// Confidence threshold of identification, used to judge whether one face
@@ -608,9 +609,9 @@ namespace Microsoft.Azure.CognitiveServices.Vision.Face
                     throw new ValidationException(ValidationRules.Pattern, "largePersonGroupId", "^[a-z0-9-_]+$");
                 }
             }
-            if (maxNumOfCandidatesReturned > 5)
+            if (maxNumOfCandidatesReturned > 100)
             {
-                throw new ValidationException(ValidationRules.InclusiveMaximum, "maxNumOfCandidatesReturned", 5);
+                throw new ValidationException(ValidationRules.InclusiveMaximum, "maxNumOfCandidatesReturned", 100);
             }
             if (maxNumOfCandidatesReturned < 1)
             {
@@ -933,8 +934,9 @@ namespace Microsoft.Azure.CognitiveServices.Vision.Face
         /// faceIdTimeToLive after the original detection call.
         /// * Optional parameters include faceId, landmarks, and attributes. Attributes
         /// include age, gender, headPose, smile, facialHair, glasses, emotion, hair,
-        /// makeup, occlusion, accessories, blur, exposure, noise, and mask. Some of
-        /// the results returned for specific attributes may not be highly accurate.
+        /// makeup, occlusion, accessories, blur, exposure, noise, mask, and
+        /// qualityForRecognition. Some of the results returned for specific attributes
+        /// may not be highly accurate.
         /// * JPEG, PNG, GIF (the first frame), and BMP format are supported. The
         /// allowed image file size is from 1KB to 6MB.
         /// * Up to 100 faces can be returned for an image. Faces are ranked by face
@@ -968,7 +970,8 @@ namespace Microsoft.Azure.CognitiveServices.Vision.Face
         /// </param>
         /// <param name='returnFaceId'>
         /// A value indicating whether the operation should return faceIds of detected
-        /// faces.
+        /// faces. Detecting with this value set to true requires additional
+        /// access approvals at https://aka.ms/facerecognition.
         /// </param>
         /// <param name='returnFaceLandmarks'>
         /// A value indicating whether the operation should return landmarks of the
@@ -979,10 +982,13 @@ namespace Microsoft.Azure.CognitiveServices.Vision.Face
         /// comma-separated string like "returnFaceAttributes=age,gender". The
         /// available attributes depends on the 'detectionModel' specified.
         /// 'detection_01' supports age, gender, headPose, smile, facialHair, glasses,
-        /// emotion, hair, makeup, occlusion, accessories, blur, exposure, and noise.
-        /// While 'detection_02' does not support any attributes and 'detection_03'
-        /// only supports mask. Note that each face attribute analysis has additional
-        /// computational and time cost.
+        /// emotion, hair, makeup, occlusion, accessories, blur, exposure, noise, and
+        /// qualityForRecognition. While 'detection_02' does not support any attributes
+        /// and 'detection_03' only supports mask and qualityForRecognition.
+        /// Additionally, qualityForRecognition is only supported when the
+        /// 'recognitionModel' is specified as 'recognition_03' or 'recognition_04'.
+        /// Note that each face attribute analysis has additional computational and
+        /// time cost.
         /// </param>
         /// <param name='recognitionModel'>
         /// Name of recognition model. Recognition model is used when the face features
@@ -1030,7 +1036,7 @@ namespace Microsoft.Azure.CognitiveServices.Vision.Face
         /// <return>
         /// A response object containing the response body and response headers.
         /// </return>
-        public async Task<HttpOperationResponse<IList<DetectedFace>>> DetectWithUrlWithHttpMessagesAsync(string url, bool? returnFaceId = true, bool? returnFaceLandmarks = false, IList<FaceAttributeType> returnFaceAttributes = default(IList<FaceAttributeType>), string recognitionModel = default(string), bool? returnRecognitionModel = false, string detectionModel = default(string), int? faceIdTimeToLive = 86400, Dictionary<string, List<string>> customHeaders = null, CancellationToken cancellationToken = default(CancellationToken))
+        public async Task<HttpOperationResponse<IList<DetectedFace>>> DetectWithUrlWithHttpMessagesAsync(string url, bool? returnFaceId = default(bool?), bool? returnFaceLandmarks = false, IList<FaceAttributeType> returnFaceAttributes = default(IList<FaceAttributeType>), string recognitionModel = default(string), bool? returnRecognitionModel = false, string detectionModel = default(string), int? faceIdTimeToLive = 86400, Dictionary<string, List<string>> customHeaders = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             if (Client.Endpoint == null)
             {
@@ -1431,8 +1437,9 @@ namespace Microsoft.Azure.CognitiveServices.Vision.Face
         /// faceIdTimeToLive after the original detection call.
         /// * Optional parameters include faceId, landmarks, and attributes. Attributes
         /// include age, gender, headPose, smile, facialHair, glasses, emotion, hair,
-        /// makeup, occlusion, accessories, blur, exposure, noise, and mask. Some of
-        /// the results returned for specific attributes may not be highly accurate.
+        /// makeup, occlusion, accessories, blur, exposure, noise, mask, and
+        /// qualityForRecognition. Some of the results returned for specific attributes
+        /// may not be highly accurate.
         /// * JPEG, PNG, GIF (the first frame), and BMP format are supported. The
         /// allowed image file size is from 1KB to 6MB.
         /// * Up to 100 faces can be returned for an image. Faces are ranked by face
@@ -1465,7 +1472,8 @@ namespace Microsoft.Azure.CognitiveServices.Vision.Face
         /// </param>
         /// <param name='returnFaceId'>
         /// A value indicating whether the operation should return faceIds of detected
-        /// faces.
+        /// faces. Detecting with this value set to true requires additional
+        /// access approvals at https://aka.ms/facerecognition.
         /// </param>
         /// <param name='returnFaceLandmarks'>
         /// A value indicating whether the operation should return landmarks of the
@@ -1476,10 +1484,13 @@ namespace Microsoft.Azure.CognitiveServices.Vision.Face
         /// comma-separated string like "returnFaceAttributes=age,gender". The
         /// available attributes depends on the 'detectionModel' specified.
         /// 'detection_01' supports age, gender, headPose, smile, facialHair, glasses,
-        /// emotion, hair, makeup, occlusion, accessories, blur, exposure, and noise.
-        /// While 'detection_02' does not support any attributes and 'detection_03'
-        /// only supports mask. Note that each face attribute analysis has additional
-        /// computational and time cost.
+        /// emotion, hair, makeup, occlusion, accessories, blur, exposure, noise, and
+        /// qualityForRecognition. While 'detection_02' does not support any attributes
+        /// and 'detection_03' only supports mask and qualityForRecognition.
+        /// Additionally, qualityForRecognition is only supported when the
+        /// 'recognitionModel' is specified as 'recognition_03' or 'recognition_04'.
+        /// Note that each face attribute analysis has additional computational and
+        /// time cost.
         /// </param>
         /// <param name='recognitionModel'>
         /// Name of recognition model. Recognition model is used when the face features
@@ -1527,7 +1538,7 @@ namespace Microsoft.Azure.CognitiveServices.Vision.Face
         /// <return>
         /// A response object containing the response body and response headers.
         /// </return>
-        public async Task<HttpOperationResponse<IList<DetectedFace>>> DetectWithStreamWithHttpMessagesAsync(Stream image, bool? returnFaceId = true, bool? returnFaceLandmarks = false, IList<FaceAttributeType> returnFaceAttributes = default(IList<FaceAttributeType>), string recognitionModel = default(string), bool? returnRecognitionModel = false, string detectionModel = default(string), int? faceIdTimeToLive = 86400, Dictionary<string, List<string>> customHeaders = null, CancellationToken cancellationToken = default(CancellationToken))
+        public async Task<HttpOperationResponse<IList<DetectedFace>>> DetectWithStreamWithHttpMessagesAsync(Stream image, bool? returnFaceId = default(bool?), bool? returnFaceLandmarks = false, IList<FaceAttributeType> returnFaceAttributes = default(IList<FaceAttributeType>), string recognitionModel = default(string), bool? returnRecognitionModel = false, string detectionModel = default(string), int? faceIdTimeToLive = 86400, Dictionary<string, List<string>> customHeaders = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             if (Client.Endpoint == null)
             {

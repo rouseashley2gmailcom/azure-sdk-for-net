@@ -25,6 +25,12 @@ namespace Azure.Storage.Files.DataLake.Models
         /// <summary>
         /// Indicates the range of bytes returned in the event that the client requested a subset of the file
         /// setting the 'Range' request header.
+        ///
+        /// The format of the Content-Range is expected to comeback in the following format.
+        /// [unit] [start]-[end]/[FileSize]
+        /// (e.g. bytes 1024-3071/10240)
+        ///
+        /// The [end] value will be the inclusive last byte (e.g. header "bytes 0-7/8" is the entire 8-byte file).
         /// </summary>
         public string ContentRange { get; internal set; }
 
@@ -142,6 +148,24 @@ namespace Azure.Storage.Files.DataLake.Models
 #pragma warning disable CA1819 // Properties should not return arrays
         public byte[] ContentHash { get; internal set; }
 #pragma warning restore CA1819 // Properties should not return arrays
+
+        /// <summary>
+        /// Returns the date and time the blob was created on.
+        /// </summary>
+        public DateTimeOffset CreatedOn { get; internal set; }
+
+        /// <summary>
+        /// Encryption context of the file.  Encryption context is metadata that is not encrypted when stored on the file.
+        /// The primary application of this field is to store non-encrypted data that can be used to derive the customer-provided key
+        /// for a file.
+        /// </summary>
+        public string EncryptionContext { get; internal set; }
+
+        /// <summary>
+        /// Optional.  The POSIX access control list for the file or directory.
+        /// </summary>
+        #pragma warning disable CA2227 // Collection properties should be read only
+        public IList<PathAccessControlItem> AccessControlList { get; internal set; }
 
         /// <summary>
         /// Prevent direct instantiation of FileDownloadDetails instances.

@@ -6,41 +6,46 @@
 #nullable disable
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Azure.Monitor.Query.Models
 {
-    /// <summary> Model factory for read-only models. </summary>
+    /// <summary> Model factory for models. </summary>
     public static partial class MonitorQueryModelFactory
     {
-        /// <summary> Initializes a new instance of LogsTableColumn. </summary>
-        /// <param name="name"> The name of this column. </param>
-        /// <param name="type"> The data type of this column. </param>
-        /// <returns> A new <see cref="Models.LogsTableColumn"/> instance for mocking. </returns>
-        public static LogsTableColumn LogsTableColumn(string name = null, LogsColumnType type = default)
-        {
-            return new LogsTableColumn(name, type);
-        }
-
-        /// <summary> Initializes a new instance of MetricAvailability. </summary>
-        /// <param name="granularity"> the time grain specifies the aggregation interval for the metric. Expressed as a duration &apos;PT1M&apos;, &apos;P1D&apos;, etc. </param>
-        /// <param name="retention"> the retention period for the metric at the specified timegrain.  Expressed as a duration &apos;PT1M&apos;, &apos;P1D&apos;, etc. </param>
+        /// <summary> Initializes a new instance of <see cref="Models.MetricAvailability"/>. </summary>
+        /// <param name="granularity"> The time grain specifies a supported aggregation interval for the metric. Expressed as a duration 'PT1M', 'P1D', etc. </param>
+        /// <param name="retention"> The retention period for the metric at the specified timegrain.  Expressed as a duration 'PT1M', 'P1D', etc. </param>
         /// <returns> A new <see cref="Models.MetricAvailability"/> instance for mocking. </returns>
         public static MetricAvailability MetricAvailability(TimeSpan? granularity = null, TimeSpan? retention = null)
         {
             return new MetricAvailability(granularity, retention);
         }
 
-        /// <summary> Initializes a new instance of MetricValue. </summary>
-        /// <param name="timeStamp"> the timestamp for the metric value in ISO 8601 format. </param>
-        /// <param name="average"> the average value in the time range. </param>
-        /// <param name="minimum"> the least value in the time range. </param>
-        /// <param name="maximum"> the greatest value in the time range. </param>
-        /// <param name="total"> the sum of all of the values in the time range. </param>
-        /// <param name="count"> the number of samples in the time range. Can be used to determine the number of values that contributed to the average value. </param>
-        /// <returns> A new <see cref="Models.MetricValue"/> instance for mocking. </returns>
-        public static MetricValue MetricValue(DateTimeOffset timeStamp = default, double? average = null, double? minimum = null, double? maximum = null, double? total = null, double? count = null)
+        /// <summary> Initializes a new instance of <see cref="Models.MetricsQueryResourcesResult"/>. </summary>
+        /// <param name="values"> The collection of metric data responses per resource, per metric. </param>
+        /// <returns> A new <see cref="Models.MetricsQueryResourcesResult"/> instance for mocking. </returns>
+        public static MetricsQueryResourcesResult MetricsQueryResourcesResult(IEnumerable<MetricsQueryResult> values = null)
         {
-            return new MetricValue(timeStamp, average, minimum, maximum, total, count);
+            values ??= new List<MetricsQueryResult>();
+
+            return new MetricsQueryResourcesResult(values?.ToList());
+        }
+
+        /// <summary> Initializes a new instance of <see cref="Models.LogsTableColumn"/>. </summary>
+        /// <param name="name"> The name of this column. </param>
+        /// <param name="type"> The data type of this column. </param>
+        /// <exception cref="ArgumentNullException"> <paramref name="name"/> is null. </exception>
+        /// <returns> A new <see cref="Models.LogsTableColumn"/> instance for mocking. </returns>
+        public static LogsTableColumn LogsTableColumn(string name = null, LogsColumnType type = default)
+        {
+            if (name == null)
+            {
+                throw new ArgumentNullException(nameof(name));
+            }
+
+            return new LogsTableColumn(name, type);
         }
     }
 }

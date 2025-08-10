@@ -71,7 +71,7 @@ foreach (SearchResult<Mountain> result in results.Value.GetResults())
     Console.WriteLine("https://www.bing.com/maps?cp={0}~{1}&sp=point.{0}_{1}_{2}",
         mountain.Summit.Latitude,
         mountain.Summit.Longitude,
-        Uri.EscapeUriString(mountain.Name));
+        Uri.EscapeDataString(mountain.Name));
 }
 ```
 
@@ -88,8 +88,6 @@ This project welcomes contributions and suggestions. Most contributions require 
 When you submit a pull request, a CLA-bot will automatically determine whether you need to provide a CLA and decorate the PR appropriately (e.g., label, comment). Simply follow the instructions provided by the bot. You will only need to do this once across all repositories using our CLA.
 
 This project has adopted the [Microsoft Open Source Code of Conduct][code_of_conduct]. For more information see the [Code of Conduct FAQ][code_of_conduct_faq] or contact opencode@microsoft.com with any additional questions or comments.
-
-![Impressions](https://azure-sdk-impressions.azurewebsites.net/api/impressions/azure-sdk-for-net%2Fsdk%2Fcore%2FMicrosoft.Azure.Core.NewtonsoftJson%2FREADME.png)
 
 [azure_search_documents_package]: https://www.nuget.org/packages/Azure.Search.Documents/
 [azure_search_documents_readme]: https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/search/Azure.Search.Documents/README.md

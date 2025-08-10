@@ -2,16 +2,22 @@
 // Licensed under the MIT License.
 
 using System;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Cryptography;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Azure.Core.TestFramework;
 using NUnit.Framework;
+using NUnit.Framework.Internal.Commands;
 
 namespace Azure.Security.KeyVault.Keys.Tests
 {
     [ClientTestFixture(
-        KeyClientOptions.ServiceVersion.V7_2,
-        KeyClientOptions.ServiceVersion.V7_3_Preview)]
+        KeyClientOptions.ServiceVersion.V7_6,
+        KeyClientOptions.ServiceVersion.V7_5,
+        KeyClientOptions.ServiceVersion.V7_4,
+        KeyClientOptions.ServiceVersion.V7_3,
+        KeyClientOptions.ServiceVersion.V7_2)]
     public class ManagedHsmLiveTests : KeyClientLiveTests
     {
         public ManagedHsmLiveTests(bool isAsync, KeyClientOptions.ServiceVersion serviceVersion)
@@ -29,7 +35,7 @@ namespace Azure.Security.KeyVault.Keys.Tests
 
         protected internal override bool IsManagedHSM => true;
 
-        [Test]
+        [RecordedTest]
         public async Task CreateRsaWithPublicExponent()
         {
             CreateRsaKeyOptions options = new CreateRsaKeyOptions(Recording.GenerateId())
@@ -49,7 +55,7 @@ namespace Azure.Security.KeyVault.Keys.Tests
             Assert.AreEqual(3, publicExponent);
         }
 
-        [Test]
+        [RecordedTest]
         public async Task CreateOctHsmKey()
         {
             string keyName = Recording.GenerateId();
@@ -63,7 +69,7 @@ namespace Azure.Security.KeyVault.Keys.Tests
             AssertKeyVaultKeysEqual(ecHsmkey, keyReturned);
         }
 
-        [Test]
+        [RecordedTest]
         public async Task CreateOctKey()
         {
             string keyName = Recording.GenerateId();
@@ -77,13 +83,75 @@ namespace Azure.Security.KeyVault.Keys.Tests
             AssertKeyVaultKeysEqual(keyNoHsm, keyReturned);
         }
 
+        [RecordedTest]
         [TestCase(16)]
         [TestCase(32)]
-        [ServiceVersion(Min = KeyClientOptions.ServiceVersion.V7_3_Preview)]
+        [ServiceVersion(Min = KeyClientOptions.ServiceVersion.V7_3)]
         public async Task GetRandomBytes(int count)
         {
             byte[] rand = await Client.GetRandomBytesAsync(count);
             Assert.AreEqual(count, rand.Length);
+        }
+
+        [RecordedTest]
+        [ServiceVersion(Min = KeyClientOptions.ServiceVersion.V7_3, Max = KeyClientOptions.ServiceVersion.V7_3)] // TODO: Remove Max once https://github.com/Azure/azure-sdk-for-net/issues/32260 is resolved.
+        public async Task ReleaseImportedKey()
+        {
+            string keyName = Recording.GenerateId();
+
+            JsonWebKey jwk = KeyUtilities.CreateRsaKey(includePrivateParameters: true);
+            ImportKeyOptions options = new(keyName, jwk)
+            {
+                Properties =
+                {
+                    Exportable = true,
+                    ReleasePolicy = GetReleasePolicy(),
+                },
+            };
+
+            KeyVaultKey key = await Client.ImportKeyAsync(options);
+            RegisterForCleanup(key.Name);
+
+            JwtSecurityToken jws = await ReleaseKeyAsync(keyName);
+            Assert.IsTrue(jws.Payload.TryGetValue("response", out object response));
+
+            JsonDocument doc = JsonDocument.Parse(response.ToString());
+            JsonElement keyElement = doc.RootElement.GetProperty("key").GetProperty("key");
+            Assert.AreEqual(key.Id, keyElement.GetProperty("kid").GetString());
+            Assert.AreEqual(JsonValueKind.String, keyElement.GetProperty("key_hsm").ValueKind);
+        }
+
+        [RecordedTest]
+        public async Task GetKeyAttestationWithHSM()
+        {
+            string keyName = Recording.GenerateId();
+            CreateOctKeyOptions options = new CreateOctKeyOptions(keyName, hardwareProtected: true);
+            KeyVaultKey key = await Client.CreateOctKeyAsync(options);
+            RegisterForCleanup(key.Name);
+
+            // Attestation details shouldn't be included unless requested
+            Assert.IsNull(key.Properties.Attestation);
+
+            KeyVaultKey keyWithAttestation = await Client.GetKeyAttestationAsync(keyName);
+            AssertKeyVaultKeysEqual(key, keyWithAttestation);
+        }
+
+        [RecordedTest]
+        public void GetKeyAttestationNonExisting()
+        {
+            Assert.ThrowsAsync<RequestFailedException>(() => Client.GetKeyAttestationAsync(Recording.GenerateId()));
+        }
+
+        [RecordedTest]
+        public async Task GetKeyAttestationWithVersion()
+        {
+            string keyName = Recording.GenerateId();
+            KeyVaultKey key = await Client.CreateKeyAsync(keyName, KeyType.Ec);
+            RegisterForCleanup(key.Name);
+
+            KeyVaultKey keyWithAttestation = await Client.GetKeyAttestationAsync(keyName, key.Properties.Version);
+
+            AssertKeyVaultKeysEqual(key, keyWithAttestation);
         }
     }
 }

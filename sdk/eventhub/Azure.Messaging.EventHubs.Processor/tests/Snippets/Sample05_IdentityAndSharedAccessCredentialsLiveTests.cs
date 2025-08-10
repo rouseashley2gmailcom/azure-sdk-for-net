@@ -39,7 +39,7 @@ namespace Azure.Messaging.EventHubs.Tests.Snippets
 #if SNIPPET
             var credential = new DefaultAzureCredential();
 
-            var storageEndpoint = "<< STORAGE ENDPOINT (likely similar to {your-account}.blob.core.windows.net) >>";
+            var storageAccountEndpoint = "<< Account Uri (likely similar to https://{your-account}.blob.core.windows.net) >>";
             var blobContainerName = "<< NAME OF THE BLOB CONTAINER >>";
 
             var fullyQualifiedNamespace = "<< NAMESPACE (likely similar to {your-namespace}.servicebus.windows.net) >>";
@@ -47,15 +47,19 @@ namespace Azure.Messaging.EventHubs.Tests.Snippets
             var consumerGroup = "<< NAME OF THE EVENT HUB CONSUMER GROUP >>";
 #else
             var credential = EventHubsTestEnvironment.Instance.Credential;
-            var storageEndpoint = new BlobServiceClient(StorageTestEnvironment.Instance.StorageConnectionString).Uri.ToString();
-            var blobContainerName = storageScope.ContainerName;
+
             var fullyQualifiedNamespace = EventHubsTestEnvironment.Instance.FullyQualifiedNamespace;
             var eventHubName = eventHubScope.EventHubName;
             var consumerGroup = eventHubScope.ConsumerGroups.First();
+
+            var storageAccountEndpoint = $"https://{ StorageTestEnvironment.Instance.StorageAccountName }.blob.{ StorageTestEnvironment.Instance.StorageEndpointSuffix}";
+            var blobContainerName = storageScope.ContainerName;
 #endif
 
-            var blobUriBuilder = new BlobUriBuilder(new Uri(storageEndpoint));
-            blobUriBuilder.BlobContainerName = blobContainerName;
+            var blobUriBuilder = new BlobUriBuilder(new Uri(storageAccountEndpoint))
+            {
+                BlobContainerName = blobContainerName
+            };
 
             var storageClient = new BlobContainerClient(
                 blobUriBuilder.ToUri(),
@@ -309,26 +313,29 @@ namespace Azure.Messaging.EventHubs.Tests.Snippets
 
             #region Snippet:EventHubs_Processor_Sample05_ConnectionStringParse
 
-            TokenCredential credential = new DefaultAzureCredential();
-
-            var storageConnectionString = "<< CONNECTION STRING FOR THE STORAGE ACCOUNT >>";
-            var blobContainerName = "<< NAME OF THE BLOB CONTAINER >>";
-            /*@@*/
-            /*@@*/ storageConnectionString = StorageTestEnvironment.Instance.StorageConnectionString;
-            /*@@*/ blobContainerName = storageScope.ContainerName;
+#if SNIPPET
+            var credential = new DefaultAzureCredential();
 
             var eventHubsConnectionString = "<< CONNECTION STRING FOR THE EVENT HUBS NAMESPACE >>";
             var eventHubName = "<< NAME OF THE EVENT HUB >>";
             var consumerGroup = "<< NAME OF THE EVENT HUB CONSUMER GROUP >>";
-            /*@@*/
-            /*@@*/ eventHubsConnectionString = EventHubsTestEnvironment.Instance.EventHubsConnectionString;
-            /*@@*/ eventHubName = eventHubScope.EventHubName;
-            /*@@*/ consumerGroup = eventHubScope.ConsumerGroups.First();
-            /*@@*/ credential = EventHubsTestEnvironment.Instance.Credential;
 
+            var storageConnectionString = "<< CONNECTION STRING FOR THE STORAGE ACCOUNT >>";
+            var blobContainerName = "<< NAME OF THE BLOB CONTAINER >>";
+#else
+            var credential = EventHubsTestEnvironment.Instance.Credential;
+            var eventHubsConnectionString = EventHubsTestEnvironment.Instance.EventHubsConnectionString;
+            var eventHubName = eventHubScope.EventHubName;
+            var consumerGroup = eventHubScope.ConsumerGroups.First();
+            var storageConnectionString = StorageTestEnvironment.Instance.StorageConnectionString;
+            var blobContainerName = storageScope.ContainerName;
+#endif
             var storageEndpoint = new BlobServiceClient(storageConnectionString).Uri;
-            var blobUriBuilder = new BlobUriBuilder(storageEndpoint);
-            blobUriBuilder.BlobContainerName = blobContainerName;
+
+            var blobUriBuilder = new BlobUriBuilder(storageEndpoint)
+            {
+                BlobContainerName = blobContainerName
+            };
 
             var storageClient = new BlobContainerClient(
                 blobUriBuilder.ToUri(),

@@ -90,7 +90,7 @@ namespace Microsoft.Azure.Batch.Protocol.Models
         /// authentication token that the Task can use to perform Batch service
         /// operations.</param>
         /// <param name="allowLowPriorityNode">Whether the Job Manager Task may
-        /// run on a low-priority Compute Node.</param>
+        /// run on a Spot/Low-priority Compute Node.</param>
         public JobManagerTask(string id, string commandLine, string displayName = default(string), TaskContainerSettings containerSettings = default(TaskContainerSettings), IList<ResourceFile> resourceFiles = default(IList<ResourceFile>), IList<OutputFile> outputFiles = default(IList<OutputFile>), IList<EnvironmentSetting> environmentSettings = default(IList<EnvironmentSetting>), TaskConstraints constraints = default(TaskConstraints), int? requiredSlots = default(int?), bool? killJobOnCompletion = default(bool?), UserIdentity userIdentity = default(UserIdentity), bool? runExclusive = default(bool?), IList<ApplicationPackageReference> applicationPackageReferences = default(IList<ApplicationPackageReference>), AuthenticationTokenSettings authenticationTokenSettings = default(AuthenticationTokenSettings), bool? allowLowPriorityNode = default(bool?))
         {
             Id = id;
@@ -150,7 +150,7 @@ namespace Microsoft.Azure.Batch.Protocol.Models
         /// command line refers to file paths, it should use a relative path
         /// (relative to the Task working directory), or use the Batch provided
         /// environment variable
-        /// (https://docs.microsoft.com/en-us/azure/batch/batch-compute-node-environment-variables).
+        /// (https://docs.microsoft.com/azure/batch/batch-compute-node-environment-variables).
         /// </remarks>
         [JsonProperty(PropertyName = "commandLine")]
         public string CommandLine { get; set; }
@@ -310,8 +310,8 @@ namespace Microsoft.Azure.Batch.Protocol.Models
         public AuthenticationTokenSettings AuthenticationTokenSettings { get; set; }
 
         /// <summary>
-        /// Gets or sets whether the Job Manager Task may run on a low-priority
-        /// Compute Node.
+        /// Gets or sets whether the Job Manager Task may run on a
+        /// Spot/Low-priority Compute Node.
         /// </summary>
         /// <remarks>
         /// The default value is true.

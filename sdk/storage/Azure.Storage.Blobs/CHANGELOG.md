@@ -1,10 +1,245 @@
 # Release History
 
-## 12.11.0-beta.2 (Unreleased)
-- Added support for service vesrion 2021-02-12
+## 12.26.0-beta.2 (Unreleased)
+
+### Features Added
+
+### Breaking Changes
+
+### Bugs Fixed
+
+### Other Changes
+
+## 12.25.0 (2025-07-14)
+
+### Features Added
+- Includes all features from 12.25.0-beta.1
+- Includes all features from 12.24.1
+
+## 12.26.0-beta.1 (2025-06-09)
+
+### Features Added
+- Added support for service version 2025-11-05.
+- AppendBlobClient.AppendBlobFromUri(), .AppendBlockFromUriAsync(), BlobBaseClient.StartCopyFromUri(), .StartCopyFromUriAsync(), SyncCopyFromUri(), .SyncCopyFromUriAsync(), BlockBlobClient.StageBlockFromUri(), .StageBlockFromUriAsync(), PageBlobClient.UploadPagesFromUri(), and .UploadPagesFromUri() will now return CopySourceStatusCode, CopySourceErrorCode, and CopySourceErrorMessage as part of error responses.
+- Added more useful error message when the SDK encounters an x-ms-version mis-match issue.
+
+### Other Changes
+- Changed BlobServiceClient.AccountName to be virtual so that it can be overridden and mocked.
+
+## 12.24.1 (2025-06-10)
+
+### Features Added
+- Added `PageBlobCreateOptions.PremiumPageBlobAccessTier` for `PageBlobClient.Create(..)`
+
+## 12.25.0-beta.1 (2025-05-06)
+
+### Features Added
+- Added support for service version 2025-07-05.
+- Added support for the `SourceShareTokenIntent` parameter to `AppendBlobClient.AppendBlockFromUri()`, `.AppendBlockFromUriAsync()`, `BlockBlobClient.StageBlockFromUri()`, `.StageBlockFromUriAsync()`, `BlockBlobClient.SyncUploadFromUri()`, `.SyncUploadFromUriAsync()`, `BlobBaseClient.SyncCopyFromUri()`, `.SyncCopyFromUriAsync()`, `PageBlobClient.UploadPagesFromUri()`, `.UploadPagesFromUriAsync()`,
+- Added `PageBlobCreateOptions.PremiumPageBlobAccessTier` to `PageBlobClient.Create(..)` overloads.
+
+## 12.24.0 (2025-03-11)
+
+### Features Added
+- Includes all features from 12.24.0-beta.1
+- Added the following Client Builders: `AddBlobServiceClient(Uri, Azure.SasCredential)`, `AddBlobServiceClient(Uri, TokenCredential)`
+
+### Bugs Fixed
+- Fixed bug where a `BlobServiceClient`, `BlobContainerClient`, `BlobBaseClient` created with a connection string with an account name specified (e.g. "AccountName=..;"), the account name was not populated on the Storage Clients if the account name was not also specified in the endpoint. (#42925)
+- Fixed bug where a `BlobServiceClient`, `BlobContainerClient`, `BlobBaseClient` created with a `StorageSharedKeyCredential`, the account name was not populated on the Storage Clients if the account name was not also specified in the endpoint. (#42925)
+
+## 12.24.0-beta.1 (2025-02-11)
+
+### Features Added
+- Added support for service version 2025-05-05.
+
+## 12.23.0 (2024-11-12)
+
+### Features Added
+- Includes all features from 12.23.0-beta.1 and 12.23.0-beta.2
+
+### Bugs Fixed
+- Fixed bug where network download streams were not properly disposed.
+- Fixed bug where DownloadToAsync() did not dispose all its network streams on error in some cases.
+
+## 12.23.0-beta.2 (2024-10-10)
+
+### Other Changes
+- Upgraded `System.Text.Json` package dependency to 6.0.10 for security fix.
+
+## 12.22.2 (2024-10-10)
+
+### Other Changes
+- Upgraded `System.Text.Json` package dependency to 6.0.10 for security fix.
+
+## 12.23.0-beta.1 (2024-10-08)
+
+### Features Added
+- Added support for service version 2025-01-05.
+- Added GenerateUserDelegationSasUri() to BlobBaseClient and BlobContainerClient.
+- Added BlobErrorCode.BlobAccessTierNotSupportedForAccountType enum value.
+
+### Bugs Fixed
+- Fixed bug where BlobClient.Upload(BinaryData content, ..) did not properly dispose stream after wrapping the BinaryData passed.
+
+## 12.22.1 (2024-09-25)
+
+### Other Changes
+- Integrated decryption for CSE v2.1
+
+## 12.22.0 (2024-09-18)
+
+### Features Added
+- Includes all features from 12.22.0-beta.1
+
+### Bugs Fixed
+- Fixed \[BUG\] Method overload BlobBaseClient.OpenReadAsync()/OpenRead() to correctly handle the allowBlobModifications flag #45516
+- Fixed \[BUG\] Fixed Equality failures due to implicit cast on BlobErrorCode #44213
+
+## 12.21.2 (2024-08-08)
+
+### Bugs Fixed
+- Fixed \[BUG\] WrapKeyInternal to correctly call WrapKey in sync flow #42160
+
+## 12.22.0-beta.1 (2024-08-06)
+
+### Features Added
+- Added support for service version 2024-11-04.
+- Added ability to retrieve SAS string to sign for debugging purposes.
+
+### Bugs Fixed
+- Fixed \[BUG\] BlobContainerClient(connectionString, blobContainerName, options) ctor to set clientSideEncryptionOptions #44623
+
+## 12.21.1 (2024-07-25)
+
+### Bugs Fixed
+- Fixed \[BUG\] Azure Blob Storage Client SDK No Longer Supports Globalization Invariant Mode for Account Key Authentication #45052
+
+## 12.21.0 (2024-07-16)
+
+### Features Added
+- Includes all features from 12.21.0-beta.1.
+
+### Bugs Fixed
+- Fixed bug where storage clients when constructed with URLs with '#' character would truncate the blob name at the '#'.
+
+## 12.21.0-beta.1 (2024-06-11)
+- Added support for service version 2024-08-04.
+- Added BlobContainerClient.GetAccountInfo(), .GetAccountInfoAsync(), BlobBaseClient.GetAccountInfo(), and .GetAccountInfoAsync() APIs.
+- Added more detailed messaging for authorization failure cases.
+
+## 12.20.0 (2024-05-13)
+- Includes all features from 12.20.0-beta.1 and 12.20.0-beta.2.
+- Fixed bug where `BlobContainerClient` and `BlobBaseClient` did not throw an exception on empty/null container names and blob names, respectively, when constructing a client. 
+
+## 12.20.0-beta.2 (2024-04-15)
+- Added support for service version 2024-05-04.
+- Fixed bug where BlockBlobClient.Upload() and .UploadAsync() would throw an exception if BlobUploadOptions was null.
+- Fixed a bug where some valid shared access signatures were improperly parsed, throwing an exception.
+
+## 12.20.0-beta.1 (2023-12-05)
+- Added support for service version 2024-02-04.
+
+## 12.19.1 (2023-11-13)
+- Distributed tracing with `ActivitySource` is stable and no longer requires the [Experimental feature-flag](https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/core/Azure.Core/samples/Diagnostics.md).
+
+## 12.19.0 (2023-11-06)
+- Includes all features from 12.19.0-beta.1.
+
+## 12.19.0-beta.1 (2023-10-16)
+- Added support for service version 2023-11-03.
+- Added support for BlobClientOptions.Audience
+
+## 12.18.0 (2023-09-12)
+- Includes all features from 12.18.0-beta.1.
+
+## 12.18.0-beta.1 (2023-08-08)
+- Added support for service version 2023-05-03 and 2023-08-03.
+- Added RehydratePendingToCold value to ArchiveStatus enum.
+
+## 12.17.0 (2023-07-11)
+- Includes all features from 12.17.0-beta.1.
+
+## 12.17.0-beta.1 (2023-05-30)
+- Added support for service version 2023-01-03.
+- Content length limit for AppendBlobClient.Append(), .AppendAsync(), .AppendBlockFromUri(), and .AppendBlockFromUriAsync() raised from 4 MiB to 100 MiB.
+
+## 12.16.0 (2023-04-11)
+- Includes all features from 12.16.0-beta.1.
+
+## 12.16.0-beta.1 (2023-03-28)
+- Added support for service version 2022-11-02.
+- Fixed bug where GenerateSasUri did not honor TrimBlobNameSlashes when creating the SAS (#34591).
+
+## 12.15.1 (2023-03-24)
+- Bumped Azure.Core dependency from 1.28 and 1.30, fixing issue with headers being non-resilient to double dispose of the request.
+
+## 12.15.0 (2023-02-21)
+- Includes all features from 12.15.0-beta.1.
+- Added BlobDownloadDetails.CreatedOn property.
+
+## 12.15.0-beta.1 (2023-02-07)
+- Added support for service version 2021-12-02.
+- Added support for Blob Cold Tier.
+- Fixed bug where BlobErrorCode.IncrementalCopyOfEarlierVersionSnapshotNotAllowed was spelled incorrectly.
+- Fixed bug / regression where BlobContainerClient.GetProperties would return null instead of PublicAccessType.None for the BlobContainerProperties.PublicAccess
+
+## 12.14.1 (2022-10-20)
+- Fixed bug were BlobBaseClient constructor taking a URI and BlobClientOptions would ignore BlobClientOptions.TrimBlobNameSlashes.
+
+## 12.14.0 (2022-10-12)
+- Includes all features from 12.14.0-beta.1.
+- Added support for leading and trailing '/' characters in blob names when constructing URIs via builder.
+
+## 12.14.0-beta.1 (2022-08-23)
+- Added support for service version 2021-10-04.
+- Added support for SDK-calculated transactional checksums on data transfer.
+
+## 12.13.1 (2022-08-22)
+- Added support for downloading blobs with bugged client-side encryption metadata from previous library versions.
+
+## 12.13.0 (2022-07-07)
+- Includes all features from 12.13.0-beta.1.
+
+## 12.13.0-beta.1 (2022-06-15)
+- Added support for service version 2021-08-06.
+- Added support for clientside encryption V2.0
+  - GCM support
+  - V2.0 is considered a security upgrade, and it is recommended applications switch to server-side encryption or upgrade to clientside V2.0.
+- Fixed bug where calling AppendBlockFromUri() without AppendBlobAppendBlockFromUriOptions throws a null exception error
+
+## 12.12.0 (2022-05-02)
+- Includes all features from 12.12.0-beta.1.
+
+## 12.12.0-beta.1 (2022-04-12)
+- Added support for service version 2021-06-08.
+- Added pageable versions of PageBlobClient.GetPageRanges() and .GetPageRangesAsync().
+- Added ability to copy source blob tags for BlobBaseClient.SyncCopyFromUri() and .SyncCopyFromUriAsync().
+- Fixed a bug where CopyFromUriOperation was throwing an Exception when the status of the blob copy was aborted or failed.
+
+## 12.11.0 (2022-03-10)
+- Includes all features from 12.11.0-beta.1, 12.11.0-beta.2, and 12.11.0-beta.3 except SDK-calculated transactional checksums on data transfer.
+- Added support for progress reporting with DownloadToAsync().
+- Fixed a bug where BlobBaseClient.DownloadTo() would result in an ObjectDisposedException on .NET Framework in certain network conditions.
+- Added nullable version of `BlobProperties.CopyStatus` called `BlobCopyStatus`, allowing a null value when Storage doesn't return a value.
+- Fixed a bug where BlobContainerClient.GetProperties() would throw an ArgumentNullException when the AccessPolicy was null
+- Removed preview support for SDK-calculated transactional checksums on data transfer.
+- Fixed a bug where BlobUriBuilder was case sensitive for parameter names.
+
+## 12.11.0-beta.3 (2022-02-07)
+- Added support for service version 2021-04-10.
+- Added support for BlobContainerClient.FilterBlobsByTag().
+- Added support for BlobContainerClient.OpenWriteAsync().
+- Fixed bug where BlobSasBuilder.SetPermissions(string rawPermissions) was not properly handling the Permanent Delete ('y') and set Immutability Policy ('i') permissions.
+- Fixed a bug where BlobClient.Upload() and UploadAsync() would result in a NullReferenceException when trying to overwrite a blob with client-side encryption enabled
+
+## 12.11.0-beta.2 (2021-11-30)
+- Added support for service version 2021-02-12
 - Added support for listing system containers with BlobServiceClient.GetBlobContainers() and .GetBlobContainersAsync().
 - Added support for blob names container invalid XML characters.
+- Added support for updating the key encryption key on a client-side encrypted blob.
 - Fixed a bug where BlobClient.Upload() and UploadAsync() when using client-side encryption would modify the Dictionary instance passed by the caller for blob metadata.
+- Fixed a bug where BlobClient.Upload() and UploadAsync() when using client-side encryption would not respect StorageTransferOptions.InitialTransferSize.
 
 ## 12.11.0-beta.1 (2021-11-03)
 - Added support for service version 2020-12-06.

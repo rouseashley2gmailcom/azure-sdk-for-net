@@ -4,11 +4,14 @@ Run `dotnet build /t:GenerateCode` to generate code.
 
 ``` yaml
 input-file:
-    - https://raw.githubusercontent.com/Azure/azure-rest-api-specs/60723d13309c8f8060d020a7f3dd9d6e380f0bbd/specification/storage/data-plane/Microsoft.FileStorage/preview/2021-02-12/file.json
+    - https://raw.githubusercontent.com/Azure/azure-rest-api-specs/596d8d2a8c1c50bd6ebe60036143f4c4787fc816/specification/storage/data-plane/Microsoft.FileStorage/stable/2025-11-05/file.json
+generation1-convenience-client: true
 # https://github.com/Azure/autorest/issues/4075
 skip-semantics-validation: true
 modelerfour:
     seal-single-value-enum-by-default: true
+
+helper-namespace: Azure.Storage.Common
 ```
 
 ### Don't include share name, directory, or file name in path - we have direct URIs.
@@ -43,7 +46,7 @@ directive:
     $.Metrics.type = "object";
 ```
 
-### Times aren't required
+### Times aren't required 
 ``` yaml
 directive:
 - from: swagger-document
@@ -52,6 +55,10 @@ directive:
     delete $.format;
 - from: swagger-document
   where: $.parameters.FileLastWriteTime
+  transform: >
+    delete $.format;
+- from: swagger-document
+  where: $.parameters.FileChangeTime
   transform: >
     delete $.format;
 ```
@@ -134,4 +141,14 @@ directive:
 - from: swagger-document
   where: $..[?(@.operationId=='File_Download')]
   transform: $["x-csharp-buffer-response"] = false;
+```
+
+### Remove conditions parameter groupings
+``` yaml
+directive:
+- from: swagger-document
+  where: $.parameters
+  transform: >
+    delete $.SourceLeaseId["x-ms-parameter-grouping"];
+    delete $.DestinationLeaseId["x-ms-parameter-grouping"];
 ```

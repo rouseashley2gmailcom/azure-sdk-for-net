@@ -7,9 +7,10 @@ Run `generate.ps1` in this directory or run `dotnet build /t:GenerateCode` to ge
 > see <https://aka.ms/autorest>
 
 ``` yaml
-tag: package-2020-10-31
-require: 
-  - https://raw.githubusercontent.com/Azure/azure-rest-api-specs/14fb40342c19f8b483e132038f8424ee62b745d9/specification/digitaltwins/data-plane/readme.md
+tag: package-2023-10-31
+require:
+  - https://github.com/Azure/azure-rest-api-specs/blob/b770b86265d5dc3a26b16c5d30a736e6bbba04de/specification/digitaltwins/data-plane/readme.md
+generation1-convenience-client: true
 ```
 
 ### Directives
@@ -18,7 +19,7 @@ require:
 directive:
 - from: swagger-document
   where: $..[?(@.operationId=='DigitalTwins_GetComponent' || @.operationId=='DigitalTwins_GetRelationshipById' || @.operationId=='DigitalTwins_Add' || @.operationId=='DigitalTwins_GetById' || @.operationId=='DigitalTwins_AddRelationship')]
-  transform: 
+  transform:
     $["x-csharp-buffer-response"] = true;
     $.responses["200"].schema.format = "binary";
 ```

@@ -10,12 +10,12 @@ using System.ComponentModel;
 
 namespace Azure.ResourceManager.Sql.Models
 {
-    /// <summary> If enabled, connections that have application intent set to readonly in their connection string may be routed to a readonly secondary replica. This property is only settable for Premium and Business Critical databases. </summary>
+    /// <summary> The state of read-only routing. If enabled, connections that have application intent set to readonly in their connection string may be routed to a readonly secondary replica in the same region. Not applicable to a Hyperscale database within an elastic pool. </summary>
     public readonly partial struct DatabaseReadScale : IEquatable<DatabaseReadScale>
     {
         private readonly string _value;
 
-        /// <summary> Determines if two <see cref="DatabaseReadScale"/> values are the same. </summary>
+        /// <summary> Initializes a new instance of <see cref="DatabaseReadScale"/>. </summary>
         /// <exception cref="ArgumentNullException"> <paramref name="value"/> is null. </exception>
         public DatabaseReadScale(string value)
         {
@@ -33,7 +33,7 @@ namespace Azure.ResourceManager.Sql.Models
         public static bool operator ==(DatabaseReadScale left, DatabaseReadScale right) => left.Equals(right);
         /// <summary> Determines if two <see cref="DatabaseReadScale"/> values are not the same. </summary>
         public static bool operator !=(DatabaseReadScale left, DatabaseReadScale right) => !left.Equals(right);
-        /// <summary> Converts a string to a <see cref="DatabaseReadScale"/>. </summary>
+        /// <summary> Converts a <see cref="string"/> to a <see cref="DatabaseReadScale"/>. </summary>
         public static implicit operator DatabaseReadScale(string value) => new DatabaseReadScale(value);
 
         /// <inheritdoc />
@@ -44,7 +44,7 @@ namespace Azure.ResourceManager.Sql.Models
 
         /// <inheritdoc />
         [EditorBrowsable(EditorBrowsableState.Never)]
-        public override int GetHashCode() => _value?.GetHashCode() ?? 0;
+        public override int GetHashCode() => _value != null ? StringComparer.InvariantCultureIgnoreCase.GetHashCode(_value) : 0;
         /// <inheritdoc />
         public override string ToString() => _value;
     }

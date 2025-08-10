@@ -4,22 +4,30 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.Serialization;
 
-namespace Azure.Monitor.Query
+namespace Azure.Core
 {
     internal abstract class TypeBinder<TExchange>
     {
+        public const string RequiresUnreferencedCodeMessage = "TypeBinder uses MakeGenericType() to construct generic types at runtime. The resulting types and their members may be trimmed. This can be suppressed if the target type to bind to is always a primitive.";
+        public const string RequiresDynamicCodeMessage = "TypeBinder uses MakeGenericType() to construct generic types at runtime. This can be suppressed if the target type to bind to is always a primitive.";
         private readonly ConcurrentDictionary<Type, BoundTypeInfo> _cache = new();
-        private Func<Type, BoundTypeInfo> _valueFactory;
+        private readonly Func<Type, BoundTypeInfo> _valueFactory;
 
+        [RequiresUnreferencedCode(RequiresUnreferencedCodeMessage)]
+        [RequiresDynamicCode(RequiresDynamicCodeMessage)]
         protected TypeBinder()
         {
             _valueFactory = t => new(t, this);
         }
 
+        [RequiresUnreferencedCode(RequiresUnreferencedCodeMessage)]
+        [RequiresDynamicCode(RequiresDynamicCodeMessage)]
         public T Deserialize<T>(TExchange source)
         {
             var info = GetBinderInfo(typeof(T));
@@ -40,7 +48,14 @@ namespace Azure.Monitor.Query
 
         public BoundTypeInfo GetBinderInfo(Type type)
         {
-            return _cache.GetOrAdd(type,  _valueFactory);
+            return _cache.GetOrAdd(type, _valueFactory);
+        }
+
+        [RequiresUnreferencedCode(RequiresUnreferencedCodeMessage)]
+        [RequiresDynamicCode(RequiresDynamicCodeMessage)]
+        public BoundTypeInfo GetBinderInfo(Type type, Type interfaceType)
+        {
+            return _cache.GetOrAdd(type, t => new BoundTypeInfo(type, interfaceType, this));
         }
 
         protected abstract void Set<T>(TExchange destination, T value, BoundMemberInfo memberInfo);
@@ -49,12 +64,34 @@ namespace Azure.Monitor.Query
         public class BoundTypeInfo
         {
             private readonly TypeBinder<TExchange> _binderImplementation;
-            private readonly bool _isPrimitive;
+            private bool _isPrimitive;
             private readonly BoundMemberInfo[] _members;
 
+            [RequiresUnreferencedCode(RequiresUnreferencedCodeMessage)]
+            [RequiresDynamicCode(RequiresDynamicCodeMessage)]
             public BoundTypeInfo(Type type, TypeBinder<TExchange> binderImplementation)
             {
                 _binderImplementation = binderImplementation;
+                _members = GetMembers(type).ToArray();
+            }
+
+            [RequiresUnreferencedCode(RequiresUnreferencedCodeMessage)]
+            [RequiresDynamicCode(RequiresDynamicCodeMessage)]
+            public BoundTypeInfo(Type type, Type interfaceType, TypeBinder<TExchange> binderImplementation)
+            {
+                if (!interfaceType.IsInterface || !interfaceType.IsAssignableFrom(type))
+                {
+                    throw new InvalidOperationException($"Either {interfaceType.Name} is not an interface or {interfaceType.Name} is not assignable from {type.Name}");
+                }
+                _binderImplementation = binderImplementation;
+                _members = GetMembers(type).Union(GetMembers(interfaceType)).ToArray();
+            }
+
+            [RequiresUnreferencedCode(RequiresUnreferencedCodeMessage)]
+            [RequiresDynamicCode(RequiresDynamicCodeMessage)]
+            private List<BoundMemberInfo> GetMembers(Type type)
+            {
+                List<BoundMemberInfo> members = new List<BoundMemberInfo>();
                 Type innerType = type;
                 if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Nullable<>))
                 {
@@ -70,7 +107,6 @@ namespace Azure.Monitor.Query
 
                 if (!_isPrimitive)
                 {
-                    List<BoundMemberInfo> members = new List<BoundMemberInfo>();
                     foreach (var memberInfo in type.GetMembers(BindingFlags.Public | BindingFlags.Instance))
                     {
                         if (memberInfo.IsDefined(typeof(IgnoreDataMemberAttribute)))
@@ -92,9 +128,8 @@ namespace Azure.Monitor.Query
                                 break;
                         }
                     }
-
-                    _members = members.ToArray();
                 }
+                return members;
             }
 
             public void Serialize<T>(T o, TExchange destination)
@@ -108,7 +143,7 @@ namespace Azure.Monitor.Query
                 }
             }
 
-            public T Deserialize<T>(TExchange source)
+            public T Deserialize<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] T>(TExchange source)
             {
                 if (_isPrimitive)
                 {
@@ -135,7 +170,7 @@ namespace Azure.Monitor.Query
             public int MemberCount => _members?.Length ?? 0;
         }
 
-        protected abstract class BoundMemberInfo
+        protected abstract class BoundMemberInfo : IEqualityComparer<BoundMemberInfo>
         {
             public BoundMemberInfo(MemberInfo memberInfo)
             {
@@ -154,6 +189,23 @@ namespace Azure.Monitor.Query
             public abstract bool CanWrite { get; }
             public abstract void Serialize(object o, TExchange destination, TypeBinder<TExchange> binderImplementation);
             public abstract void Deserialize(TExchange source, object o, TypeBinder<TExchange> binderImplementation);
+
+            public bool Equals(BoundMemberInfo x, BoundMemberInfo y)
+            {
+                if (ReferenceEquals(x, y))
+                    return true;
+                if (x is null || y is null)
+                    return false;
+                return x.Name == y.Name;
+            }
+
+            public int GetHashCode(BoundMemberInfo other)
+            {
+                if (other is null)
+                    return 0;
+
+                return other.Name is null ? 0 : other.Name.GetHashCode();
+            }
         }
 
         private delegate TProperty PropertyGetter<TProperty>(object o);
@@ -165,7 +217,11 @@ namespace Azure.Monitor.Query
             private static ParameterExpression InputParameter = Expression.Parameter(typeof(object), "input");
             private static ParameterExpression ValueParameter = Expression.Parameter(typeof(TProperty), "value");
 
-            public BoundMemberInfo(PropertyInfo propertyInfo) : this(propertyInfo, propertyInfo.CanRead, propertyInfo.CanWrite, propertyInfo.PropertyType)
+            public BoundMemberInfo(PropertyInfo propertyInfo) : this(
+                propertyInfo,
+                propertyInfo.CanRead && propertyInfo.GetMethod?.IsPublic == true,
+                propertyInfo.CanWrite && propertyInfo.SetMethod?.IsPublic == true,
+                propertyInfo.PropertyType)
             {
             }
 

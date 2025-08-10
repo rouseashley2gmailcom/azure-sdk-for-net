@@ -4,11 +4,23 @@ Run `dotnet build /t:GenerateCode` to generate code.
 
 ``` yaml
 input-file:
-    - https://raw.githubusercontent.com/Azure/azure-rest-api-specs/60723d13309c8f8060d020a7f3dd9d6e380f0bbd/specification/storage/data-plane/Microsoft.BlobStorage/preview/2021-02-12/blob.json
+    - https://raw.githubusercontent.com/Azure/azure-rest-api-specs/596d8d2a8c1c50bd6ebe60036143f4c4787fc816/specification/storage/data-plane/Microsoft.BlobStorage/stable/2025-11-05/blob.json
+generation1-convenience-client: true
 # https://github.com/Azure/autorest/issues/4075
 skip-semantics-validation: true
+keep-non-overloadable-protocol-signature: true
 modelerfour:
     seal-single-value-enum-by-default: true
+
+helper-namespace: Azure.Storage.Common
+```
+
+### Setup DPG Methods
+``` yaml
+protocol-method-list:
+  - Blob_GetProperties
+  - Blob_AcquireLease
+  - Container_AcquireLease
 ```
 
 ### Don't include container name or blob in path - we have direct URIs.
@@ -117,25 +129,6 @@ directive:
     delete $.EncryptionKeySha256["x-ms-parameter-grouping"];
     delete $.EncryptionAlgorithm["x-ms-parameter-grouping"];
     delete $.EncryptionScope["x-ms-parameter-grouping"];
-```
-
-### Remove Container_GetAccountInfo and Blob_GetAccountInfo. Unused and clashes with Service_GetAccountInfo after removal of path params.
-``` yaml
-directive:
-- from: swagger-document
-  where: $["x-ms-paths"]
-  transform: >
-    for (const property in $)
-    {
-        if (property.includes('/{containerName}?restype=account&comp=properties'))
-        {
-            delete $[property];
-        }
-        if (property.includes('/{containerName}/{blob}?restype=account&comp=properties'))
-        {
-            delete $[property];
-        }
-    }
 ```
 
 ### Fix 304s

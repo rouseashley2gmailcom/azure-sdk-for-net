@@ -6,11 +6,10 @@
 #nullable disable
 
 using System.Text.Json;
-using Azure.Core;
 
 namespace Azure.AI.FormRecognizer.DocumentAnalysis
 {
-    public partial class DocumentSpan
+    public partial struct DocumentSpan
     {
         internal static DocumentSpan DeserializeDocumentSpan(JsonElement element)
         {
@@ -18,18 +17,26 @@ namespace Azure.AI.FormRecognizer.DocumentAnalysis
             int length = default;
             foreach (var property in element.EnumerateObject())
             {
-                if (property.NameEquals("offset"))
+                if (property.NameEquals("offset"u8))
                 {
                     offset = property.Value.GetInt32();
                     continue;
                 }
-                if (property.NameEquals("length"))
+                if (property.NameEquals("length"u8))
                 {
                     length = property.Value.GetInt32();
                     continue;
                 }
             }
             return new DocumentSpan(offset, length);
+        }
+
+        /// <summary> Deserializes the model from a raw response. </summary>
+        /// <param name="response"> The response to deserialize the model from. </param>
+        internal static DocumentSpan FromResponse(Response response)
+        {
+            using var document = JsonDocument.Parse(response.Content, ModelSerializationExtensions.JsonDocumentOptions);
+            return DeserializeDocumentSpan(document.RootElement);
         }
     }
 }

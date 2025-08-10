@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using Azure.Core;
 using Azure.Core.Pipeline;
 using Azure.Storage.Blobs.Models;
+using Azure.Storage.Common;
 using Azure.Storage.Cryptography;
 using Azure.Storage.Sas;
 using Metadata = System.Collections.Generic.IDictionary<string, string>;
@@ -71,7 +72,7 @@ namespace Azure.Storage.Blobs
         /// <summary>
         /// Gets the Storage account name corresponding to the service client.
         /// </summary>
-        public string AccountName
+        public virtual string AccountName
         {
             get
             {
@@ -148,14 +149,12 @@ namespace Azure.Storage.Blobs
             _uri = conn.BlobEndpoint;
             options ??= new BlobClientOptions();
             _authenticationPolicy = StorageClientOptions.GetAuthenticationPolicy(conn.Credentials);
+            _accountName = conn.AccountName;
 
             _clientConfiguration = new BlobClientConfiguration(
                 pipeline: options.Build(_authenticationPolicy),
                 sharedKeyCredential: conn.Credentials as StorageSharedKeyCredential,
-                clientDiagnostics: new StorageClientDiagnostics(options),
-                version: options.Version,
-                customerProvidedKey: options.CustomerProvidedKey,
-                encryptionScope: options.EncryptionScope);
+                clientOptions: options);
 
             _clientSideEncryption = options._clientSideEncryptionOptions?.Clone();
             _serviceRestClient = BuildServiceRestClient(_uri);
@@ -198,7 +197,7 @@ namespace Azure.Storage.Blobs
         /// every request.
         /// </param>
         public BlobServiceClient(Uri serviceUri, StorageSharedKeyCredential credential, BlobClientOptions options = default)
-            : this(serviceUri, credential.AsPolicy(), options ?? new BlobClientOptions(), credential)
+            : this(serviceUri, credential.AsPolicy(), credential, options ?? new BlobClientOptions())
         {
         }
 
@@ -223,7 +222,7 @@ namespace Azure.Storage.Blobs
         /// This constructor should only be used when shared access signature needs to be updated during lifespan of this client.
         /// </remarks>
         public BlobServiceClient(Uri serviceUri, AzureSasCredential credential, BlobClientOptions options = default)
-            : this(serviceUri, credential.AsPolicy<BlobUriBuilder>(serviceUri), options ?? new BlobClientOptions())
+            : this(serviceUri, credential.AsPolicy<BlobUriBuilder>(serviceUri), credential, options ?? new BlobClientOptions())
         {
         }
 
@@ -244,7 +243,13 @@ namespace Azure.Storage.Blobs
         /// every request.
         /// </param>
         public BlobServiceClient(Uri serviceUri, TokenCredential credential, BlobClientOptions options = default)
-            : this(serviceUri, credential.AsPolicy(options), options ?? new BlobClientOptions())
+            : this(
+                  serviceUri,
+                  credential.AsPolicy(
+                    string.IsNullOrEmpty(options?.Audience?.ToString()) ? BlobAudience.DefaultAudience.CreateDefaultScope() : options.Audience.Value.CreateDefaultScope(),
+                    options),
+                  credential,
+                  options ?? new BlobClientOptions())
         {
             Errors.VerifyHttpsTokenAuth(serviceUri);
         }
@@ -265,23 +270,118 @@ namespace Azure.Storage.Blobs
         /// policies for authentication, retries, etc., that are applied to
         /// every request.
         /// </param>
+        internal BlobServiceClient(
+            Uri serviceUri,
+            HttpPipelinePolicy authentication,
+            BlobClientOptions options)
+            : this(serviceUri,
+                  new BlobClientConfiguration(
+                      pipeline: options.Build(authentication),
+                      sharedKeyCredential: default,
+                      clientOptions: options),
+                  authentication,
+                  options?._clientSideEncryptionOptions?.Clone())
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="BlobServiceClient"/>
+        /// class.
+        /// </summary>
+        /// <param name="serviceUri">
+        /// A <see cref="Uri"/> referencing the blob service.
+        /// This is likely to be similar to "https://{account_name}.blob.core.windows.net".
+        /// </param>
+        /// <param name="authentication">
+        /// An optional authentication policy used to sign requests.
+        /// </param>
         /// <param name="storageSharedKeyCredential">
         /// Optional storage shared key credential used to sign requests and generate sas.
+        /// </param>
+        /// <param name="options">
+        /// Optional client options that define the transport pipeline
+        /// policies for authentication, retries, etc., that are applied to
+        /// every request.
         /// </param>
         internal BlobServiceClient(
             Uri serviceUri,
             HttpPipelinePolicy authentication,
-            BlobClientOptions options,
-            StorageSharedKeyCredential storageSharedKeyCredential = default)
-            : this(
-                  serviceUri,
+            StorageSharedKeyCredential storageSharedKeyCredential,
+            BlobClientOptions options)
+            : this(serviceUri,
                   new BlobClientConfiguration(
                       pipeline: options.Build(authentication),
                       sharedKeyCredential: storageSharedKeyCredential,
-                      clientDiagnostics: new StorageClientDiagnostics(options),
-                      version: options?.Version ?? BlobClientOptions.LatestVersion,
-                      customerProvidedKey: options?.CustomerProvidedKey,
-                      encryptionScope: options?.EncryptionScope),
+                      clientOptions: options),
+                  authentication,
+                  options?._clientSideEncryptionOptions?.Clone())
+        {
+            _accountName ??= storageSharedKeyCredential?.AccountName;
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="BlobServiceClient"/>
+        /// class.
+        /// </summary>
+        /// <param name="serviceUri">
+        /// A <see cref="Uri"/> referencing the blob service.
+        /// This is likely to be similar to "https://{account_name}.blob.core.windows.net".
+        /// </param>
+        /// <param name="authentication">
+        /// An optional authentication policy used to sign requests.
+        /// </param>
+        /// <param name="tokenCredential">
+        /// The token credential used to sign requests.
+        /// </param>
+        /// <param name="options">
+        /// Optional client options that define the transport pipeline
+        /// policies for authentication, retries, etc., that are applied to
+        /// every request.
+        /// </param>
+        internal BlobServiceClient(
+            Uri serviceUri,
+            HttpPipelinePolicy authentication,
+            TokenCredential tokenCredential,
+            BlobClientOptions options)
+            : this(serviceUri,
+                  new BlobClientConfiguration(
+                      pipeline: options.Build(authentication),
+                      tokenCredential: tokenCredential,
+                      clientOptions: options),
+                  authentication,
+                  options?._clientSideEncryptionOptions?.Clone())
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="BlobServiceClient"/>
+        /// class.
+        /// </summary>
+        /// <param name="serviceUri">
+        /// A <see cref="Uri"/> referencing the blob service.
+        /// This is likely to be similar to "https://{account_name}.blob.core.windows.net".
+        /// </param>
+        /// <param name="authentication">
+        /// An optional authentication policy used to sign requests.
+        /// </param>
+        /// <param name="sasCredential">
+        /// Optional SAS credential used to sign requests and generate sas.
+        /// </param>
+        /// <param name="options">
+        /// Optional client options that define the transport pipeline
+        /// policies for authentication, retries, etc., that are applied to
+        /// every request.
+        /// </param>
+        internal BlobServiceClient(
+            Uri serviceUri,
+            HttpPipelinePolicy authentication,
+            AzureSasCredential sasCredential,
+            BlobClientOptions options)
+            : this(serviceUri,
+                  new BlobClientConfiguration(
+                      pipeline: options.Build(authentication),
+                      sasCredential: sasCredential,
+                      clientOptions: options),
                   authentication,
                   options?._clientSideEncryptionOptions?.Clone())
         {
@@ -342,9 +442,71 @@ namespace Azure.Storage.Blobs
         /// <param name="pipeline">
         /// The transport pipeline used to send every request.
         /// </param>
+        /// <param name="sharedKeyCredential">
+        /// The shared key credential used to sign requests.
+        /// </param>
+        /// <param name="sasCredential">
+        /// The SAS credential used to sign requests.
+        /// </param>
+        /// <param name="tokenCredential">
+        /// The token credential used to sign requests.
+        /// </param>
         /// <returns>
         /// New instanc of the <see cref="BlobServiceClient"/> class.
         /// </returns>
+        protected static BlobServiceClient CreateClient(
+            Uri serviceUri,
+            BlobClientOptions options,
+            HttpPipelinePolicy authentication,
+            HttpPipeline pipeline,
+            StorageSharedKeyCredential sharedKeyCredential,
+            AzureSasCredential sasCredential,
+            TokenCredential tokenCredential)
+        {
+            return new BlobServiceClient(
+                serviceUri,
+                new BlobClientConfiguration(
+                    pipeline: pipeline,
+                    sharedKeyCredential: sharedKeyCredential,
+                    sasCredential: sasCredential,
+                    tokenCredential: tokenCredential,
+                    clientDiagnostics: new ClientDiagnostics(options),
+                    version: options.Version,
+                    customerProvidedKey: null,
+                    transferValidation: options.TransferValidation,
+                    encryptionScope: null,
+                    trimBlobNameSlashes: options.TrimBlobNameSlashes,
+                    clientOptions: options),
+                authentication,
+                clientSideEncryption: null);
+        }
+
+        /// <summary>
+        /// Intended for DataLake to create a backing blob client.
+        ///
+        /// Initializes a new instance of the <see cref="BlobServiceClient"/>
+        /// class.
+        /// </summary>
+        /// <param name="serviceUri">
+        /// A <see cref="Uri"/> referencing the block blob that includes the
+        /// name of the account, the name of the container, and the name of
+        /// the blob.
+        /// </param>
+        /// <param name="options">
+        /// Optional client options that define the transport pipeline
+        /// policies for authentication, retries, etc., that are applied to
+        /// every request.
+        /// </param>
+        /// <param name="authentication">
+        /// An optional authentication policy used to sign requests.
+        /// </param>
+        /// <param name="pipeline">
+        /// The transport pipeline used to send every request.
+        /// </param>
+        /// <returns>
+        /// New instanc of the <see cref="BlobServiceClient"/> class.
+        /// </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
         protected static BlobServiceClient CreateClient(
             Uri serviceUri,
             BlobClientOptions options,
@@ -356,10 +518,7 @@ namespace Azure.Storage.Blobs
                 new BlobClientConfiguration(
                     pipeline: pipeline,
                     sharedKeyCredential: null,
-                    clientDiagnostics: new StorageClientDiagnostics(options),
-                    version: options.Version,
-                    customerProvidedKey: null,
-                    encryptionScope: null),
+                    clientOptions: options),
                 authentication,
                 clientSideEncryption: null);
         }
@@ -388,6 +547,7 @@ namespace Azure.Storage.Blobs
             new BlobContainerClient(
                 Uri.AppendToPath(blobContainerName),
                 ClientConfiguration,
+                AuthenticationPolicy,
                 ClientSideEncryption);
 
         #region protected static accessors for Azure.Storage.Blobs.Batch
@@ -458,6 +618,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Pageable<BlobContainerItem> GetBlobContainers(
             BlobContainerTraits traits = BlobContainerTraits.None,
@@ -494,6 +656,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         [EditorBrowsable(EditorBrowsableState.Never)]
 #pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
@@ -535,6 +699,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual AsyncPageable<BlobContainerItem> GetBlobContainersAsync(
             BlobContainerTraits traits = BlobContainerTraits.None,
@@ -571,6 +737,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         [EditorBrowsable(EditorBrowsableState.Never)]
 #pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
@@ -632,6 +800,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         internal async Task<Response<ListContainersSegmentResponse>> GetBlobContainersInternal(
             string continuationToken,
@@ -739,6 +909,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Response<AccountInfo> GetAccountInfo(
             CancellationToken cancellationToken = default) =>
@@ -765,6 +937,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual async Task<Response<AccountInfo>> GetAccountInfoAsync(
             CancellationToken cancellationToken = default) =>
@@ -794,6 +968,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         private async Task<Response<AccountInfo>> GetAccountInfoInternal(
             bool async,
@@ -862,6 +1038,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Response<BlobServiceProperties> GetProperties(
             CancellationToken cancellationToken = default) =>
@@ -890,6 +1068,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual async Task<Response<BlobServiceProperties>> GetPropertiesAsync(
             CancellationToken cancellationToken = default) =>
@@ -921,6 +1101,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         private async Task<Response<BlobServiceProperties>> GetPropertiesInternal(
             bool async,
@@ -993,7 +1175,10 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
+        [CallerShouldAudit("https://aka.ms/azsdk/callershouldaudit/storage-blobs")]
         public virtual Response SetProperties(
             BlobServiceProperties properties,
             CancellationToken cancellationToken = default) =>
@@ -1027,7 +1212,10 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
+        [CallerShouldAudit("https://aka.ms/azsdk/callershouldaudit/storage-blobs")]
         public virtual async Task<Response> SetPropertiesAsync(
             BlobServiceProperties properties,
             CancellationToken cancellationToken = default) =>
@@ -1064,6 +1252,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         private async Task<Response> SetPropertiesInternal(
             BlobServiceProperties properties,
@@ -1088,14 +1278,14 @@ namespace Azure.Storage.Blobs
                     if (async)
                     {
                         response  = await ServiceRestClient.SetPropertiesAsync(
-                            storageServiceProperties: properties,
+                            blobServiceProperties: properties,
                             cancellationToken: cancellationToken)
                             .ConfigureAwait(false);
                     }
                     else
                     {
                         response = ServiceRestClient.SetProperties(
-                            storageServiceProperties: properties,
+                            blobServiceProperties: properties,
                             cancellationToken: cancellationToken);
                     }
 
@@ -1139,6 +1329,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Response<BlobServiceStatistics> GetStatistics(
             CancellationToken cancellationToken = default) =>
@@ -1169,6 +1361,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual async Task<Response<BlobServiceStatistics>> GetStatisticsAsync(
             CancellationToken cancellationToken = default) =>
@@ -1202,6 +1396,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         private async Task<Response<BlobServiceStatistics>> GetStatisticsInternal(
             bool async,
@@ -1258,6 +1454,10 @@ namespace Azure.Storage.Blobs
         /// <param name="startsOn">
         /// Start time for the key's validity, with null indicating an
         /// immediate start.  The time should be specified in UTC.
+        ///
+        /// Note: If you set the start time to the current time, failures
+        /// might occur intermittently for the first few minutes. This is due to different
+        /// machines having slightly different current times (known as clock skew).
         /// </param>
         /// <param name="expiresOn">
         /// Expiration of the key's validity.  The time should be specified
@@ -1274,7 +1474,10 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
+        [CallerShouldAudit("https://aka.ms/azsdk/callershouldaudit/storage-blobs")]
         public virtual Response<UserDelegationKey> GetUserDelegationKey(
             DateTimeOffset? startsOn,
             DateTimeOffset expiresOn,
@@ -1294,6 +1497,10 @@ namespace Azure.Storage.Blobs
         /// <param name="startsOn">
         /// Start time for the key's validity, with null indicating an
         /// immediate start.  The time should be specified in UTC.
+        ///
+        /// Note: If you set the start time to the current time, failures
+        /// might occur intermittently for the first few minutes. This is due to different
+        /// machines having slightly different current times (known as clock skew).
         /// </param>
         /// <param name="expiresOn">
         /// Expiration of the key's validity.  The time should be specified
@@ -1310,7 +1517,10 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
+        [CallerShouldAudit("https://aka.ms/azsdk/callershouldaudit/storage-blobs")]
         public virtual async Task<Response<UserDelegationKey>> GetUserDelegationKeyAsync(
             DateTimeOffset? startsOn,
             DateTimeOffset expiresOn,
@@ -1330,6 +1540,10 @@ namespace Azure.Storage.Blobs
         /// <param name="startsOn">
         /// Start time for the key's validity, with null indicating an
         /// immediate start.  The time should be specified in UTC.
+        ///
+        /// Note: If you set the start time to the current time, failures
+        /// might occur intermittently for the first few minutes. This is due to different
+        /// machines having slightly different current times (known as clock skew).
         /// </param>
         /// <param name="expiresOn">
         /// Expiration of the key's validity.  The time should be specified
@@ -1347,6 +1561,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         private async Task<Response<UserDelegationKey>> GetUserDelegationKeyInternal(
             DateTimeOffset? startsOn,
@@ -1454,6 +1670,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         [ForwardsClientCalls]
         public virtual Response<BlobContainerClient> CreateBlobContainer(
@@ -1506,6 +1724,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         [ForwardsClientCalls]
         public virtual async Task<Response<BlobContainerClient>> CreateBlobContainerAsync(
@@ -1523,8 +1743,7 @@ namespace Azure.Storage.Blobs
         #region DeleteBlobContainer
         /// <summary>
         /// The <see cref="DeleteBlobContainer"/> operation marks the
-        /// specified blob container for deletion. The container and any blobs
-        /// contained within it are later deleted during garbage collection.
+        /// specified blob container for deletion.
         ///
         /// For more information, see
         /// <see href="https://docs.microsoft.com/rest/api/storageservices/delete-container">
@@ -1542,11 +1761,13 @@ namespace Azure.Storage.Blobs
         /// notifications that the operation should be cancelled.
         /// </param>
         /// <returns>
-        /// A <see cref="Response"/> if successful.
+        /// A <see cref="Response"/> on successfully marking for deletion.
         /// </returns>
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         [ForwardsClientCalls]
         public virtual Response DeleteBlobContainer(
@@ -1560,8 +1781,7 @@ namespace Azure.Storage.Blobs
 
         /// <summary>
         /// The <see cref="DeleteBlobContainerAsync"/> operation marks the
-        /// specified container for deletion. The container and any blobs
-        /// contained within it are later deleted during garbage collection.
+        /// specified container for deletion.
         ///
         /// For more information, see
         /// <see href="https://docs.microsoft.com/rest/api/storageservices/delete-container">
@@ -1579,11 +1799,13 @@ namespace Azure.Storage.Blobs
         /// notifications that the operation should be cancelled.
         /// </param>
         /// <returns>
-        /// A <see cref="Response"/> if successful.
+        /// A <see cref="Response"/> on successfully marking for deletion.
         /// </returns>
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         [ForwardsClientCalls]
         public virtual async Task<Response> DeleteBlobContainerAsync(
@@ -1620,6 +1842,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Response<BlobContainerClient> UndeleteBlobContainer(
             string deletedContainerName,
@@ -1654,6 +1878,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual async Task<Response<BlobContainerClient>> UndeleteBlobContainerAsync(
             string deletedContainerName,
@@ -1692,6 +1918,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         [EditorBrowsable(EditorBrowsableState.Never)]
         public virtual Response<BlobContainerClient> UndeleteBlobContainer(
@@ -1732,6 +1960,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         [EditorBrowsable(EditorBrowsableState.Never)]
         public virtual async Task<Response<BlobContainerClient>> UndeleteBlobContainerAsync(
@@ -1775,6 +2005,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         internal async Task<Response<BlobContainerClient>> UndeleteBlobContainerInternal(
             string deletedContainerName,
@@ -1868,6 +2100,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         internal virtual Response<BlobContainerClient> RenameBlobContainer(
             string sourceContainerName,
@@ -1907,6 +2141,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         internal virtual async Task<Response<BlobContainerClient>> RenameBlobContainerAsync(
             string sourceContainerName,
@@ -1947,6 +2183,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         internal async Task<Response<BlobContainerClient>> RenameBlobContainerInternal(
             string sourceContainerName,
@@ -2021,8 +2259,8 @@ namespace Azure.Storage.Blobs
         #region FilterBlobs
         /// <summary>
         /// The Filter Blobs operation enables callers to list blobs across all containers whose tags
-        /// match a given search expression. Filter blobs searches across all containers within a
-        /// storage account but can be scoped within the expression to a single container.
+        /// match a given search expression and only the tags appearing in the expression will be returned.
+        /// Filter blobs searches across all containers within a storage account but can be scoped within the expression to a single container.
         ///
         /// For more information, see
         /// <see href="https://docs.microsoft.com/en-us/rest/api/storageservices/find-blobs-by-tags">
@@ -2045,6 +2283,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Pageable<TaggedBlobItem> FindBlobsByTags(
             string tagFilterSqlExpression,
@@ -2077,6 +2317,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual AsyncPageable<TaggedBlobItem> FindBlobsByTagsAsync(
             string tagFilterSqlExpression,
@@ -2175,15 +2417,61 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="Exception"/> will be thrown if a failure occurs.
         /// </remarks>
+        [CallerShouldAudit("https://aka.ms/azsdk/callershouldaudit/storage-blobs")]
         public Uri GenerateAccountSasUri(
             AccountSasPermissions permissions,
             DateTimeOffset expiresOn,
             AccountSasResourceTypes resourceTypes) =>
+            GenerateAccountSasUri(permissions, expiresOn, resourceTypes, out _);
+
+        /// <summary>
+        /// The <see cref="GenerateAccountSasUri(AccountSasPermissions, DateTimeOffset, AccountSasResourceTypes)"/>
+        /// returns a <see cref="Uri"/> that generates a Blob Account
+        /// Shared Access Signature (SAS) based on the Client properties
+        /// and parameters passed. The SAS is signed by the
+        /// shared key credential of the client.
+        ///
+        /// To check if the client is able to sign a Service Sas see
+        /// <see cref="CanGenerateAccountSasUri"/>.
+        ///
+        /// For more information, see
+        /// <see href="https://docs.microsoft.com/en-us/rest/api/storageservices/create-account-sas">
+        /// Constructing an Account SAS</see>.
+        /// </summary>
+        /// <param name="permissions">
+        /// Required. Specifies the list of permissions to be associated with the SAS.
+        /// See <see cref="AccountSasPermissions"/>.
+        /// </param>
+        /// <param name="expiresOn">
+        /// Required. The time at which the shared access signature becomes invalid.
+        /// </param>
+        /// <param name="resourceTypes">
+        /// Specifies the resource types associated with the shared access signature.
+        /// The user is restricted to operations on the specified resources.
+        /// See <see cref="AccountSasResourceTypes"/>.
+        /// </param>
+        /// <param name="stringToSign">
+        /// For debugging purposes only.  This string will be overwritten with the string to sign that was used to generate the SAS Uri.
+        /// </param>
+        /// <returns>
+        /// A <see cref="Uri"/> containing the SAS Uri.
+        /// </returns>
+        /// <remarks>
+        /// A <see cref="Exception"/> will be thrown if a failure occurs.
+        /// </remarks>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [CallerShouldAudit("https://aka.ms/azsdk/callershouldaudit/storage-blobs")]
+        public Uri GenerateAccountSasUri(
+            AccountSasPermissions permissions,
+            DateTimeOffset expiresOn,
+            AccountSasResourceTypes resourceTypes,
+            out string stringToSign) =>
             GenerateAccountSasUri(new AccountSasBuilder(
                 permissions,
                 expiresOn,
                 AccountSasServices.Blobs,
-                resourceTypes));
+                resourceTypes),
+                out stringToSign);
 
         /// <summary>
         /// The <see cref="GenerateAccountSasUri(AccountSasBuilder)"/> returns a <see cref="Uri"/> that
@@ -2207,7 +2495,38 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="Exception"/> will be thrown if a failure occurs.
         /// </remarks>
+        [CallerShouldAudit("https://aka.ms/azsdk/callershouldaudit/storage-blobs")]
         public Uri GenerateAccountSasUri(AccountSasBuilder builder)
+            => GenerateAccountSasUri(builder, out _);
+
+        /// <summary>
+        /// The <see cref="GenerateAccountSasUri(AccountSasBuilder)"/> returns a <see cref="Uri"/> that
+        /// generates a Blob Account Shared Access Signature (SAS) based on the
+        /// Client properties and builder passed. The SAS is signed by the
+        /// shared key credential of the client.
+        ///
+        /// To check if the client is able to sign a Service Sas see
+        /// <see cref="CanGenerateAccountSasUri"/>.
+        ///
+        /// For more information, see
+        /// <see href="https://docs.microsoft.com/en-us/rest/api/storageservices/create-account-sas">
+        /// Constructing an Account SAS</see>.
+        /// </summary>
+        /// <param name="builder">
+        /// Used to generate a Shared Access Signature (SAS).
+        /// </param>
+        /// <param name="stringToSign">
+        /// For debugging purposes only.  This string will be overwritten with the string to sign that was used to generate the SAS Uri.
+        /// </param>
+        /// <returns>
+        /// A <see cref="Uri"/> containing the SAS Uri.
+        /// </returns>
+        /// <remarks>
+        /// A <see cref="Exception"/> will be thrown if a failure occurs.
+        /// </remarks>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [CallerShouldAudit("https://aka.ms/azsdk/callershouldaudit/storage-blobs")]
+        public Uri GenerateAccountSasUri(AccountSasBuilder builder, out string stringToSign)
         {
             builder = builder ?? throw Errors.ArgumentNull(nameof(builder));
             if (!builder.Services.HasFlag(AccountSasServices.Blobs))
@@ -2218,7 +2537,7 @@ namespace Azure.Storage.Blobs
                     nameof(AccountSasServices.Blobs));
             }
             UriBuilder sasUri = new UriBuilder(Uri);
-            sasUri.Query = builder.ToSasQueryParameters(ClientConfiguration.SharedKeyCredential).ToString();
+            sasUri.Query = builder.ToSasQueryParameters(ClientConfiguration.SharedKeyCredential, out stringToSign).ToString();
             return sasUri.Uri;
         }
         #endregion

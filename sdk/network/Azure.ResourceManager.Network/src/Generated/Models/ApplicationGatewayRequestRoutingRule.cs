@@ -5,23 +5,27 @@
 
 #nullable disable
 
+using System;
+using System.Collections.Generic;
+using Azure.Core;
 using Azure.ResourceManager.Resources.Models;
 
 namespace Azure.ResourceManager.Network.Models
 {
     /// <summary> Request routing rule of an application gateway. </summary>
-    public partial class ApplicationGatewayRequestRoutingRule : SubResource
+    public partial class ApplicationGatewayRequestRoutingRule : NetworkResourceData
     {
-        /// <summary> Initializes a new instance of ApplicationGatewayRequestRoutingRule. </summary>
+        /// <summary> Initializes a new instance of <see cref="ApplicationGatewayRequestRoutingRule"/>. </summary>
         public ApplicationGatewayRequestRoutingRule()
         {
         }
 
-        /// <summary> Initializes a new instance of ApplicationGatewayRequestRoutingRule. </summary>
+        /// <summary> Initializes a new instance of <see cref="ApplicationGatewayRequestRoutingRule"/>. </summary>
         /// <param name="id"> Resource ID. </param>
-        /// <param name="name"> Name of the request routing rule that is unique within an Application Gateway. </param>
+        /// <param name="name"> Resource name. </param>
+        /// <param name="resourceType"> Resource type. </param>
+        /// <param name="serializedAdditionalRawData"> Keeps track of any properties unknown to the library. </param>
         /// <param name="etag"> A unique read-only string that changes whenever the resource is updated. </param>
-        /// <param name="type"> Type of the resource. </param>
         /// <param name="ruleType"> Rule type. </param>
         /// <param name="priority"> Priority of the request routing rule. </param>
         /// <param name="backendAddressPool"> Backend address pool resource of the application gateway. </param>
@@ -30,12 +34,11 @@ namespace Azure.ResourceManager.Network.Models
         /// <param name="urlPathMap"> URL path map resource of the application gateway. </param>
         /// <param name="rewriteRuleSet"> Rewrite Rule Set resource in Basic rule of the application gateway. </param>
         /// <param name="redirectConfiguration"> Redirect configuration resource of the application gateway. </param>
+        /// <param name="loadDistributionPolicy"> Load Distribution Policy resource of the application gateway. </param>
         /// <param name="provisioningState"> The provisioning state of the request routing rule resource. </param>
-        internal ApplicationGatewayRequestRoutingRule(string id, string name, string etag, string type, ApplicationGatewayRequestRoutingRuleType? ruleType, int? priority, WritableSubResource backendAddressPool, WritableSubResource backendHttpSettings, WritableSubResource httpListener, WritableSubResource urlPathMap, WritableSubResource rewriteRuleSet, WritableSubResource redirectConfiguration, ProvisioningState? provisioningState) : base(id)
+        internal ApplicationGatewayRequestRoutingRule(ResourceIdentifier id, string name, ResourceType? resourceType, IDictionary<string, BinaryData> serializedAdditionalRawData, ETag? etag, ApplicationGatewayRequestRoutingRuleType? ruleType, int? priority, WritableSubResource backendAddressPool, WritableSubResource backendHttpSettings, WritableSubResource httpListener, WritableSubResource urlPathMap, WritableSubResource rewriteRuleSet, WritableSubResource redirectConfiguration, WritableSubResource loadDistributionPolicy, NetworkProvisioningState? provisioningState) : base(id, name, resourceType, serializedAdditionalRawData)
         {
-            Name = name;
-            Etag = etag;
-            Type = type;
+            ETag = etag;
             RuleType = ruleType;
             Priority = priority;
             BackendAddressPool = backendAddressPool;
@@ -44,32 +47,115 @@ namespace Azure.ResourceManager.Network.Models
             UrlPathMap = urlPathMap;
             RewriteRuleSet = rewriteRuleSet;
             RedirectConfiguration = redirectConfiguration;
+            LoadDistributionPolicy = loadDistributionPolicy;
             ProvisioningState = provisioningState;
         }
 
-        /// <summary> Name of the request routing rule that is unique within an Application Gateway. </summary>
-        public string Name { get; set; }
         /// <summary> A unique read-only string that changes whenever the resource is updated. </summary>
-        public string Etag { get; }
-        /// <summary> Type of the resource. </summary>
-        public string Type { get; }
+        public ETag? ETag { get; }
         /// <summary> Rule type. </summary>
         public ApplicationGatewayRequestRoutingRuleType? RuleType { get; set; }
         /// <summary> Priority of the request routing rule. </summary>
         public int? Priority { get; set; }
         /// <summary> Backend address pool resource of the application gateway. </summary>
-        public WritableSubResource BackendAddressPool { get; set; }
+        internal WritableSubResource BackendAddressPool { get; set; }
+        /// <summary> Gets or sets Id. </summary>
+        public ResourceIdentifier BackendAddressPoolId
+        {
+            get => BackendAddressPool is null ? default : BackendAddressPool.Id;
+            set
+            {
+                if (BackendAddressPool is null)
+                    BackendAddressPool = new WritableSubResource();
+                BackendAddressPool.Id = value;
+            }
+        }
+
         /// <summary> Backend http settings resource of the application gateway. </summary>
-        public WritableSubResource BackendHttpSettings { get; set; }
+        internal WritableSubResource BackendHttpSettings { get; set; }
+        /// <summary> Gets or sets Id. </summary>
+        public ResourceIdentifier BackendHttpSettingsId
+        {
+            get => BackendHttpSettings is null ? default : BackendHttpSettings.Id;
+            set
+            {
+                if (BackendHttpSettings is null)
+                    BackendHttpSettings = new WritableSubResource();
+                BackendHttpSettings.Id = value;
+            }
+        }
+
         /// <summary> Http listener resource of the application gateway. </summary>
-        public WritableSubResource HttpListener { get; set; }
+        internal WritableSubResource HttpListener { get; set; }
+        /// <summary> Gets or sets Id. </summary>
+        public ResourceIdentifier HttpListenerId
+        {
+            get => HttpListener is null ? default : HttpListener.Id;
+            set
+            {
+                if (HttpListener is null)
+                    HttpListener = new WritableSubResource();
+                HttpListener.Id = value;
+            }
+        }
+
         /// <summary> URL path map resource of the application gateway. </summary>
-        public WritableSubResource UrlPathMap { get; set; }
+        internal WritableSubResource UrlPathMap { get; set; }
+        /// <summary> Gets or sets Id. </summary>
+        public ResourceIdentifier UrlPathMapId
+        {
+            get => UrlPathMap is null ? default : UrlPathMap.Id;
+            set
+            {
+                if (UrlPathMap is null)
+                    UrlPathMap = new WritableSubResource();
+                UrlPathMap.Id = value;
+            }
+        }
+
         /// <summary> Rewrite Rule Set resource in Basic rule of the application gateway. </summary>
-        public WritableSubResource RewriteRuleSet { get; set; }
+        internal WritableSubResource RewriteRuleSet { get; set; }
+        /// <summary> Gets or sets Id. </summary>
+        public ResourceIdentifier RewriteRuleSetId
+        {
+            get => RewriteRuleSet is null ? default : RewriteRuleSet.Id;
+            set
+            {
+                if (RewriteRuleSet is null)
+                    RewriteRuleSet = new WritableSubResource();
+                RewriteRuleSet.Id = value;
+            }
+        }
+
         /// <summary> Redirect configuration resource of the application gateway. </summary>
-        public WritableSubResource RedirectConfiguration { get; set; }
+        internal WritableSubResource RedirectConfiguration { get; set; }
+        /// <summary> Gets or sets Id. </summary>
+        public ResourceIdentifier RedirectConfigurationId
+        {
+            get => RedirectConfiguration is null ? default : RedirectConfiguration.Id;
+            set
+            {
+                if (RedirectConfiguration is null)
+                    RedirectConfiguration = new WritableSubResource();
+                RedirectConfiguration.Id = value;
+            }
+        }
+
+        /// <summary> Load Distribution Policy resource of the application gateway. </summary>
+        internal WritableSubResource LoadDistributionPolicy { get; set; }
+        /// <summary> Gets or sets Id. </summary>
+        public ResourceIdentifier LoadDistributionPolicyId
+        {
+            get => LoadDistributionPolicy is null ? default : LoadDistributionPolicy.Id;
+            set
+            {
+                if (LoadDistributionPolicy is null)
+                    LoadDistributionPolicy = new WritableSubResource();
+                LoadDistributionPolicy.Id = value;
+            }
+        }
+
         /// <summary> The provisioning state of the request routing rule resource. </summary>
-        public ProvisioningState? ProvisioningState { get; }
+        public NetworkProvisioningState? ProvisioningState { get; }
     }
 }

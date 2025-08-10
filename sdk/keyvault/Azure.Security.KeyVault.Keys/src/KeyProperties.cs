@@ -131,27 +131,32 @@ namespace Azure.Security.KeyVault.Keys
         public string RecoveryLevel { get => _attributes.RecoveryLevel; internal set => _attributes.RecoveryLevel = value; }
 
         /// <summary>
+        /// Gets the underlying HSM platform.
+        /// </summary>
+        public string HsmPlatform { get => _attributes.HsmPlatform; internal set => _attributes.HsmPlatform = value; }
+
+        /// <summary>
         /// Gets or sets the policy rules under which the key can be exported.
         /// </summary>
         public KeyReleasePolicy ReleasePolicy { get; set; }
 
         /// <summary>
+        /// Gets the <see cref="KeyAttestation"/> object containing the attestation policy.
+        /// </summary>
+        public KeyAttestation Attestation { get => _attributes.Attestation; }
+
+        /// <summary>
         /// Parses the key identifier into the <see cref="VaultUri"/>, <see cref="Name"/>, and <see cref="Version"/> of the key.
         /// </summary>
-        /// <param name="idToParse">The key vault object identifier.</param>
-        internal void ParseId(Uri idToParse)
+        /// <param name="id">The key vault object identifier.</param>
+        internal void ParseId(Uri id)
         {
-            // We expect an identifier with either 3 or 4 segments: host + collection + name [+ version]
-            if (idToParse.Segments.Length != 3 && idToParse.Segments.Length != 4)
-                throw new ArgumentException(string.Format(CultureInfo.InvariantCulture, "Invalid ObjectIdentifier: {0}. Bad number of segments: {1}", idToParse, idToParse.Segments.Length));
+            KeyVaultIdentifier identifier = KeyVaultIdentifier.ParseWithCollection(id, "keys");
 
-            if (!string.Equals(idToParse.Segments[1], "keys" + "/", StringComparison.OrdinalIgnoreCase))
-                throw new ArgumentException(string.Format(CultureInfo.InvariantCulture, "Invalid ObjectIdentifier: {0}. segment [1] should be 'keys/', found '{1}'", idToParse, idToParse.Segments[1]));
-
-            Id = idToParse;
-            VaultUri = new Uri($"{idToParse.Scheme}://{idToParse.Authority}");
-            Name = idToParse.Segments[2].Trim('/');
-            Version = (idToParse.Segments.Length == 4) ? idToParse.Segments[3].TrimEnd('/') : null;
+            Id = id;
+            VaultUri = identifier.VaultUri;
+            Name = identifier.Name;
+            Version = identifier.Version;
         }
 
         internal void ReadProperty(JsonProperty prop)

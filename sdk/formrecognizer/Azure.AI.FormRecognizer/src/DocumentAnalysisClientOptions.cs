@@ -12,7 +12,7 @@ namespace Azure.AI.FormRecognizer.DocumentAnalysis
     /// </summary>
     public class DocumentAnalysisClientOptions : ClientOptions
     {
-        internal const ServiceVersion LatestVersion = ServiceVersion.V2021_09_30_preview;
+        internal const ServiceVersion LatestVersion = ServiceVersion.V2023_07_31;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="DocumentAnalysisClientOptions"/> class which allows
@@ -21,10 +21,12 @@ namespace Azure.AI.FormRecognizer.DocumentAnalysis
         /// <param name="version">The version of the service to send requests to.</param>
         public DocumentAnalysisClientOptions(ServiceVersion version = LatestVersion)
         {
-            Version = version switch
+            Version = version;
+            VersionString = version switch
             {
-                ServiceVersion.V2021_09_30_preview => version,
-                _ => throw new NotSupportedException($"The service version {version} is not supported.")
+                ServiceVersion.V2022_08_31 => "2022-08-31",
+                ServiceVersion.V2023_07_31 => "2023-07-31",
+                _ => throw new NotSupportedException($"The service version {version} is not supported by this library."),
             };
 
             AddLoggedHeadersAndQueryParameters();
@@ -35,29 +37,31 @@ namespace Azure.AI.FormRecognizer.DocumentAnalysis
         /// </summary>
         public enum ServiceVersion
         {
-            /// <summary>
-            /// The version 2021-09-30-preview of the service.
-            /// </summary>
 #pragma warning disable CA1707 // Identifiers should not contain underscores
-#pragma warning disable AZC0016 // All parts of ServiceVersion members' names must begin with a number or uppercase letter and cannot have consecutive underscores
-            V2021_09_30_preview = 1,
-#pragma warning restore AZC0016 // All parts of ServiceVersion members' names must begin with a number or uppercase letter and cannot have consecutive underscores
+            /// <summary>
+            /// The version 2022-08-31 of the service.
+            /// </summary>
+            V2022_08_31 = 1,
+
+            /// <summary>
+            /// The version 2023-07-31 of the service.
+            /// </summary>
+            V2023_07_31
 #pragma warning restore CA1707 // Identifiers should not contain underscores
         }
+
+        /// <summary>
+        /// Gets or sets the Audience to use for authentication with Azure Active Directory (AAD). The audience is not considered when using a shared key.
+        /// </summary>
+        /// <value>If <c>null</c>, <see cref="DocumentAnalysisAudience.AzurePublicCloud" /> will be assumed.</value>
+        public DocumentAnalysisAudience? Audience { get; set; }
 
         /// <summary>
         /// The service version.
         /// </summary>
         public ServiceVersion Version { get; }
 
-        internal static string GetVersionString(ServiceVersion version)
-        {
-            return version switch
-            {
-                ServiceVersion.V2021_09_30_preview => "2021_09_30_preview",
-                _ => throw new NotSupportedException($"The service version {version} is not supported."),
-            };
-        }
+        internal string VersionString { get; }
 
         /// <summary>
         /// Add headers and query parameters that are considered safe for logging or including in

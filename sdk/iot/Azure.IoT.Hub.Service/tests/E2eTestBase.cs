@@ -14,10 +14,16 @@ namespace Azure.IoT.Hub.Service.Tests
     [Parallelizable(ParallelScope.Self)]
     public abstract class E2eTestBase : RecordedTestBase<IotHubServiceTestEnvironment>
     {
+        internal const string FakeHost = "FakeHost.net";
+        internal const string FakeStorageUri = "https://fake.blob.core.windows.net";
+
         public E2eTestBase(bool isAsync)
          : base(isAsync, TestSettings.Instance.TestMode)
         {
-            Sanitizer = new CustomRequestSanitizer();
+            // Sanitize SAS tokens in request body
+            JsonPathSanitizers.Add("outputBlobContainerUri");
+            JsonPathSanitizers.Add("inputBlobContainerUri");
+            ReplacementHost = FakeHost;
         }
 
         public E2eTestBase(bool isAsync, RecordedTestMode testMode)
@@ -30,8 +36,10 @@ namespace Azure.IoT.Hub.Service.Tests
         {
             TestDiagnostics = false;
 
+#if NETFRAMEWORK
             // TODO: set via client options and pipeline instead
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+#endif
         }
 
         protected IotHubServiceClient GetClient()

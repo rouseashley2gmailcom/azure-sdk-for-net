@@ -6,49 +6,82 @@
 #nullable disable
 
 using System;
+using System.Collections.Generic;
+using Azure.Core;
+using Azure.ResourceManager.Models;
 
 namespace Azure.ResourceManager.Sql.Models
 {
-    /// <summary> The database usages. </summary>
-    public partial class DatabaseUsage
+    /// <summary> Usage metric of a database. </summary>
+    public partial class DatabaseUsage : ResourceData
     {
-        /// <summary> Initializes a new instance of DatabaseUsage. </summary>
-        internal DatabaseUsage()
+        /// <summary>
+        /// Keeps track of any properties unknown to the library.
+        /// <para>
+        /// To assign an object to the value of this property use <see cref="BinaryData.FromObjectAsJson{T}(T, System.Text.Json.JsonSerializerOptions?)"/>.
+        /// </para>
+        /// <para>
+        /// To assign an already formatted json string to this property use <see cref="BinaryData.FromString(string)"/>.
+        /// </para>
+        /// <para>
+        /// Examples:
+        /// <list type="bullet">
+        /// <item>
+        /// <term>BinaryData.FromObjectAsJson("foo")</term>
+        /// <description>Creates a payload of "foo".</description>
+        /// </item>
+        /// <item>
+        /// <term>BinaryData.FromString("\"foo\"")</term>
+        /// <description>Creates a payload of "foo".</description>
+        /// </item>
+        /// <item>
+        /// <term>BinaryData.FromObjectAsJson(new { key = "value" })</term>
+        /// <description>Creates a payload of { "key": "value" }.</description>
+        /// </item>
+        /// <item>
+        /// <term>BinaryData.FromString("{\"key\": \"value\"}")</term>
+        /// <description>Creates a payload of { "key": "value" }.</description>
+        /// </item>
+        /// </list>
+        /// </para>
+        /// </summary>
+        private IDictionary<string, BinaryData> _serializedAdditionalRawData;
+
+        /// <summary> Initializes a new instance of <see cref="DatabaseUsage"/>. </summary>
+        public DatabaseUsage()
         {
         }
 
-        /// <summary> Initializes a new instance of DatabaseUsage. </summary>
-        /// <param name="name"> The name of the usage metric. </param>
-        /// <param name="resourceName"> The name of the resource. </param>
-        /// <param name="displayName"> The usage metric display name. </param>
-        /// <param name="currentValue"> The current value of the usage metric. </param>
-        /// <param name="limit"> The current limit of the usage metric. </param>
-        /// <param name="unit"> The units of the usage metric. </param>
-        /// <param name="nextResetTime"> The next reset time for the usage metric (ISO8601 format). </param>
-        internal DatabaseUsage(string name, string resourceName, string displayName, double? currentValue, double? limit, string unit, DateTimeOffset? nextResetTime)
+        /// <summary> Initializes a new instance of <see cref="DatabaseUsage"/>. </summary>
+        /// <param name="id"> The id. </param>
+        /// <param name="name"> The name. </param>
+        /// <param name="resourceType"> The resourceType. </param>
+        /// <param name="systemData"> The systemData. </param>
+        /// <param name="displayName"> User-readable name of the metric. </param>
+        /// <param name="currentValue"> Current value of the metric. </param>
+        /// <param name="limit"> Boundary value of the metric. </param>
+        /// <param name="unit"> Unit of the metric. </param>
+        /// <param name="serializedAdditionalRawData"> Keeps track of any properties unknown to the library. </param>
+        internal DatabaseUsage(ResourceIdentifier id, string name, ResourceType resourceType, SystemData systemData, string displayName, double? currentValue, double? limit, string unit, IDictionary<string, BinaryData> serializedAdditionalRawData) : base(id, name, resourceType, systemData)
         {
-            Name = name;
-            ResourceName = resourceName;
             DisplayName = displayName;
             CurrentValue = currentValue;
             Limit = limit;
             Unit = unit;
-            NextResetTime = nextResetTime;
+            _serializedAdditionalRawData = serializedAdditionalRawData;
         }
 
-        /// <summary> The name of the usage metric. </summary>
-        public string Name { get; }
-        /// <summary> The name of the resource. </summary>
-        public string ResourceName { get; }
-        /// <summary> The usage metric display name. </summary>
+        /// <summary> User-readable name of the metric. </summary>
+        [WirePath("properties.displayName")]
         public string DisplayName { get; }
-        /// <summary> The current value of the usage metric. </summary>
+        /// <summary> Current value of the metric. </summary>
+        [WirePath("properties.currentValue")]
         public double? CurrentValue { get; }
-        /// <summary> The current limit of the usage metric. </summary>
+        /// <summary> Boundary value of the metric. </summary>
+        [WirePath("properties.limit")]
         public double? Limit { get; }
-        /// <summary> The units of the usage metric. </summary>
+        /// <summary> Unit of the metric. </summary>
+        [WirePath("properties.unit")]
         public string Unit { get; }
-        /// <summary> The next reset time for the usage metric (ISO8601 format). </summary>
-        public DateTimeOffset? NextResetTime { get; }
     }
 }

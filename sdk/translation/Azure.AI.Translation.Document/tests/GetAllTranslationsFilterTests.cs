@@ -141,9 +141,12 @@ namespace Azure.AI.Translation.Document.Tests
             // create client
             var client = GetClient();
 
+            // timestamp before creating a translation job
+            var timestamp = Recording.UtcNow;
+
             // create test jobs
             await CreateTranslationJobsAsync(client, jobsCount: 1, docsPerJob: 1, jobTerminalStatus: DocumentTranslationStatus.Succeeded);
-            var timestamp = Recording.UtcNow;
+
             var targetIds = await CreateTranslationJobsAsync(client, jobsCount: 1, docsPerJob: 1, jobTerminalStatus: DocumentTranslationStatus.Succeeded);
 
             // list translations with filter
@@ -201,7 +204,7 @@ namespace Azure.AI.Translation.Document.Tests
             // list translations with filter
             var options = new GetTranslationStatusesOptions
             {
-                OrderBy = { new TranslationFilterOrder(property: TranslationFilterProperty.CreatedOn, asc: false) },
+                OrderBy = { new TranslationFilterOrder(property: TranslationFilterProperty.CreatedOn, ascending: false) },
                 CreatedAfter = recentTimestamp
             };
 

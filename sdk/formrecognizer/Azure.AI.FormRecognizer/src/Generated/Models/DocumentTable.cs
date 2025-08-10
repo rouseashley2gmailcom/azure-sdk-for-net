@@ -8,14 +8,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Azure.Core;
 
 namespace Azure.AI.FormRecognizer.DocumentAnalysis
 {
     /// <summary> A table object consisting table cells arranged in a rectangular layout. </summary>
     public partial class DocumentTable
     {
-        /// <summary> Initializes a new instance of DocumentTable. </summary>
+        /// <summary> Initializes a new instance of <see cref="DocumentTable"/>. </summary>
         /// <param name="rowCount"> Number of rows in the table. </param>
         /// <param name="columnCount"> Number of columns in the table. </param>
         /// <param name="cells"> Cells contained within the table. </param>
@@ -23,14 +22,8 @@ namespace Azure.AI.FormRecognizer.DocumentAnalysis
         /// <exception cref="ArgumentNullException"> <paramref name="cells"/> or <paramref name="spans"/> is null. </exception>
         internal DocumentTable(int rowCount, int columnCount, IEnumerable<DocumentTableCell> cells, IEnumerable<DocumentSpan> spans)
         {
-            if (cells == null)
-            {
-                throw new ArgumentNullException(nameof(cells));
-            }
-            if (spans == null)
-            {
-                throw new ArgumentNullException(nameof(spans));
-            }
+            Argument.AssertNotNull(cells, nameof(cells));
+            Argument.AssertNotNull(spans, nameof(spans));
 
             RowCount = rowCount;
             ColumnCount = columnCount;
@@ -39,7 +32,7 @@ namespace Azure.AI.FormRecognizer.DocumentAnalysis
             Spans = spans.ToList();
         }
 
-        /// <summary> Initializes a new instance of DocumentTable. </summary>
+        /// <summary> Initializes a new instance of <see cref="DocumentTable"/>. </summary>
         /// <param name="rowCount"> Number of rows in the table. </param>
         /// <param name="columnCount"> Number of columns in the table. </param>
         /// <param name="cells"> Cells contained within the table. </param>

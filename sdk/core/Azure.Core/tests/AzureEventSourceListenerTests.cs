@@ -5,7 +5,9 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.Tracing;
 using System.Linq;
+using System.Security.Cryptography;
 using Azure.Core.Diagnostics;
+using Moq;
 using NUnit.Framework;
 
 namespace Azure.Core.Tests
@@ -30,6 +32,27 @@ namespace Azure.Core.Tests
 
             Assert.AreEqual("Request", singleInvocation.Item1.EventName);
             Assert.NotNull(singleInvocation.Item2);
+        }
+
+        [Test]
+        public void FiltersMessagesUsingLevel()
+        {
+            var warningInvocations = new List<(EventWrittenEventArgs, string)>();
+            var verboseInvocations = new List<(EventWrittenEventArgs, string)>();
+            using var verboseListener = new AzureEventSourceListener((args, s) => verboseInvocations.Add((args, s)), EventLevel.Verbose);
+            using var warningListener = new AzureEventSourceListener((args, s) => warningInvocations.Add((args, s)), EventLevel.Warning);
+
+            AzureCoreEventSource.Singleton.ErrorResponse("id", 500, "GET", "http", 5);
+            AzureCoreEventSource.Singleton.Request("id", "GET", "http", "header", "Test-SDK");
+
+            Assert.AreEqual(1, warningInvocations.Count);
+            var warningInvocation = warningInvocations.Single();
+            Assert.AreEqual("ErrorResponse", warningInvocation.Item1.EventName);
+            Assert.NotNull(warningInvocation.Item2);
+
+            Assert.AreEqual(2, verboseInvocations.Count);
+            Assert.True(verboseInvocations.Any(c=>c.Item1.EventName == "ErrorResponse"));
+            Assert.True(verboseInvocations.Any(c=>c.Item1.EventName == "Request"));
         }
 
         [Test]
@@ -59,6 +82,17 @@ namespace Azure.Core.Tests
         {
             (EventWrittenEventArgs e, string message) = ExpectSingleEvent(() => TestSource.Log.LogWithByteArray(new byte[] { 0, 1, 233 }));
             Assert.AreEqual("Logging 0001E9", message);
+        }
+
+        [Test]
+        public void FormatsLargeByteArrays()
+        {
+            byte[] largeArray = new byte[64];
+            using RandomNumberGenerator rng = RandomNumberGenerator.Create();
+            rng.GetBytes(largeArray);
+
+            (EventWrittenEventArgs e, string message) = ExpectSingleEvent(() => TestSource.Log.LogWithByteArray(largeArray));
+            Assert.AreEqual($"Logging {string.Join("", largeArray.Select(b => b.ToString("X2")))}", message);
         }
 
         [Test]

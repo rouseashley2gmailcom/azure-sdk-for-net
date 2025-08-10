@@ -3,28 +3,27 @@
 
 using System;
 using System.Collections.Concurrent;
-using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Azure.SignalR;
 using Microsoft.Azure.SignalR.Management;
+using Microsoft.Extensions.Options;
 
 namespace Microsoft.Azure.WebJobs.Extensions.SignalRService
 {
-    internal class ServiceHubContextStore : IInternalServiceHubContextStore
+    internal sealed class ServiceHubContextStore : IInternalServiceHubContextStore
     {
         private readonly ConcurrentDictionary<string, (Lazy<Task<IServiceHubContext>> Lazy, IServiceHubContext Value)> _store = new(StringComparer.OrdinalIgnoreCase);
         private readonly ConcurrentDictionary<string, Lazy<Task<object>>> _stronglyTypedStore = new(StringComparer.OrdinalIgnoreCase);
-        private readonly IServiceEndpointManager _endpointManager;
         private readonly ServiceManager _serviceManager;
-
-        public AccessKey[] AccessKeys => _endpointManager.Endpoints.Keys.Select(endpoint => endpoint.AccessKey).ToArray();
 
         public IServiceManager ServiceManager => _serviceManager as IServiceManager;
 
-        public ServiceHubContextStore(IServiceEndpointManager endpointManager, ServiceManager serviceManager)
+        public IOptionsMonitor<SignatureValidationOptions> SignatureValidationOptions { get; }
+
+        public ServiceHubContextStore(IOptionsMonitor<SignatureValidationOptions> signatureValidationOptions, ServiceManager serviceManager)
         {
+            SignatureValidationOptions = signatureValidationOptions;
             _serviceManager = serviceManager;
-            _endpointManager = endpointManager;
         }
 
         public async ValueTask<ServiceHubContext<T>> GetAsync<T>(string hubName) where T : class
@@ -69,6 +68,37 @@ namespace Microsoft.Azure.WebJobs.Extensions.SignalRService
                 _store.TryRemove(hubName, out _);
                 throw;
             }
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            _serviceManager.Dispose();
+            foreach (var tuple in _store.Values)
+            {
+                if (tuple.Value is not null)
+                {
+                    await tuple.Value.DisposeAsync().ConfigureAwait(false);
+                }
+                if (tuple.Lazy is not null && tuple.Lazy.IsValueCreated)
+                {
+                    await (await tuple.Lazy.Value.ConfigureAwait(false)).DisposeAsync().ConfigureAwait(false);
+                }
+            }
+            foreach (var lazy in _stronglyTypedStore.Values)
+            {
+                if (lazy.IsValueCreated)
+                {
+                    // The IAsyncDisposable interface doesn't apply to ServiceHubContext<T> on netstandard2.0 yet.
+                    ((IDisposable)await lazy.Value.ConfigureAwait(false)).Dispose();
+                }
+            }
+        }
+
+        public void Dispose()
+        {
+#pragma warning disable AZC0102 // Do not use GetAwaiter().GetResult().
+            DisposeAsync().GetAwaiter().GetResult();
+#pragma warning restore AZC0102 // Do not use GetAwaiter().GetResult().
         }
     }
 }

@@ -6,32 +6,36 @@
 #nullable disable
 
 using System.Collections.Generic;
-using Azure.Core;
+using Azure.Storage.Common;
 
 namespace Azure.Storage.Blobs.Models
 {
     /// <summary> the list of pages. </summary>
     internal partial class PageList
     {
-        /// <summary> Initializes a new instance of PageList. </summary>
+        /// <summary> Initializes a new instance of <see cref="PageList"/>. </summary>
         internal PageList()
         {
             PageRange = new ChangeTrackingList<PageRange>();
             ClearRange = new ChangeTrackingList<ClearRange>();
         }
 
-        /// <summary> Initializes a new instance of PageList. </summary>
+        /// <summary> Initializes a new instance of <see cref="PageList"/>. </summary>
         /// <param name="pageRange"></param>
         /// <param name="clearRange"></param>
-        internal PageList(IReadOnlyList<PageRange> pageRange, IReadOnlyList<ClearRange> clearRange)
+        /// <param name="nextMarker"></param>
+        internal PageList(IReadOnlyList<PageRange> pageRange, IReadOnlyList<ClearRange> clearRange, string nextMarker)
         {
             PageRange = pageRange;
             ClearRange = clearRange;
+            NextMarker = nextMarker;
         }
 
         /// <summary> Gets the page range. </summary>
         public IReadOnlyList<PageRange> PageRange { get; }
         /// <summary> Gets the clear range. </summary>
         public IReadOnlyList<ClearRange> ClearRange { get; }
+        /// <summary> Gets the next marker. </summary>
+        public string NextMarker { get; }
     }
 }

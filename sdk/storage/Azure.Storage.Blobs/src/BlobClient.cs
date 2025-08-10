@@ -337,6 +337,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Response<BlobContentInfo> Upload(Stream content) =>
             Upload(content, CancellationToken.None);
@@ -364,6 +366,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Response<BlobContentInfo> Upload(BinaryData content) =>
             Upload(content, CancellationToken.None);
@@ -391,13 +395,15 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Response<BlobContentInfo> Upload(string path) =>
             Upload(path, CancellationToken.None);
 
         /// <summary>
         /// The <see cref="UploadAsync(Stream)"/> operation creates a new block blob
-        /// or updates the content of an existing block blob.  Updating an
+        /// or throws an exception if the blob already exists.  Updating an
         /// existing block blob overwrites any existing metadata on the blob.
         ///
         /// For partial block blob updates and other advanced features, please
@@ -419,13 +425,15 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual async Task<Response<BlobContentInfo>> UploadAsync(Stream content) =>
             await UploadAsync(content, CancellationToken.None).ConfigureAwait(false);
 
         /// <summary>
         /// The <see cref="UploadAsync(BinaryData)"/> operation creates a new block blob
-        /// or updates the content of an existing block blob.  Updating an
+        /// or throws an exception if the blob already exists.  Updating an
         /// existing block blob overwrites any existing metadata on the blob.
         ///
         /// For partial block blob updates and other advanced features, please
@@ -447,6 +455,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual async Task<Response<BlobContentInfo>> UploadAsync(BinaryData content) =>
             await UploadAsync(content, CancellationToken.None).ConfigureAwait(false);
@@ -474,6 +484,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual async Task<Response<BlobContentInfo>> UploadAsync(string path) =>
             await UploadAsync(path, CancellationToken.None).ConfigureAwait(false);
@@ -505,6 +517,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Response<BlobContentInfo> Upload(
             Stream content,
@@ -541,6 +555,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Response<BlobContentInfo> Upload(
             BinaryData content,
@@ -577,6 +593,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Response<BlobContentInfo> Upload(
             string path,
@@ -613,6 +631,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Task<Response<BlobContentInfo>> UploadAsync(
             Stream content,
@@ -649,6 +669,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Task<Response<BlobContentInfo>> UploadAsync(
             BinaryData content,
@@ -685,6 +707,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual async Task<Response<BlobContentInfo>> UploadAsync(
             string path,
@@ -726,6 +750,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Response<BlobContentInfo> Upload(
             Stream content,
@@ -770,6 +796,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Response<BlobContentInfo> Upload(
             BinaryData content,
@@ -811,6 +839,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Response<BlobContentInfo> Upload(
             string path,
@@ -855,6 +885,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Task<Response<BlobContentInfo>> UploadAsync(
             Stream content,
@@ -899,6 +931,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Task<Response<BlobContentInfo>> UploadAsync(
             BinaryData content,
@@ -943,6 +977,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual async Task<Response<BlobContentInfo>> UploadAsync(
             string path,
@@ -990,6 +1026,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Response<BlobContentInfo> Upload(
             Stream content,
@@ -1038,17 +1076,24 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Response<BlobContentInfo> Upload(
             BinaryData content,
             BlobUploadOptions options,
-            CancellationToken cancellationToken = default) =>
-            StagedUploadInternal(
-                content.ToStream(),
-                options,
-                async: false,
-                cancellationToken: cancellationToken)
-                .EnsureCompleted();
+            CancellationToken cancellationToken = default)
+        {
+            using (var stream = content.ToStream())
+            {
+                return StagedUploadInternal(
+                    stream,
+                    options,
+                    async: false,
+                    cancellationToken: cancellationToken)
+                    .EnsureCompleted();
+            }
+        }
 
         /// <summary>
         /// The <see cref="Upload(Stream, BlobHttpHeaders, Metadata, BlobRequestConditions, IProgress{long}, AccessTier?, StorageTransferOptions, CancellationToken)"/>
@@ -1106,6 +1151,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         [EditorBrowsable(EditorBrowsableState.Never)]
         public virtual Response<BlobContentInfo> Upload(
@@ -1168,6 +1215,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Response<BlobContentInfo> Upload(
             string path,
@@ -1241,6 +1290,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         [EditorBrowsable(EditorBrowsableState.Never)]
         public virtual Response<BlobContentInfo> Upload(
@@ -1308,6 +1359,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual async Task<Response<BlobContentInfo>> UploadAsync(
             Stream content,
@@ -1356,17 +1409,24 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual async Task<Response<BlobContentInfo>> UploadAsync(
             BinaryData content,
             BlobUploadOptions options,
-            CancellationToken cancellationToken = default) =>
-            await StagedUploadInternal(
-                content.ToStream(),
-                options,
-                async: true,
-                cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
+            CancellationToken cancellationToken = default)
+        {
+            using (var stream = content.ToStream())
+            {
+                return await StagedUploadInternal(
+                    stream,
+                    options,
+                    async: true,
+                    cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+            }
+        }
 
         /// <summary>
         /// The <see cref="UploadAsync(Stream, BlobHttpHeaders, Metadata, BlobRequestConditions, IProgress{long}, AccessTier?, StorageTransferOptions, CancellationToken)"/>
@@ -1424,6 +1484,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         [ForwardsClientCalls]
         [EditorBrowsable(EditorBrowsableState.Never)]
@@ -1486,6 +1548,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual async Task<Response<BlobContentInfo>> UploadAsync(
             string path,
@@ -1559,6 +1623,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         [ForwardsClientCalls]
         [EditorBrowsable(EditorBrowsableState.Never)]
@@ -1615,6 +1681,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         internal async Task<Response<BlobContentInfo>> StagedUploadInternal(
             Stream content,
@@ -1622,25 +1690,32 @@ namespace Azure.Storage.Blobs
             bool async = true,
             CancellationToken cancellationToken = default)
         {
+            UploadTransferValidationOptions validationOptions = options?.TransferValidation ?? ClientConfiguration.TransferValidation.Upload;
+
+            long? expectedContentLength = null;
             if (UsingClientSideEncryption)
             {
-                if (UsingClientSideEncryption && options.TransactionalHashingOptions != default)
-                {
-                    throw Errors.TransactionalHashingNotSupportedWithClientSideEncryption();
-                }
+                options ??= new BlobUploadOptions();
 
-                // content is now unseekable, so PartitionedUploader will be forced to do a buffered multipart upload
-                (content, options.Metadata) = await new BlobClientSideEncryptor(new ClientSideEncryptor(ClientSideEncryption))
+                // if content length was known, we retain that for dividing REST requests appropriately
+                expectedContentLength = content.GetLengthOrDefault();
+                IClientSideEncryptor encryptor = ClientSideEncryption.GetClientSideEncryptor();
+                if (expectedContentLength.HasValue)
+                {
+                    expectedContentLength = encryptor.ExpectedOutputContentLength(expectedContentLength.Value);
+                }
+                (content, options.Metadata) = await new BlobClientSideEncryptor(encryptor)
                     .ClientSideEncryptInternal(content, options.Metadata, async, cancellationToken).ConfigureAwait(false);
             }
 
             var uploader = GetPartitionedUploader(
                 transferOptions: options?.TransferOptions ?? default,
-                options?.TransactionalHashingOptions,
+                validationOptions,
                 operationName: $"{nameof(BlobClient)}.{nameof(Upload)}");
 
             return await uploader.UploadInternal(
                 content,
+                expectedContentLength,
                 options,
                 options?.ProgressHandler,
                 async,
@@ -1673,6 +1748,8 @@ namespace Azure.Storage.Blobs
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         internal async Task<Response<BlobContentInfo>> StagedUploadInternal(
             string path,
@@ -1680,28 +1757,6 @@ namespace Azure.Storage.Blobs
             bool async = true,
             CancellationToken cancellationToken = default)
         {
-            // TODO Upload from file will get it's own implementation in the future that opens more
-            //      than one stream at once. This is incompatible with .NET's CryptoStream. We will
-            //      need to uncomment the below code and revert to upload from stream if client-side
-            //      encryption is enabled.
-            //if (ClientSideEncryption != default)
-            //{
-            //    using (FileStream stream = new FileStream(path, FileMode.Open, FileAccess.Read))
-            //    {
-            //        return await StagedUploadAsync(
-            //            stream,
-            //            blobHttpHeaders,
-            //            metadata,
-            //            conditions,
-            //            progressHandler,
-            //            accessTier,
-            //            transferOptions: transferOptions,
-            //            async: async,
-            //            cancellationToken: cancellationToken)
-            //            .ConfigureAwait(false);
-            //    }
-            //}
-
             using (FileStream stream = new FileStream(path, FileMode.Open, FileAccess.Read))
             {
                 return await StagedUploadInternal(
@@ -1714,6 +1769,107 @@ namespace Azure.Storage.Blobs
         }
         #endregion Upload
 
+        #region OpenWrite
+        /// <summary>
+        /// Opens a stream for writing to the blob. If the blob exists,
+        /// it will be overwritten.
+        /// </summary>
+        /// <param name="overwrite">
+        /// Whether an existing blob should be deleted and recreated.
+        /// The only valid value for this operation is true.
+        /// </param>
+        /// <param name="options">
+        /// Optional parameters.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Optional <see cref="CancellationToken"/> to propagate
+        /// notifications that the operation should be cancelled.
+        /// </param>
+        /// <returns>
+        /// A stream to write to the Append Blob.
+        /// </returns>
+        /// <remarks>
+        /// A <see cref="RequestFailedException"/> will be thrown if
+        /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
+        /// </remarks>
+#pragma warning disable AZC0015 // Unexpected client method return type.
+        [ForwardsClientCalls]
+        public virtual Stream OpenWrite(
+#pragma warning restore AZC0015 // Unexpected client method return type.
+            bool overwrite,
+            BlobOpenWriteOptions options = default,
+            CancellationToken cancellationToken = default)
+            => OpenWriteInternal(
+                overwrite,
+                options,
+                async: false,
+                cancellationToken).EnsureCompleted();
+
+        /// <summary>
+        /// Opens a stream for writing to the blob. If the blob exists,
+        /// it will be overwritten.
+        /// </summary>
+        /// <param name="overwrite">
+        /// Whether an existing blob should be deleted and recreated.
+        /// The only valid value for this operation is true.
+        /// </param>
+        /// <param name="options">
+        /// Optional parameters.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Optional <see cref="CancellationToken"/> to propagate
+        /// notifications that the operation should be cancelled.
+        /// </param>
+        /// <returns>
+        /// A stream to write to the Append Blob.
+        /// </returns>
+        /// <remarks>
+        /// A <see cref="RequestFailedException"/> will be thrown if
+        /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
+        /// </remarks>
+#pragma warning disable AZC0015 // Unexpected client method return type.
+        [ForwardsClientCalls]
+        public virtual async Task<Stream> OpenWriteAsync(
+#pragma warning restore AZC0015 // Unexpected client method return type.
+            bool overwrite,
+            BlobOpenWriteOptions options = default,
+            CancellationToken cancellationToken = default)
+            => await OpenWriteInternal(
+                overwrite,
+                options,
+                async: true,
+                cancellationToken).ConfigureAwait(false);
+
+        internal async Task<Stream> OpenWriteInternal(
+            bool overwrite,
+            BlobOpenWriteOptions options,
+            bool async,
+            CancellationToken cancellationToken)
+        {
+            if (UsingClientSideEncryption)
+            {
+                IClientSideEncryptor encryptor = ClientSideEncryption.GetClientSideEncryptor();
+                return await new BlobClientSideEncryptor(encryptor)
+                    .ClientSideEncryptionOpenWriteInternal(
+                        BlockBlobClient,
+                        overwrite,
+                        options?.ToBlockBlobOpenWriteOptions(),
+                        async,
+                        cancellationToken).ConfigureAwait(false);
+            }
+
+            return await BlockBlobClient.OpenWriteInternal(
+                overwrite,
+                options?.ToBlockBlobOpenWriteOptions(),
+                async,
+                cancellationToken).ConfigureAwait(false);
+        }
+        #endregion
+
         private BlockBlobClient _blockBlobClient;
 
         private BlockBlobClient BlockBlobClient
@@ -1722,7 +1878,7 @@ namespace Azure.Storage.Blobs
             {
                 if (_blockBlobClient == null)
                 {
-                    _blockBlobClient = new BlockBlobClient(Uri, ClientConfiguration);
+                    _blockBlobClient = new BlockBlobClient(Uri, ClientConfiguration, ClientSideEncryption);
                 }
                 return _blockBlobClient;
             }
@@ -1730,9 +1886,9 @@ namespace Azure.Storage.Blobs
 
         internal PartitionedUploader<BlobUploadOptions, BlobContentInfo> GetPartitionedUploader(
             StorageTransferOptions transferOptions,
-            UploadTransactionalHashingOptions hashingOptions,
+            UploadTransferValidationOptions validationOptions,
             ArrayPool<byte> arrayPool = null,
             string operationName = null)
-            => BlockBlobClient.GetPartitionedUploader(transferOptions, hashingOptions, arrayPool, operationName);
+            => BlockBlobClient.GetPartitionedUploader(transferOptions, validationOptions, arrayPool, operationName);
     }
 }

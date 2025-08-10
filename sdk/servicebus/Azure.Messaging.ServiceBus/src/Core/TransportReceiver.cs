@@ -17,14 +17,10 @@ namespace Azure.Messaging.ServiceBus.Core
     internal abstract class TransportReceiver
     {
         /// <summary>
-        /// Indicates whether or not this receiver has been closed.
+        /// Indicates whether the session link has been closed. This is useful for session receiver scenarios because once the link is closed for a
+        /// session receiver it will not be reopened.
         /// </summary>
-        ///
-        /// <value>
-        /// <c>true</c> if the consumer is closed; otherwise, <c>false</c>.
-        /// </value>
-        ///
-        public abstract bool IsClosed { get; }
+        public abstract bool IsSessionLinkClosed { get; }
 
         /// <summary>
         ///
@@ -35,6 +31,11 @@ namespace Azure.Messaging.ServiceBus.Core
         /// The Session Id associated with the receiver.
         /// </summary>
         public abstract DateTimeOffset SessionLockedUntil { get; protected set; }
+
+        /// <summary>
+        /// The prefetch count associated with the receiver.
+        /// </summary>
+        public abstract int PrefetchCount { get; set; }
 
         /// <summary>
         /// Receives a set of <see cref="ServiceBusReceivedMessage" /> from the entity using <see cref="ServiceBusReceiveMode"/> mode.
@@ -142,6 +143,20 @@ namespace Azure.Messaging.ServiceBus.Core
             CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// Deletes up to <paramref name="messageCount"/> number of messages from the entity. Only messages that
+        /// were added to the queue prior to <paramref name="beforeEnqueueTimeUtc"/> will be deleted. The actual number
+        /// of deleted messages may be less if there are fewer eligible messages in the entity.
+        /// </summary>
+        /// <param name="messageCount">The desired number of messages to delete.</param>
+        /// <param name="beforeEnqueueTimeUtc">A <see cref="DateTimeOffset"/> representing the cutoff time for deletion. Only messages that were enqueued before this time will be deleted.</param>
+        /// <param name="cancellationToken">An optional <see cref="CancellationToken"/> instance to signal the request to cancel the operation.</param>
+        /// <returns>The number of messages that were deleted.</returns>
+        public abstract Task<int> DeleteMessagesAsync(
+            int messageCount,
+            DateTimeOffset beforeEnqueueTimeUtc,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// Moves a message to the dead-letter subqueue.
         /// </summary>
         ///
@@ -154,7 +169,7 @@ namespace Azure.Messaging.ServiceBus.Core
         /// <remarks>
         /// In order to receive a message from the dead-letter queue, you will need a new
         /// <see cref="ServiceBusReceiver"/> with the corresponding path.
-        /// You can use EntityNameHelper.FormatDeadLetterPath(string)"/> to help with this.
+        /// You can use <see cref="ServiceBusReceiverOptions.SubQueue"/> with <see cref="SubQueue.DeadLetter"/> to help with this.
         /// This operation can only be performed on messages that were received by this receiver
         /// when <see cref="ServiceBusReceiveMode"/> is set to <see cref="ServiceBusReceiveMode.PeekLock"/>.
         /// </remarks>

@@ -2,10 +2,13 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Net.Http.Headers;
 using System.Threading.Tasks;
 using Azure.Core.Pipeline;
 using Azure.Security.KeyVault.Secrets;
+using Moq;
 using NUnit.Framework;
 
 namespace Azure.Core.Samples
@@ -13,12 +16,14 @@ namespace Azure.Core.Samples
     public class PipelineSamples
     {
         [Test]
-        public void AddingPerCallPolicy()
+        public void AddPolicies()
         {
-            #region Snippet:AddingPerCallPolicy
+            #region Snippet:AddPerCallPolicy
             SecretClientOptions options = new SecretClientOptions();
             options.AddPolicy(new CustomRequestPolicy(), HttpPipelinePosition.PerCall);
+            #endregion
 
+            #region Snippet:AddPerRetryPolicy
             options.AddPolicy(new StopwatchPolicy(), HttpPipelinePosition.PerRetry);
             #endregion
         }
@@ -62,5 +67,42 @@ namespace Azure.Core.Samples
             }
         }
         #endregion
+
+        private class RequestFailedDetailsParserSample
+        {
+            public SampleClientOptions options;
+            private readonly HttpPipeline _pipeline;
+
+            public RequestFailedDetailsParserSample()
+            {
+                options = new();
+                #region Snippet:RequestFailedDetailsParser
+                var pipelineOptions = new HttpPipelineOptions(options)
+                {
+                    RequestFailedDetailsParser = new FooClientRequestFailedDetailsParser()
+                };
+
+                _pipeline = HttpPipelineBuilder.Build(pipelineOptions);
+                #endregion
+                if (_pipeline == null)
+                { throw new Exception(); };
+            }
+        }
+
+        private class SampleClientOptions : ClientOptions { }
+        private class SampleClient
+        {
+            public SampleClient(Uri endpoint, TokenCredential credential, SampleClientOptions options = default)
+            {
+            }
+        }
+
+        private class FooClientRequestFailedDetailsParser : RequestFailedDetailsParser
+        {
+            public override bool TryParse(Response response, out ResponseError error, out IDictionary<string, string> data)
+            {
+                throw new NotImplementedException();
+            }
+        }
     }
 }

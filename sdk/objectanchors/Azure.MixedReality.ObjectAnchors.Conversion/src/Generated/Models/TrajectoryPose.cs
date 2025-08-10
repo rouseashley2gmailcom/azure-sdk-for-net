@@ -6,11 +6,12 @@
 #nullable disable
 
 using System;
+using Azure.MixedReality.Common;
 using Azure.MixedReality.ObjectAnchors.Conversion.Models;
 
 namespace Azure.MixedReality.ObjectAnchors.Conversion
 {
-    /// <summary> The Pose. </summary>
+    /// <summary> Represents a pose. </summary>
     public readonly partial struct TrajectoryPose
     {
     }

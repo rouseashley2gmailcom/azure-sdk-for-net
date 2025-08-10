@@ -22,7 +22,7 @@ pr:
     - sdk/extensions/
 
 extends:
-  template: ../../eng/pipelines/templates/stages/archetype-sdk-client.yml
+  template: /eng/pipelines/templates/stages/archetype-sdk-client.yml
   parameters:
     ServiceDirectory: extensions
     ArtifactName: packages
@@ -37,3 +37,7 @@ extends:
       safeName: AzureExtensionsAspNetCoreConfigurationSecrets
     - name: Microsoft.Azure.WebJobs.Extensions.Clients
       safeName: MicrosoftAzureWebJobsExtensionsClients
+    CheckAOTCompat: false
+    AOTTestInputs:
+    - ArtifactName: Microsoft.Extensions.Azure
+      ExpectedWarningsFilepath: None

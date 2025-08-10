@@ -24,19 +24,19 @@ namespace Azure.Analytics.Synapse.Artifacts.Models
 
         private const string SucceededValue = "Succeeded";
         private const string FailedValue = "Failed";
-        private const string InprogressValue = "Inprogress";
+        private const string InProgressValue = "Inprogress";
 
         /// <summary> Succeeded. </summary>
         public static TriggerRunStatus Succeeded { get; } = new TriggerRunStatus(SucceededValue);
         /// <summary> Failed. </summary>
         public static TriggerRunStatus Failed { get; } = new TriggerRunStatus(FailedValue);
         /// <summary> Inprogress. </summary>
-        public static TriggerRunStatus Inprogress { get; } = new TriggerRunStatus(InprogressValue);
+        public static TriggerRunStatus InProgress { get; } = new TriggerRunStatus(InProgressValue);
         /// <summary> Determines if two <see cref="TriggerRunStatus"/> values are the same. </summary>
         public static bool operator ==(TriggerRunStatus left, TriggerRunStatus right) => left.Equals(right);
         /// <summary> Determines if two <see cref="TriggerRunStatus"/> values are not the same. </summary>
         public static bool operator !=(TriggerRunStatus left, TriggerRunStatus right) => !left.Equals(right);
-        /// <summary> Converts a string to a <see cref="TriggerRunStatus"/>. </summary>
+        /// <summary> Converts a <see cref="string"/> to a <see cref="TriggerRunStatus"/>. </summary>
         public static implicit operator TriggerRunStatus(string value) => new TriggerRunStatus(value);
 
         /// <inheritdoc />
@@ -47,7 +47,7 @@ namespace Azure.Analytics.Synapse.Artifacts.Models
 
         /// <inheritdoc />
         [EditorBrowsable(EditorBrowsableState.Never)]
-        public override int GetHashCode() => _value?.GetHashCode() ?? 0;
+        public override int GetHashCode() => _value != null ? StringComparer.InvariantCultureIgnoreCase.GetHashCode(_value) : 0;
         /// <inheritdoc />
         public override string ToString() => _value;
     }

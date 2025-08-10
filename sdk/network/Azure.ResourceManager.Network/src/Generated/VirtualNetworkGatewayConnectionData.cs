@@ -13,35 +13,38 @@ using Azure.ResourceManager.Resources.Models;
 
 namespace Azure.ResourceManager.Network
 {
-    /// <summary> A class representing the VirtualNetworkGatewayConnection data model. </summary>
-    public partial class VirtualNetworkGatewayConnectionData : Resource
+    /// <summary>
+    /// A class representing the VirtualNetworkGatewayConnection data model.
+    /// A common class for general resource information.
+    /// </summary>
+    public partial class VirtualNetworkGatewayConnectionData : NetworkTrackedResourceData
     {
-        /// <summary> Initializes a new instance of VirtualNetworkGatewayConnectionData. </summary>
+        /// <summary> Initializes a new instance of <see cref="VirtualNetworkGatewayConnectionData"/>. </summary>
         /// <param name="virtualNetworkGateway1"> The reference to virtual network gateway resource. </param>
         /// <param name="connectionType"> Gateway connection type. </param>
         /// <exception cref="ArgumentNullException"> <paramref name="virtualNetworkGateway1"/> is null. </exception>
         public VirtualNetworkGatewayConnectionData(VirtualNetworkGatewayData virtualNetworkGateway1, VirtualNetworkGatewayConnectionType connectionType)
         {
-            if (virtualNetworkGateway1 == null)
-            {
-                throw new ArgumentNullException(nameof(virtualNetworkGateway1));
-            }
+            Argument.AssertNotNull(virtualNetworkGateway1, nameof(virtualNetworkGateway1));
 
             VirtualNetworkGateway1 = virtualNetworkGateway1;
             IngressNatRules = new ChangeTrackingList<WritableSubResource>();
             EgressNatRules = new ChangeTrackingList<WritableSubResource>();
             ConnectionType = connectionType;
+            TunnelProperties = new ChangeTrackingList<VirtualNetworkGatewayConnectionTunnelProperties>();
             TunnelConnectionStatus = new ChangeTrackingList<TunnelConnectionHealth>();
-            IpsecPolicies = new ChangeTrackingList<IpsecPolicy>();
+            GatewayCustomBgpIPAddresses = new ChangeTrackingList<GatewayCustomBgpIPAddressIPConfiguration>();
+            IPsecPolicies = new ChangeTrackingList<IPsecPolicy>();
             TrafficSelectorPolicies = new ChangeTrackingList<TrafficSelectorPolicy>();
         }
 
-        /// <summary> Initializes a new instance of VirtualNetworkGatewayConnectionData. </summary>
+        /// <summary> Initializes a new instance of <see cref="VirtualNetworkGatewayConnectionData"/>. </summary>
         /// <param name="id"> Resource ID. </param>
         /// <param name="name"> Resource name. </param>
-        /// <param name="type"> Resource type. </param>
+        /// <param name="resourceType"> Resource type. </param>
         /// <param name="location"> Resource location. </param>
         /// <param name="tags"> Resource tags. </param>
+        /// <param name="serializedAdditionalRawData"> Keeps track of any properties unknown to the library. </param>
         /// <param name="etag"> A unique read-only string that changes whenever the resource is updated. </param>
         /// <param name="authorizationKey"> The authorizationKey. </param>
         /// <param name="virtualNetworkGateway1"> The reference to virtual network gateway resource. </param>
@@ -54,23 +57,26 @@ namespace Azure.ResourceManager.Network
         /// <param name="routingWeight"> The routing weight. </param>
         /// <param name="dpdTimeoutSeconds"> The dead peer detection timeout of this connection in seconds. </param>
         /// <param name="connectionMode"> The connection mode for this connection. </param>
+        /// <param name="tunnelProperties"> Tunnel properties for virtual network gateway connection. </param>
         /// <param name="sharedKey"> The IPSec shared key. </param>
         /// <param name="connectionStatus"> Virtual Network Gateway connection status. </param>
-        /// <param name="tunnelConnectionStatus"> Collection of all tunnels&apos; connection health status. </param>
+        /// <param name="tunnelConnectionStatus"> Collection of all tunnels' connection health status. </param>
         /// <param name="egressBytesTransferred"> The egress bytes transferred in this connection. </param>
         /// <param name="ingressBytesTransferred"> The ingress bytes transferred in this connection. </param>
         /// <param name="peer"> The reference to peerings resource. </param>
         /// <param name="enableBgp"> EnableBgp flag. </param>
-        /// <param name="useLocalAzureIpAddress"> Use private local Azure IP for the connection. </param>
+        /// <param name="gatewayCustomBgpIPAddresses"> GatewayCustomBgpIpAddresses to be used for virtual network gateway Connection. </param>
+        /// <param name="useLocalAzureIPAddress"> Use private local Azure IP for the connection. </param>
         /// <param name="usePolicyBasedTrafficSelectors"> Enable policy-based traffic selectors. </param>
         /// <param name="ipsecPolicies"> The IPSec Policies to be considered by this connection. </param>
         /// <param name="trafficSelectorPolicies"> The Traffic Selector Policies to be considered by this connection. </param>
         /// <param name="resourceGuid"> The resource GUID property of the virtual network gateway connection resource. </param>
         /// <param name="provisioningState"> The provisioning state of the virtual network gateway connection resource. </param>
         /// <param name="expressRouteGatewayBypass"> Bypass ExpressRoute Gateway for data forwarding. </param>
-        internal VirtualNetworkGatewayConnectionData(string id, string name, string type, string location, IDictionary<string, string> tags, string etag, string authorizationKey, VirtualNetworkGatewayData virtualNetworkGateway1, VirtualNetworkGatewayData virtualNetworkGateway2, LocalNetworkGatewayData localNetworkGateway2, IList<WritableSubResource> ingressNatRules, IList<WritableSubResource> egressNatRules, VirtualNetworkGatewayConnectionType connectionType, VirtualNetworkGatewayConnectionProtocol? connectionProtocol, int? routingWeight, int? dpdTimeoutSeconds, VirtualNetworkGatewayConnectionMode? connectionMode, string sharedKey, VirtualNetworkGatewayConnectionStatus? connectionStatus, IReadOnlyList<TunnelConnectionHealth> tunnelConnectionStatus, long? egressBytesTransferred, long? ingressBytesTransferred, WritableSubResource peer, bool? enableBgp, bool? useLocalAzureIpAddress, bool? usePolicyBasedTrafficSelectors, IList<IpsecPolicy> ipsecPolicies, IList<TrafficSelectorPolicy> trafficSelectorPolicies, string resourceGuid, ProvisioningState? provisioningState, bool? expressRouteGatewayBypass) : base(id, name, type, location, tags)
+        /// <param name="enablePrivateLinkFastPath"> Bypass the ExpressRoute gateway when accessing private-links. ExpressRoute FastPath (expressRouteGatewayBypass) must be enabled. </param>
+        internal VirtualNetworkGatewayConnectionData(ResourceIdentifier id, string name, ResourceType? resourceType, AzureLocation? location, IDictionary<string, string> tags, IDictionary<string, BinaryData> serializedAdditionalRawData, ETag? etag, string authorizationKey, VirtualNetworkGatewayData virtualNetworkGateway1, VirtualNetworkGatewayData virtualNetworkGateway2, LocalNetworkGatewayData localNetworkGateway2, IList<WritableSubResource> ingressNatRules, IList<WritableSubResource> egressNatRules, VirtualNetworkGatewayConnectionType connectionType, VirtualNetworkGatewayConnectionProtocol? connectionProtocol, int? routingWeight, int? dpdTimeoutSeconds, VirtualNetworkGatewayConnectionMode? connectionMode, IList<VirtualNetworkGatewayConnectionTunnelProperties> tunnelProperties, string sharedKey, VirtualNetworkGatewayConnectionStatus? connectionStatus, IReadOnlyList<TunnelConnectionHealth> tunnelConnectionStatus, long? egressBytesTransferred, long? ingressBytesTransferred, WritableSubResource peer, bool? enableBgp, IList<GatewayCustomBgpIPAddressIPConfiguration> gatewayCustomBgpIPAddresses, bool? useLocalAzureIPAddress, bool? usePolicyBasedTrafficSelectors, IList<IPsecPolicy> ipsecPolicies, IList<TrafficSelectorPolicy> trafficSelectorPolicies, Guid? resourceGuid, NetworkProvisioningState? provisioningState, bool? expressRouteGatewayBypass, bool? enablePrivateLinkFastPath) : base(id, name, resourceType, location, tags, serializedAdditionalRawData)
         {
-            Etag = etag;
+            ETag = etag;
             AuthorizationKey = authorizationKey;
             VirtualNetworkGateway1 = virtualNetworkGateway1;
             VirtualNetworkGateway2 = virtualNetworkGateway2;
@@ -82,6 +88,7 @@ namespace Azure.ResourceManager.Network
             RoutingWeight = routingWeight;
             DpdTimeoutSeconds = dpdTimeoutSeconds;
             ConnectionMode = connectionMode;
+            TunnelProperties = tunnelProperties;
             SharedKey = sharedKey;
             ConnectionStatus = connectionStatus;
             TunnelConnectionStatus = tunnelConnectionStatus;
@@ -89,17 +96,24 @@ namespace Azure.ResourceManager.Network
             IngressBytesTransferred = ingressBytesTransferred;
             Peer = peer;
             EnableBgp = enableBgp;
-            UseLocalAzureIpAddress = useLocalAzureIpAddress;
+            GatewayCustomBgpIPAddresses = gatewayCustomBgpIPAddresses;
+            UseLocalAzureIPAddress = useLocalAzureIPAddress;
             UsePolicyBasedTrafficSelectors = usePolicyBasedTrafficSelectors;
-            IpsecPolicies = ipsecPolicies;
+            IPsecPolicies = ipsecPolicies;
             TrafficSelectorPolicies = trafficSelectorPolicies;
             ResourceGuid = resourceGuid;
             ProvisioningState = provisioningState;
             ExpressRouteGatewayBypass = expressRouteGatewayBypass;
+            EnablePrivateLinkFastPath = enablePrivateLinkFastPath;
+        }
+
+        /// <summary> Initializes a new instance of <see cref="VirtualNetworkGatewayConnectionData"/> for deserialization. </summary>
+        internal VirtualNetworkGatewayConnectionData()
+        {
         }
 
         /// <summary> A unique read-only string that changes whenever the resource is updated. </summary>
-        public string Etag { get; }
+        public ETag? ETag { get; }
         /// <summary> The authorizationKey. </summary>
         public string AuthorizationKey { get; set; }
         /// <summary> The reference to virtual network gateway resource. </summary>
@@ -122,33 +136,51 @@ namespace Azure.ResourceManager.Network
         public int? DpdTimeoutSeconds { get; set; }
         /// <summary> The connection mode for this connection. </summary>
         public VirtualNetworkGatewayConnectionMode? ConnectionMode { get; set; }
+        /// <summary> Tunnel properties for virtual network gateway connection. </summary>
+        public IList<VirtualNetworkGatewayConnectionTunnelProperties> TunnelProperties { get; }
         /// <summary> The IPSec shared key. </summary>
         public string SharedKey { get; set; }
         /// <summary> Virtual Network Gateway connection status. </summary>
         public VirtualNetworkGatewayConnectionStatus? ConnectionStatus { get; }
-        /// <summary> Collection of all tunnels&apos; connection health status. </summary>
+        /// <summary> Collection of all tunnels' connection health status. </summary>
         public IReadOnlyList<TunnelConnectionHealth> TunnelConnectionStatus { get; }
         /// <summary> The egress bytes transferred in this connection. </summary>
         public long? EgressBytesTransferred { get; }
         /// <summary> The ingress bytes transferred in this connection. </summary>
         public long? IngressBytesTransferred { get; }
         /// <summary> The reference to peerings resource. </summary>
-        public WritableSubResource Peer { get; set; }
+        internal WritableSubResource Peer { get; set; }
+        /// <summary> Gets or sets Id. </summary>
+        public ResourceIdentifier PeerId
+        {
+            get => Peer is null ? default : Peer.Id;
+            set
+            {
+                if (Peer is null)
+                    Peer = new WritableSubResource();
+                Peer.Id = value;
+            }
+        }
+
         /// <summary> EnableBgp flag. </summary>
         public bool? EnableBgp { get; set; }
+        /// <summary> GatewayCustomBgpIpAddresses to be used for virtual network gateway Connection. </summary>
+        public IList<GatewayCustomBgpIPAddressIPConfiguration> GatewayCustomBgpIPAddresses { get; }
         /// <summary> Use private local Azure IP for the connection. </summary>
-        public bool? UseLocalAzureIpAddress { get; set; }
+        public bool? UseLocalAzureIPAddress { get; set; }
         /// <summary> Enable policy-based traffic selectors. </summary>
         public bool? UsePolicyBasedTrafficSelectors { get; set; }
         /// <summary> The IPSec Policies to be considered by this connection. </summary>
-        public IList<IpsecPolicy> IpsecPolicies { get; }
+        public IList<IPsecPolicy> IPsecPolicies { get; }
         /// <summary> The Traffic Selector Policies to be considered by this connection. </summary>
         public IList<TrafficSelectorPolicy> TrafficSelectorPolicies { get; }
         /// <summary> The resource GUID property of the virtual network gateway connection resource. </summary>
-        public string ResourceGuid { get; }
+        public Guid? ResourceGuid { get; }
         /// <summary> The provisioning state of the virtual network gateway connection resource. </summary>
-        public ProvisioningState? ProvisioningState { get; }
+        public NetworkProvisioningState? ProvisioningState { get; }
         /// <summary> Bypass ExpressRoute Gateway for data forwarding. </summary>
         public bool? ExpressRouteGatewayBypass { get; set; }
+        /// <summary> Bypass the ExpressRoute gateway when accessing private-links. ExpressRoute FastPath (expressRouteGatewayBypass) must be enabled. </summary>
+        public bool? EnablePrivateLinkFastPath { get; set; }
     }
 }

@@ -11,7 +11,7 @@ namespace Azure.Storage.Queues.Models
     /// <summary>
     /// QueuesModelFactory provides utilities for mocking.
     /// </summary>
-    [CodeGenType("AzureQueueStorageModelFactory")]
+    [CodeGenType("StorageQueuesModelFactory")]
     public static partial class QueuesModelFactory
     {
         /// <summary>
@@ -121,6 +121,7 @@ namespace Azure.Storage.Queues.Models
         /// <summary>
         /// Creates a new QueueProperties instance for mocking.
         /// </summary>
+        [EditorBrowsable(EditorBrowsableState.Never)]
         public static QueueProperties QueueProperties(
             IDictionary<string, string> metadata,
             int approximateMessagesCount)
@@ -129,6 +130,20 @@ namespace Azure.Storage.Queues.Models
             {
                 Metadata = metadata,
                 ApproximateMessagesCount = approximateMessagesCount,
+            };
+        }
+
+        /// <summary>
+        /// Creates a new QueueProperties instance for mocking.
+        /// </summary>
+        public static QueueProperties QueueProperties(
+            IDictionary<string, string> metadata,
+            long approximateMessagesCount)
+        {
+            return new QueueProperties()
+            {
+                Metadata = metadata,
+                ApproximateMessagesCountLong = approximateMessagesCount,
             };
         }
 

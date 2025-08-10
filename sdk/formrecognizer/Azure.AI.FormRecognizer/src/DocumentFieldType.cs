@@ -11,9 +11,16 @@ namespace Azure.AI.FormRecognizer.DocumentAnalysis
     /// The type of the value of a <see cref="DocumentField"/>.
     /// </summary>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Naming", "CA1720:Identifier contains type name")]
-    [CodeGenModel("DocumentFieldType")]
     public enum DocumentFieldType
     {
+        /// <summary>
+        /// Used when the value of the field could not be parsed by the service. The expected
+        /// field type can be checked at <see cref="DocumentField.ExpectedFieldType"/>. Consider
+        /// using <see cref="DocumentField.Content"/> to get a textual representation of the field
+        /// and parsing it manually in this case.
+        /// </summary>
+        Unknown,
+
         /// <summary>
         /// Used for <see cref="string"/> type.
         /// </summary>
@@ -59,7 +66,7 @@ namespace Azure.AI.FormRecognizer.DocumentAnalysis
         Dictionary,
 
         /// <summary>
-        /// Used for <see cref="SelectionMarkState"/> type.
+        /// Used for <see cref="DocumentSelectionMarkState"/> type.
         /// </summary>
         SelectionMark,
 
@@ -71,6 +78,21 @@ namespace Azure.AI.FormRecognizer.DocumentAnalysis
         /// <summary>
         /// Used for <see cref="DocumentSignatureType"/> type.
         /// </summary>
-        Signature
+        Signature,
+
+        /// <summary>
+        /// Used for <see cref="CurrencyValue"/> type.
+        /// </summary>
+        Currency,
+
+        /// <summary>
+        /// Used for <see cref="AddressValue"/> type.
+        /// </summary>
+        Address,
+
+        /// <summary>
+        /// Used for <see cref="bool"/> type.
+        /// </summary>
+        Boolean
     }
 }

@@ -7,25 +7,18 @@
 
 using System;
 using System.Collections.Generic;
-using Azure.Core;
 
 namespace Azure.Containers.ContainerRegistry
 {
     /// <summary> Manifest attributes details. </summary>
     public partial class ArtifactManifestProperties
     {
-        /// <summary> Initializes a new instance of ArtifactManifestProperties. </summary>
+        /// <summary> Initializes a new instance of <see cref="ArtifactManifestProperties"/>. </summary>
         /// <param name="digest"> Manifest. </param>
         /// <param name="createdOn"> Created time. </param>
         /// <param name="lastUpdatedOn"> Last update time. </param>
-        /// <exception cref="ArgumentNullException"> <paramref name="digest"/> is null. </exception>
         internal ArtifactManifestProperties(string digest, DateTimeOffset createdOn, DateTimeOffset lastUpdatedOn)
         {
-            if (digest == null)
-            {
-                throw new ArgumentNullException(nameof(digest));
-            }
-
             Digest = digest;
             CreatedOn = createdOn;
             LastUpdatedOn = lastUpdatedOn;
@@ -33,11 +26,11 @@ namespace Azure.Containers.ContainerRegistry
             Tags = new ChangeTrackingList<string>();
         }
 
-        /// <summary> Initializes a new instance of ArtifactManifestProperties. </summary>
+        /// <summary> Initializes a new instance of <see cref="ArtifactManifestProperties"/>. </summary>
         /// <param name="registryLoginServer"> Registry login server name. This is likely to be similar to {registry-name}.azurecr.io. </param>
         /// <param name="repositoryName"> Repository name. </param>
         /// <param name="digest"> Manifest. </param>
-        /// <param name="size"> Image size. </param>
+        /// <param name="sizeInBytes"> Image size. </param>
         /// <param name="createdOn"> Created time. </param>
         /// <param name="lastUpdatedOn"> Last update time. </param>
         /// <param name="architecture"> CPU architecture. </param>
@@ -48,12 +41,12 @@ namespace Azure.Containers.ContainerRegistry
         /// <param name="canWrite"> Write enabled. </param>
         /// <param name="canList"> List enabled. </param>
         /// <param name="canRead"> Read enabled. </param>
-        internal ArtifactManifestProperties(string registryLoginServer, string repositoryName, string digest, long? size, DateTimeOffset createdOn, DateTimeOffset lastUpdatedOn, ArtifactArchitecture? architecture, ArtifactOperatingSystem? operatingSystem, IReadOnlyList<ArtifactManifestPlatform> relatedArtifacts, IReadOnlyList<string> tags, bool? canDelete, bool? canWrite, bool? canList, bool? canRead)
+        internal ArtifactManifestProperties(string registryLoginServer, string repositoryName, string digest, long? sizeInBytes, DateTimeOffset createdOn, DateTimeOffset lastUpdatedOn, ArtifactArchitecture? architecture, ArtifactOperatingSystem? operatingSystem, IReadOnlyList<ArtifactManifestPlatform> relatedArtifacts, IReadOnlyList<string> tags, bool? canDelete, bool? canWrite, bool? canList, bool? canRead)
         {
             RegistryLoginServer = registryLoginServer;
             RepositoryName = repositoryName;
             Digest = digest;
-            Size = size;
+            SizeInBytes = sizeInBytes;
             CreatedOn = createdOn;
             LastUpdatedOn = lastUpdatedOn;
             Architecture = architecture;
@@ -72,8 +65,6 @@ namespace Azure.Containers.ContainerRegistry
         public string RepositoryName { get; }
         /// <summary> Manifest. </summary>
         public string Digest { get; }
-        /// <summary> Image size. </summary>
-        public long? Size { get; }
         /// <summary> Created time. </summary>
         public DateTimeOffset CreatedOn { get; }
         /// <summary> Last update time. </summary>

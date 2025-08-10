@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure.Core;
@@ -15,30 +14,19 @@ namespace Azure.Data.AppConfiguration
     public partial class ConfigurationClient
     {
         private const string AcceptDateTimeFormat = "R";
-        private const string AcceptDatetimeHeader = "Accept-Datetime";
-        private const string KvRoute = "/kv/";
-        private const string RevisionsRoute = "/revisions/";
-        private const string LocksRoute = "/locks/";
         private const string KeyQueryFilter = "key";
         private const string LabelQueryFilter = "label";
         private const string FieldsQueryFilter = "$select";
 
-        private static readonly char[] s_reservedCharacters = new char[] { ',', '\\' };
-
-        private static readonly HttpHeader s_mediaTypeKeyValueApplicationHeader = new HttpHeader(
-            HttpHeader.Names.Accept,
-            "application/vnd.microsoft.appconfig.kv+json"
-        );
-
         private static async Task<Response<ConfigurationSetting>> CreateResponseAsync(Response response, CancellationToken cancellation)
         {
-            ConfigurationSetting result = await ConfigurationServiceSerializer.DeserializeSettingAsync(response.ContentStream, cancellation).ConfigureAwait(false);
+            ConfigurationSetting result = await ConfigurationServiceSerializer.DeserializeSettingAsync(response.Content, cancellation).ConfigureAwait(false);
             return Response.FromValue(result, response);
         }
 
         private static Response<ConfigurationSetting> CreateResponse(Response response)
         {
-            return Response.FromValue(ConfigurationServiceSerializer.DeserializeSetting(response.ContentStream), response);
+            return Response.FromValue(ConfigurationServiceSerializer.DeserializeSetting(response.Content), response);
         }
 
         private static Response<ConfigurationSetting> CreateResourceModifiedResponse(Response response)
@@ -64,86 +52,87 @@ namespace Azure.Data.AppConfiguration
             }
         }
 
-        private void BuildUriForKvRoute(RequestUriBuilder builder, ConfigurationSetting keyValue)
-            => BuildUriForKvRoute(builder, keyValue.Key, keyValue.Label); // TODO (pri 2) : does this need to filter ETag?
-
-        private void BuildUriForKvRoute(RequestUriBuilder builder, string key, string label)
+        private HttpMessage CreateNextGetConfigurationSettingsRequest(string nextLink, string key, string label, string syncToken, string after, string acceptDatetime, IEnumerable<string> @select, string snapshot, MatchConditions matchConditions, IEnumerable<string> tags, RequestContext context)
         {
-            builder.Reset(_endpoint);
-            builder.AppendPath(KvRoute, escape: false);
-            builder.AppendPath(key);
-
-            if (label != null)
+            HttpMessage message = Pipeline.CreateMessage(context, PipelineMessageClassifier200);
+            Request request = message.Request;
+            request.Method = RequestMethod.Get;
+            RawRequestUriBuilder uri = new RawRequestUriBuilder();
+            uri.Reset(_endpoint);
+            uri.AppendRawNextLink(nextLink, false);
+            request.Uri = uri;
+            if (syncToken != null)
             {
-                builder.AppendQuery(LabelQueryFilter, label);
+                request.Headers.SetValue("Sync-Token", syncToken);
             }
+            if (acceptDatetime != null)
+            {
+                request.Headers.SetValue("Accept-Datetime", acceptDatetime);
+            }
+            if (matchConditions != null)
+            {
+                request.Headers.Add(matchConditions);
+            }
+            request.Headers.SetValue("Accept", "application/problem+json, application/vnd.microsoft.appconfig.kvset+json");
+            return message;
         }
 
-        private void BuildUriForLocksRoute(RequestUriBuilder builder, string key, string label)
+        private HttpMessage CreateNextGetSnapshotsRequest(string nextLink, string name, string after, IEnumerable<SnapshotFields> @select, IEnumerable<ConfigurationSnapshotStatus> status, string syncToken, RequestContext context)
         {
-            builder.Reset(_endpoint);
-            builder.AppendPath(LocksRoute, escape: false);
-            builder.AppendPath(key);
-
-            if (label != null)
+            HttpMessage message = Pipeline.CreateMessage(context, PipelineMessageClassifier200);
+            Request request = message.Request;
+            request.Method = RequestMethod.Get;
+            RawRequestUriBuilder uri = new RawRequestUriBuilder();
+            uri.Reset(_endpoint);
+            uri.AppendRawNextLink(nextLink, false);
+            request.Uri = uri;
+            if (syncToken != null)
             {
-                builder.AppendQuery(LabelQueryFilter, label);
+                request.Headers.SetValue("Sync-Token", syncToken);
             }
+            request.Headers.SetValue("Accept", "application/problem+json, application/vnd.microsoft.appconfig.snapshotset+json");
+            return message;
         }
 
-        private static string EscapeReservedCharacters(string input)
+        private HttpMessage CreateNextGetLabelsRequest(string nextLink, string name, string syncToken, string after, string acceptDatetime, IEnumerable<SettingLabelFields> @select, RequestContext context)
         {
-            string resp = string.Empty;
-            for (int i = 0; i < input.Length; i++)
+            HttpMessage message = Pipeline.CreateMessage(context, PipelineMessageClassifier200);
+            Request request = message.Request;
+            request.Method = RequestMethod.Get;
+            RawRequestUriBuilder uri = new RawRequestUriBuilder();
+            uri.Reset(_endpoint);
+            uri.AppendRawNextLink(nextLink, false);
+            request.Uri = uri;
+            if (syncToken != null)
             {
-                if (s_reservedCharacters.Contains(input[i]))
-                {
-                    resp += $"\\{input[i]}";
-                }
-                else
-                {
-                    resp += input[i];
-                }
+                request.Headers.SetValue("Sync-Token", syncToken);
             }
-            return resp;
+            if (acceptDatetime != null)
+            {
+                request.Headers.SetValue("Accept-Datetime", acceptDatetime);
+            }
+            request.Headers.SetValue("Accept", "application/problem+json, application/vnd.microsoft.appconfig.labelset+json");
+            return message;
         }
 
-        internal static void BuildBatchQuery(RequestUriBuilder builder, SettingSelector selector, string pageLink)
+        private HttpMessage CreateNextGetRevisionsRequest(string nextLink, string key, string label, string syncToken, string after, string acceptDatetime, IEnumerable<string> @select, IEnumerable<string> tags, RequestContext context)
         {
-            if (!string.IsNullOrEmpty(selector.KeyFilter))
+            HttpMessage message = Pipeline.CreateMessage(context, PipelineMessageClassifier200);
+            Request request = message.Request;
+            request.Method = RequestMethod.Get;
+            RawRequestUriBuilder uri = new RawRequestUriBuilder();
+            uri.Reset(_endpoint);
+            uri.AppendRawNextLink(nextLink, false);
+            if (syncToken != null)
             {
-                builder.AppendQuery(KeyQueryFilter, selector.KeyFilter);
+                request.Headers.SetValue("Sync-Token", syncToken);
             }
-
-            if (!string.IsNullOrEmpty(selector.LabelFilter))
+            if (acceptDatetime != null)
             {
-                builder.AppendQuery(LabelQueryFilter, selector.LabelFilter);
+                request.Headers.SetValue("Accept-Datetime", acceptDatetime);
             }
-
-            if (selector.Fields != SettingFields.All)
-            {
-                var filter = selector.Fields.ToString().ToLowerInvariant().Replace("isreadonly", "locked");
-                builder.AppendQuery(FieldsQueryFilter, filter);
-            }
-
-            if (!string.IsNullOrEmpty(pageLink))
-            {
-                builder.AppendQuery("after", pageLink, escapeValue: false);
-            }
-        }
-
-        private void BuildUriForGetBatch(RequestUriBuilder builder, SettingSelector selector, string pageLink)
-        {
-            builder.Reset(_endpoint);
-            builder.AppendPath(KvRoute, escape: false);
-            BuildBatchQuery(builder, selector, pageLink);
-        }
-
-        private void BuildUriForRevisions(RequestUriBuilder builder, SettingSelector selector, string pageLink)
-        {
-            builder.Reset(_endpoint);
-            builder.AppendPath(RevisionsRoute, escape: false);
-            BuildBatchQuery(builder, selector, pageLink);
+            request.Headers.SetValue("Accept", "application/problem+json, application/vnd.microsoft.appconfig.kvset+json");
+            return message;
         }
 
         #region nobody wants to see these

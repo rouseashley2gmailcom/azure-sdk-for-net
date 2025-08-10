@@ -1,70 +1,194 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using Azure.Core;
-using Azure.Core.TestFramework;
+using System;
+using System.IO;
+using System.Text.Json;
 using NUnit.Framework;
 
 namespace Azure.Identity.Tests
 {
-    public class VisualStudioCodeCredentialTests : CredentialTestBase
+    internal class VisualStudioCodeCredentialTests
     {
-        public VisualStudioCodeCredentialTests(bool isAsync) : base(isAsync)
-        { }
-
-        [SetUp]
-        public void Setup()
+        [Test]
+        public void GetAuthenticationRecord_WithInvalidJson_ReturnsNull()
         {
-            TestSetup();
+            var invalidJsonBytes = new byte[0];
+            var testFileSystem = new TestFileSystemService
+            {
+                FileExistsHandler = path => path.Contains("authRecord.json"),
+                GetFileStreamHandler = _ =>
+                {
+                    var tempFilePath = Path.GetTempFileName();
+                    File.WriteAllBytes(tempFilePath, invalidJsonBytes);
+                    return new FileStream(tempFilePath, FileMode.Open, FileAccess.Read);
+                }
+            };
+
+            var authRecord = VisualStudioCodeCredential.GetAuthenticationRecord(testFileSystem);
+            Assert.IsNull(authRecord, "Authentication record should be null when JSON is invalid");
         }
 
         [Test]
-        [NonParallelizable]
-        public async Task AuthenticateWithVsCodeCredential([Values(null, TenantIdHint)] string tenantId, [Values(true)] bool allowMultiTenantAuthentication)
+        public void GetAuthenticationRecord_WithEmptyJson_ReturnsNull()
         {
-            using var env = new TestEnvVar(new Dictionary<string, string> {{"TENANT_ID", TenantId}});
-            var environment = new IdentityTestEnvironment();
-            var options = new VisualStudioCodeCredentialOptions { TenantId = environment.TenantId, Transport = new MockTransport() };
-            var context = new TokenRequestContext(new[] { Scope }, tenantId: tenantId);
-            expectedTenantId = TenantIdResolver.Resolve(environment.TenantId, context);
+            var testFileSystem = new TestFileSystemService
+            {
+                FileExistsHandler = path => path.Contains("authRecord.json"),
+                GetFileStreamHandler = _ =>
+                {
+                    var tempFilePath = Path.GetTempFileName();
+                    return new FileStream(tempFilePath, FileMode.Open, FileAccess.Read);
+                }
+            };
 
-            VisualStudioCodeCredential credential = InstrumentClient(
-                new VisualStudioCodeCredential(
-                    options,
-                    null,
-                    mockPublicMsalClient,
-                    CredentialTestHelpers.CreateFileSystemForVisualStudioCode(environment),
-                    new TestVscAdapter("VS Code Azure", "AzureCloud", expectedToken)));
-
-            var actualToken = await credential.GetTokenAsync(context, CancellationToken.None);
-
-            Assert.AreEqual(expectedToken, actualToken.Token, "Token should match");
-            Assert.AreEqual(expiresOn, actualToken.ExpiresOn, "expiresOn should match");
+            var authRecord = VisualStudioCodeCredential.GetAuthenticationRecord(testFileSystem);
+            Assert.IsNull(authRecord, "Authentication record should be null when JSON is empty");
         }
 
         [Test]
-        public void RespectsIsPIILoggingEnabled([Values(true, false)] bool isLoggingPIIEnabled)
+        public void GetAuthenticationRecord_WithIncompleteJson_ReturnsNull()
         {
-            var credential = new VisualStudioCodeCredential(new VisualStudioCodeCredentialOptions{ IsLoggingPIIEnabled = isLoggingPIIEnabled});
+            var incompleteJson = JsonSerializer.Serialize(new
+            {
+                tenantId = "test-tenant"
+                // Missing homeAccountId
+            });
 
-            Assert.NotNull(credential.Client);
-            Assert.AreEqual(isLoggingPIIEnabled, credential.Client.IsPiiLoggingEnabled);
+            var testFileSystem = new TestFileSystemService
+            {
+                FileExistsHandler = path => path.Contains("authRecord.json"),
+                GetFileStreamHandler = _ =>
+                {
+                    var tempFilePath = Path.GetTempFileName();
+                    File.WriteAllText(tempFilePath, incompleteJson);
+                    return new FileStream(tempFilePath, FileMode.Open, FileAccess.Read);
+                }
+            };
+
+            var authRecord = VisualStudioCodeCredential.GetAuthenticationRecord(testFileSystem);
+            Assert.IsNull(authRecord, "Authentication record should be null when required fields are missing");
         }
 
         [Test]
-        public void AdfsTenantThrowsCredentialUnavailable()
+        public void GetAuthenticationRecord_WithValidJson_ReturnsAuthenticationRecord()
         {
-            var options = new VisualStudioCodeCredentialOptions { TenantId = "adfs", Transport = new MockTransport() };
-            var context = new TokenRequestContext(new[] { Scope });
-            string expectedTenantId = TenantIdResolver.Resolve(null, context);
+            var validJson = JsonSerializer.Serialize(new
+            {
+                version = "1.0",
+                homeAccountId = "test-home-account-id.test-tenant-id",
+                environment = "login.microsoftonline.com",
+                tenantId = "test-tenant-id",
+                username = "test@example.com",
+                clientId = "test-client-id"
+            });
 
-            VisualStudioCodeCredential credential = InstrumentClient(new VisualStudioCodeCredential(options));
+            var testFileSystem = new TestFileSystemService
+            {
+                FileExistsHandler = path => path.Contains("authRecord.json"),
+                GetFileStreamHandler = _ =>
+                {
+                    var tempFilePath = Path.GetTempFileName();
+                    File.WriteAllText(tempFilePath, validJson);
+                    return new FileStream(tempFilePath, FileMode.Open, FileAccess.Read);
+                }
+            };
 
-            Assert.ThrowsAsync<CredentialUnavailableException>(
-                async () => await credential.GetTokenAsync(new TokenRequestContext(new[] { "https://vault.azure.net/.default" }), CancellationToken.None));
+            var authRecord = VisualStudioCodeCredential.GetAuthenticationRecord(testFileSystem);
+            Assert.IsNotNull(authRecord, "Authentication record should not be null with valid JSON");
+            Assert.AreEqual("test-tenant-id", authRecord.TenantId);
+            Assert.AreEqual("test-home-account-id.test-tenant-id", authRecord.HomeAccountId);
+        }
+
+        [Test]
+        public void GetAuthenticationRecord_ChecksLowerCasePathFirst()
+        {
+            bool lowerCaseChecked = false;
+            bool upperCaseChecked = false;
+
+            var validJson = JsonSerializer.Serialize(new
+            {
+                version = "1.0",
+                homeAccountId = "test-home-account-id.test-tenant-id",
+                environment = "login.microsoftonline.com",
+                tenantId = "test-tenant-id",
+                username = "test@example.com",
+                clientId = "test-client-id"
+            });
+
+            var testFileSystem = new TestFileSystemService
+            {
+                FileExistsHandler = path =>
+                {
+                    if (path.Contains(".azure"))
+                    {
+                        lowerCaseChecked = true;
+                        return false; // Lower case doesn't exist
+                    }
+                    if (path.Contains(".Azure"))
+                    {
+                        upperCaseChecked = true;
+                        return true; // Upper case exists
+                    }
+                    return false;
+                },
+                GetFileStreamHandler = _ => {
+                    var tempFilePath = Path.GetTempFileName();
+                    File.WriteAllText(tempFilePath, validJson);
+                    return new FileStream(tempFilePath, FileMode.Open, FileAccess.Read);
+                }
+            };
+
+            var authRecord = VisualStudioCodeCredential.GetAuthenticationRecord(testFileSystem);
+
+            Assert.IsTrue(lowerCaseChecked, "Lower case path should be checked first");
+            Assert.IsTrue(upperCaseChecked, "Upper case path should be checked when lower case doesn't exist");
+            Assert.IsNotNull(authRecord, "Authentication record should be found in upper case path");
+        }
+
+        [Test]
+        public void GetAuthenticationRecord_HandlesIOException()
+        {
+            var testFileSystem = new TestFileSystemService
+            {
+                FileExistsHandler = path => path.Contains("authRecord.json"),
+                GetFileStreamHandler = _ => throw new IOException("File access denied")
+            };
+
+            var authRecord = VisualStudioCodeCredential.GetAuthenticationRecord(testFileSystem);
+            Assert.IsNull(authRecord, "Authentication record should be null when IOException occurs");
+        }
+
+        [Test]
+        public void GetAuthenticationRecord_FileDoesNotExist()
+        {
+            var testFileSystem = new TestFileSystemService
+            {
+                FileExistsHandler = path => false
+            };
+
+            var authRecord = VisualStudioCodeCredential.GetAuthenticationRecord(testFileSystem);
+            Assert.IsNull(authRecord, "Authentication record should be null when file doesn't exist");
+        }
+
+        [Test]
+        public void Constructor_WithNullOptions_Succeeds()
+        {
+            Assert.DoesNotThrow(() => new VisualStudioCodeCredential(null));
+        }
+
+        [Test]
+        public void Constructor_WithValidOptions_TransfersProperties()
+        {
+            var options = new VisualStudioCodeCredentialOptions
+            {
+                TenantId = "test-tenant",
+                AuthorityHost = new Uri("https://login.microsoftonline.us"),
+                IsUnsafeSupportLoggingEnabled = true
+            };
+
+            // Constructor should succeed and not throw
+            Assert.DoesNotThrow(() => new VisualStudioCodeCredential(options));
         }
     }
 }

@@ -5,6 +5,8 @@ using Azure.Core;
 using Azure.Core.TestFramework;
 using System;
 
+#nullable disable
+
 namespace Azure.ResourceManager.TestFramework
 {
     public class MockTestEnvironment : TestEnvironment
@@ -15,7 +17,7 @@ namespace Azure.ResourceManager.TestFramework
             Environment.SetEnvironmentVariable("RESOURCE_MANAGER_URL", MockEndPoint);
         }
 
-        public virtual string MockEndPoint => $"https://localhost:8441";
+        public static string MockEndPoint = $"https://localhost:8443";
 
         private TokenCredential _mockCredential;
 

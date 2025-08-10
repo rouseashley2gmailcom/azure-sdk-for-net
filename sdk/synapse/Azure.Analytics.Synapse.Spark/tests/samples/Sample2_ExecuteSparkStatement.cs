@@ -21,14 +21,16 @@ namespace Azure.Analytics.Synapse.Spark.Samples
         public void ExecuteSparkStatementSync()
         {
             #region Snippet:CreateSparkSessionClient
+#if SNIPPET
             // Replace the strings below with the spark and endpoint information
             string sparkPoolName = "<my-spark-pool-name>";
-            /*@@*/sparkPoolName = TestEnvironment.SparkPoolName;
-
             string endpoint = "<my-endpoint-url>";
-            /*@@*/endpoint = TestEnvironment.EndpointUrl;
+#else
+            string sparkPoolName = TestEnvironment.SparkPoolName;
+            string endpoint = TestEnvironment.EndpointUrl;
+#endif
 
-            SparkSessionClient client = new SparkSessionClient(new Uri(endpoint), sparkPoolName, new DefaultAzureCredential());
+            SparkSessionClient client = new SparkSessionClient(new Uri(endpoint), "2019-11-01-preview", sparkPoolName, new DefaultAzureCredential());
             #endregion
 
             #region Snippet:CreateSparkSession

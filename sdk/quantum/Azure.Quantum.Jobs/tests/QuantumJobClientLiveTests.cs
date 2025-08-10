@@ -2,21 +2,70 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure.Core.TestFramework;
 using Azure.Quantum.Jobs.Models;
 using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Models;
 using NUnit.Framework;
+using Azure.Core.TestFramework.Models;
 
 namespace Azure.Quantum.Jobs.Tests
 {
     public class QuantumJobClientLiveTests: RecordedTestBase<QuantumJobClientTestEnvironment>
     {
+        public const string ZERO_UID = "00000000-0000-0000-0000-000000000000";
+        public const string TENANT_ID = "72f988bf-86f1-41af-91ab-2d7cd011db47";
+        public const string PLACEHOLDER = "PLACEHOLDER";
+        public const string RESOURCE_GROUP = "myresourcegroup";
+        public const string WORKSPACE = "myworkspace";
+        public const string LOCATION = "eastus";
+        public const string STORAGE = "mystorage";
+
         public QuantumJobClientLiveTests(bool isAsync) : base(isAsync)
         {
-            Sanitizer = new QuantumJobClientRecordedTestSanitizer();
+            JsonPathSanitizers.Add("$..containerUri");
+            JsonPathSanitizers.Add("$..inputDataUri");
+            JsonPathSanitizers.Add("$..outputDataUri");
+            JsonPathSanitizers.Add("$..sasUri");
+            JsonPathSanitizers.Add("$..outputMappingBlobUri");
+            JsonPathSanitizers.Add("$..containerUri");
+            JsonPathSanitizers.Add("$..containerUri");
+            JsonPathSanitizers.Add("$..containerUri");
+
+            JsonPathSanitizers.Add("$..AZURE_QUANTUM_WORKSPACE_LOCATION");
+            JsonPathSanitizers.Add("$..AZURE_QUANTUM_WORKSPACE_NAME");
+            JsonPathSanitizers.Add("$..AZURE_QUANTUM_WORKSPACE_RG");
+
+            var testEnvironment = new QuantumJobClientTestEnvironment();
+            UriRegexSanitizers.Add(new UriRegexSanitizer(@"/resourceGroups/[a-z0-9-]+/")
+            {
+                Value = $"/resourceGroups/{RESOURCE_GROUP}/"
+            });
+            UriRegexSanitizers.Add(new UriRegexSanitizer(@"/workspaces/[a-z0-9-]+/")
+            {
+                Value = $"/workspaces/{WORKSPACE}/"
+            });
+            UriRegexSanitizers.Add(new UriRegexSanitizer(@"https://[^\.]+.blob.core.windows.net/")
+            {
+                Value = $"https://{STORAGE}.blob.core.windows.net/"
+            });
+            UriRegexSanitizers.Add(new UriRegexSanitizer(@"https://[^\.]+.quantum.azure.com/")
+            {
+                Value = $"https://{LOCATION}.quantum.azure.com/"
+            });
+            UriRegexSanitizers.Add(new UriRegexSanitizer(@"/workspaces/[a-z0-9-]+/")
+            {
+                Value = $"/workspaces/{WORKSPACE}/"
+            });
+            UriRegexSanitizers.Add(new UriRegexSanitizer(@"/subscriptions/[a-z0-9-]+/")
+            {
+                Value = $"/subscriptions/{ZERO_UID}/"
+            });
 
             //TODO: https://github.com/Azure/autorest.csharp/issues/689
             TestDiagnostics = false;
@@ -24,10 +73,13 @@ namespace Azure.Quantum.Jobs.Tests
 
         private QuantumJobClient CreateClient()
         {
-            // To be called only when recording locally
-            TestEnvironment.Initialize();
-
-            var rawClient = new QuantumJobClient(TestEnvironment.SubscriptionId, TestEnvironment.ResourceGroup, TestEnvironment.WorkspaceName, TestEnvironment.Location, TestEnvironment.Credential, InstrumentClientOptions(new QuantumJobClientOptions()));
+            var rawClient = new QuantumJobClient(
+                TestEnvironment.SubscriptionId,
+                TestEnvironment.WorkspaceResourceGroup,
+                TestEnvironment.WorkspaceName,
+                TestEnvironment.WorkspaceLocation,
+                TestEnvironment.Credential,
+                InstrumentClientOptions(new QuantumJobClientOptions()));
 
             return InstrumentClient(rawClient);
         }
@@ -50,34 +102,51 @@ namespace Azure.Quantum.Jobs.Tests
             }
 
             // Get input data blob Uri with SAS key
-            string blobName = $"input-{TestEnvironment.GetRandomId("BlobName")}.json";
+            string blobName = $"input-{TestEnvironment.GetRandomId("BlobName")}.bc";
             var inputDataUri = (await client.GetStorageSasUriAsync(
                 new BlobDetails("testcontainer")
                 {
                     BlobName = blobName,
                 })).Value.SasUri;
 
-            // Upload input data to blob (if not in Playback mode)
+            // Upload QIR bitcode to blob storage (if not in Playback mode)
             if (Mode != RecordedTestMode.Playback)
             {
+                var qirFilePath = Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "BellState.bc");
+
+                // Upload QIR bitcode to blob storage
                 var blobClient = new BlobClient(new Uri(inputDataUri));
-                var problemFilename = Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "problem.json");
-                await blobClient.UploadAsync(problemFilename, overwrite: true);
+                var blobHeaders = new BlobHttpHeaders
+                {
+                    ContentType = "qir.v1"
+                };
+                var blobUploadOptions = new BlobUploadOptions { HttpHeaders = blobHeaders };
+                using (FileStream qirFileStream = File.OpenRead(qirFilePath))
+                {
+                    await blobClient.UploadAsync(qirFileStream, options: blobUploadOptions);
+                }
             }
 
             // Submit job
             var jobId = $"job-{TestEnvironment.GetRandomId("JobId")}";
             var jobName = $"jobName-{TestEnvironment.GetRandomId("JobName")}";
-            var inputDataFormat = "microsoft.qio.v2";
-            var outputDataFormat = "microsoft.qio-results.v2";
-            var providerId = "microsoft";
-            var target = "microsoft.paralleltempering-parameterfree.cpu";
+            var inputDataFormat = "qir.v1";
+            var outputDataFormat = "microsoft.quantum-results.v1";
+            var providerId = "quantinuum";
+            var target = "quantinuum.sim.h1-1e";
+            var inputParams = new Dictionary<string, object>()
+            {
+                { "entryPoint", "ENTRYPOINT__BellState" },
+                { "arguments", new string[] { } },
+                { "targetCapability", "AdaptiveExecution" },
+            };
             var createJobDetails = new JobDetails(containerUri, inputDataFormat, providerId, target)
             {
                 Id = jobId,
                 InputDataUri = inputDataUri,
                 Name = jobName,
-                OutputDataFormat = outputDataFormat
+                OutputDataFormat = outputDataFormat,
+                InputParams = inputParams,
             };
             var jobDetails = (await client.CreateJobAsync(jobId, createJobDetails)).Value;
 
@@ -109,22 +178,6 @@ namespace Azure.Quantum.Jobs.Tests
             Assert.AreEqual(jobDetails.Target, gotJob.Target);
             Assert.AreEqual(jobDetails.Id, gotJob.Id);
             Assert.AreEqual(jobDetails.Name, gotJob.Name);
-
-            // Get all jobs and look for the job that we've just created
-            var jobFound = false;
-            await foreach (JobDetails job in client.GetJobsAsync())
-            {
-                if (job.Id == jobDetails.Id)
-                {
-                    jobFound = true;
-                    Assert.AreEqual(jobDetails.InputDataFormat, gotJob.InputDataFormat);
-                    Assert.AreEqual(jobDetails.OutputDataFormat, gotJob.OutputDataFormat);
-                    Assert.AreEqual(jobDetails.ProviderId, gotJob.ProviderId);
-                    Assert.AreEqual(jobDetails.Target, gotJob.Target);
-                    Assert.AreEqual(jobDetails.Name, gotJob.Name);
-                }
-            }
-            Assert.IsTrue(jobFound);
         }
 
         [RecordedTest]

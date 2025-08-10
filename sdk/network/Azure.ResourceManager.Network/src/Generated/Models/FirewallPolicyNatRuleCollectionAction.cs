@@ -5,24 +5,61 @@
 
 #nullable disable
 
+using System;
+using System.Collections.Generic;
+
 namespace Azure.ResourceManager.Network.Models
 {
     /// <summary> Properties of the FirewallPolicyNatRuleCollectionAction. </summary>
-    public partial class FirewallPolicyNatRuleCollectionAction
+    internal partial class FirewallPolicyNatRuleCollectionAction
     {
-        /// <summary> Initializes a new instance of FirewallPolicyNatRuleCollectionAction. </summary>
+        /// <summary>
+        /// Keeps track of any properties unknown to the library.
+        /// <para>
+        /// To assign an object to the value of this property use <see cref="BinaryData.FromObjectAsJson{T}(T, System.Text.Json.JsonSerializerOptions?)"/>.
+        /// </para>
+        /// <para>
+        /// To assign an already formatted json string to this property use <see cref="BinaryData.FromString(string)"/>.
+        /// </para>
+        /// <para>
+        /// Examples:
+        /// <list type="bullet">
+        /// <item>
+        /// <term>BinaryData.FromObjectAsJson("foo")</term>
+        /// <description>Creates a payload of "foo".</description>
+        /// </item>
+        /// <item>
+        /// <term>BinaryData.FromString("\"foo\"")</term>
+        /// <description>Creates a payload of "foo".</description>
+        /// </item>
+        /// <item>
+        /// <term>BinaryData.FromObjectAsJson(new { key = "value" })</term>
+        /// <description>Creates a payload of { "key": "value" }.</description>
+        /// </item>
+        /// <item>
+        /// <term>BinaryData.FromString("{\"key\": \"value\"}")</term>
+        /// <description>Creates a payload of { "key": "value" }.</description>
+        /// </item>
+        /// </list>
+        /// </para>
+        /// </summary>
+        private IDictionary<string, BinaryData> _serializedAdditionalRawData;
+
+        /// <summary> Initializes a new instance of <see cref="FirewallPolicyNatRuleCollectionAction"/>. </summary>
         public FirewallPolicyNatRuleCollectionAction()
         {
         }
 
-        /// <summary> Initializes a new instance of FirewallPolicyNatRuleCollectionAction. </summary>
-        /// <param name="type"> The type of action. </param>
-        internal FirewallPolicyNatRuleCollectionAction(FirewallPolicyNatRuleCollectionActionType? type)
+        /// <summary> Initializes a new instance of <see cref="FirewallPolicyNatRuleCollectionAction"/>. </summary>
+        /// <param name="actionType"> The type of action. </param>
+        /// <param name="serializedAdditionalRawData"> Keeps track of any properties unknown to the library. </param>
+        internal FirewallPolicyNatRuleCollectionAction(FirewallPolicyNatRuleCollectionActionType? actionType, IDictionary<string, BinaryData> serializedAdditionalRawData)
         {
-            Type = type;
+            ActionType = actionType;
+            _serializedAdditionalRawData = serializedAdditionalRawData;
         }
 
         /// <summary> The type of action. </summary>
-        public FirewallPolicyNatRuleCollectionActionType? Type { get; set; }
+        public FirewallPolicyNatRuleCollectionActionType? ActionType { get; set; }
     }
 }

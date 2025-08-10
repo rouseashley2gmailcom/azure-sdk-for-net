@@ -22,6 +22,10 @@ namespace Azure.Identity.Tests
         private const int GetTokenSucceededEvent = 2;
         private const int GetTokenFailedEvent = 3;
 
+#pragma warning disable SYSLIB0026 // X509Certificate2 is immutable
+        private static readonly X509Certificate2 _mockCertificate = new();
+#pragma warning restore // X509Certificate2 is immutable
+
         private TestEventListener _listener;
 
         public AzureIdentityEventSourceTests(bool isAsync) : base(isAsync)
@@ -71,7 +75,7 @@ namespace Azure.Identity.Tests
         {
             var mockMsalClient = new MockMsalConfidentialClient(AuthenticationResultFactory.Create(Guid.NewGuid().ToString(), expiresOn: DateTimeOffset.Now + TimeSpan.FromMinutes(10)));
 
-            var credential = InstrumentClient(new ClientCertificateCredential(Guid.NewGuid().ToString(), Guid.NewGuid().ToString(), new X509Certificate2(), default, default, mockMsalClient));
+            var credential = InstrumentClient(new ClientCertificateCredential(Guid.NewGuid().ToString(), Guid.NewGuid().ToString(), _mockCertificate, default, default, mockMsalClient));
 
             var method = "ClientCertificateCredential.GetToken";
 
@@ -81,7 +85,7 @@ namespace Azure.Identity.Tests
         [Test]
         public async Task ValidateDeviceCodeCredentialSucceededEvents()
         {
-            var mockMsalClient = new MockMsalPublicClient { DeviceCodeAuthFactory =  (_, _) => { return AuthenticationResultFactory.Create(Guid.NewGuid().ToString(), expiresOn: DateTimeOffset.UtcNow.AddMinutes(10)); } };
+            var mockMsalClient = new MockMsalPublicClient { DeviceCodeAuthFactory = (_, _, _, _, _) => { return AuthenticationResultFactory.Create(Guid.NewGuid().ToString(), expiresOn: DateTimeOffset.UtcNow.AddMinutes(10)); } };
 
             var credential = InstrumentClient(new DeviceCodeCredential((_, __) => { return Task.CompletedTask; }, default, Guid.NewGuid().ToString(), default, default, mockMsalClient));
 
@@ -93,7 +97,7 @@ namespace Azure.Identity.Tests
         [Test]
         public async Task ValidateInteractiveBrowserCredentialSucceededEvents()
         {
-            var mockMsalClient = new MockMsalPublicClient { AuthFactory = (_,_) => { return AuthenticationResultFactory.Create(Guid.NewGuid().ToString(), expiresOn: DateTimeOffset.UtcNow.AddMinutes(10)); } };
+            var mockMsalClient = new MockMsalPublicClient { AuthFactory = (_, _) => { return AuthenticationResultFactory.Create(Guid.NewGuid().ToString(), expiresOn: DateTimeOffset.UtcNow.AddMinutes(10)); } };
 
             var credential = InstrumentClient(new InteractiveBrowserCredential(default, Guid.NewGuid().ToString(), default, default, mockMsalClient));
 
@@ -108,7 +112,7 @@ namespace Azure.Identity.Tests
             var mockMsalClient = new MockMsalPublicClient
             {
                 Accounts = new List<IAccount> { new MockAccount("mockuser@mockdomain.com") },
-                SilentAuthFactory = (_,_) => { return AuthenticationResultFactory.Create(Guid.NewGuid().ToString(), expiresOn: DateTimeOffset.UtcNow.AddMinutes(10)); }
+                ExtendedSilentAuthFactory = (_, _, _, _, _, _) => { return AuthenticationResultFactory.Create(Guid.NewGuid().ToString(), expiresOn: DateTimeOffset.UtcNow.AddMinutes(10)); }
             };
 
             var credential = InstrumentClient(new SharedTokenCacheCredential(null, "mockuser@mockdomain.com", default, default, mockMsalClient));
@@ -133,13 +137,13 @@ namespace Azure.Identity.Tests
         }
 
         [Test]
-        public async Task ValidateClientCertificateCrededntialFailedEvents()
+        public async Task ValidateClientCertificateCredentialFailedEvents()
         {
             var expExMessage = Guid.NewGuid().ToString();
 
             var mockMsalClient = new MockMsalConfidentialClient(new MockClientException(expExMessage));
 
-            var credential = InstrumentClient(new ClientCertificateCredential(Guid.NewGuid().ToString(), Guid.NewGuid().ToString(), new X509Certificate2(), default, default, mockMsalClient));
+            var credential = InstrumentClient(new ClientCertificateCredential(Guid.NewGuid().ToString(), Guid.NewGuid().ToString(), _mockCertificate, default, default, mockMsalClient));
 
             var method = "ClientCertificateCredential.GetToken";
 
@@ -153,11 +157,11 @@ namespace Azure.Identity.Tests
 
             var mockMsalClient = new MockMsalPublicClient
             {
-                DeviceCodeAuthFactory = (_, _) => throw new MockClientException(expExMessage),
-                SilentAuthFactory = (_, _) => throw new MockClientException(expExMessage)
+                DeviceCodeAuthFactory = (_, _, _, _, _) => throw new MockClientException(expExMessage),
+                SilentAuthFactory = (_, _, _, _, _) => throw new MockClientException(expExMessage)
             };
 
-            var credential = InstrumentClient(new DeviceCodeCredential((_, _) => { return Task.CompletedTask; }, default, Guid.NewGuid().ToString(), default, default, mockMsalClient));
+            var credential = InstrumentClient(new DeviceCodeCredential((_, _) => { return Task.CompletedTask; }, default, Guid.NewGuid().ToString(), new(), default, mockMsalClient));
 
             var method = "DeviceCodeCredential.GetToken";
 
@@ -169,7 +173,7 @@ namespace Azure.Identity.Tests
         {
             var expExMessage = Guid.NewGuid().ToString();
 
-            var mockMsalClient = new MockMsalPublicClient { AuthFactory = (_,_) => throw new MockClientException(expExMessage) };
+            var mockMsalClient = new MockMsalPublicClient { AuthFactory = (_, _) => throw new MockClientException(expExMessage) };
 
             var credential = InstrumentClient(new InteractiveBrowserCredential(Guid.NewGuid().ToString(), Guid.NewGuid().ToString(), default, default, mockMsalClient));
 
@@ -186,7 +190,7 @@ namespace Azure.Identity.Tests
             var mockMsalClient = new MockMsalPublicClient
             {
                 Accounts = new List<IAccount> { new MockAccount("mockuser@mockdomain.com") },
-                SilentAuthFactory = (_,_) => throw new MockClientException(expExMessage)
+                ExtendedSilentAuthFactory = (_, _, _, _, _, _) => throw new MockClientException(expExMessage)
             };
 
             var credential = InstrumentClient(new SharedTokenCacheCredential(null, "mockuser@mockdomain.com", default, default, mockMsalClient));

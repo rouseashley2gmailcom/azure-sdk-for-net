@@ -13,19 +13,19 @@ namespace Azure.ResourceManager.Sql.Models
     {
         public static string ToSerialString(this AutomaticTuningMode value) => value switch
         {
+            AutomaticTuningMode.Unspecified => "Unspecified",
             AutomaticTuningMode.Inherit => "Inherit",
             AutomaticTuningMode.Custom => "Custom",
             AutomaticTuningMode.Auto => "Auto",
-            AutomaticTuningMode.Unspecified => "Unspecified",
             _ => throw new ArgumentOutOfRangeException(nameof(value), value, "Unknown AutomaticTuningMode value.")
         };
 
         public static AutomaticTuningMode ToAutomaticTuningMode(this string value)
         {
-            if (string.Equals(value, "Inherit", StringComparison.InvariantCultureIgnoreCase)) return AutomaticTuningMode.Inherit;
-            if (string.Equals(value, "Custom", StringComparison.InvariantCultureIgnoreCase)) return AutomaticTuningMode.Custom;
-            if (string.Equals(value, "Auto", StringComparison.InvariantCultureIgnoreCase)) return AutomaticTuningMode.Auto;
-            if (string.Equals(value, "Unspecified", StringComparison.InvariantCultureIgnoreCase)) return AutomaticTuningMode.Unspecified;
+            if (StringComparer.OrdinalIgnoreCase.Equals(value, "Unspecified")) return AutomaticTuningMode.Unspecified;
+            if (StringComparer.OrdinalIgnoreCase.Equals(value, "Inherit")) return AutomaticTuningMode.Inherit;
+            if (StringComparer.OrdinalIgnoreCase.Equals(value, "Custom")) return AutomaticTuningMode.Custom;
+            if (StringComparer.OrdinalIgnoreCase.Equals(value, "Auto")) return AutomaticTuningMode.Auto;
             throw new ArgumentOutOfRangeException(nameof(value), value, "Unknown AutomaticTuningMode value.");
         }
     }

@@ -21,7 +21,8 @@ namespace Azure.Storage.Blobs.Models
 #pragma warning restore CA2227 // Collection properties should be readonly
 
         /// <summary>
-        /// Options tags to set for this append blob.
+        /// Options tags to set on the destination blob.
+        /// Not valid if <see cref="CopySourceTagsMode"/> is set to <see cref="BlobCopySourceTagsMode.Copy"/>.
         /// </summary>
 #pragma warning disable CA2227 // Collection properties should be readonly
         public Tags Tags { get; set; }
@@ -81,5 +82,20 @@ namespace Azure.Storage.Blobs.Models
         /// <see cref="BlobBaseClient.StartCopyFromUriAsync(System.Uri, BlobCopyFromUriOptions, System.Threading.CancellationToken)"/>.
         /// </summary>
         public HttpAuthorization SourceAuthentication { get; set; }
+
+        /// <summary>
+        /// Optional.  Note that this option is not applicable to <see cref="BlobBaseClient.StartCopyFromUri(System.Uri, BlobCopyFromUriOptions, System.Threading.CancellationToken)"/> and <see cref="BlobBaseClient.StartCopyFromUriAsync(System.Uri, BlobCopyFromUriOptions, System.Threading.CancellationToken)"/>.
+        /// If <see cref="BlobCopySourceTagsMode.Replace"/>, the tags on the destination blob will be set to <see cref="Tags"/>.
+        /// If <see cref="BlobCopySourceTagsMode.Copy"/>, the tags on the source blob will be copied to the destination blob.
+        /// Default is to replace.
+        /// </summary>
+        public BlobCopySourceTagsMode? CopySourceTagsMode { get; set; }
+
+        /// <summary>
+        /// Optional.  Note that this option is not applicable to <see cref="BlobBaseClient.StartCopyFromUri(System.Uri, BlobCopyFromUriOptions, System.Threading.CancellationToken)"/> and <see cref="BlobBaseClient.StartCopyFromUriAsync(System.Uri, BlobCopyFromUriOptions, System.Threading.CancellationToken)"/>.
+        /// Only applicable (but required) when the source is Azure Storage Files and using token authentication.
+        /// Used to indicate the intent of the request.
+        /// </summary>
+        public FileShareTokenIntent? SourceShareTokenIntent { get; set; }
     }
 }

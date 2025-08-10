@@ -6,7 +6,6 @@
 #nullable disable
 
 using System;
-using Azure;
 using Azure.Core;
 
 namespace Azure.Storage.Files.Shares
@@ -26,5 +25,9 @@ namespace Azure.Storage.Files.Shares
         public string Version => _response.Headers.TryGetValue("x-ms-version", out string value) ? value : null;
         /// <summary> The value of this header is set to true if the contents of the request are successfully encrypted using the specified algorithm, and false otherwise. </summary>
         public bool? IsServerEncrypted => _response.Headers.TryGetValue("x-ms-request-server-encrypted", out bool? value) ? value : null;
+        /// <summary> Last write time for the file. </summary>
+        public DateTimeOffset? FileLastWriteTime => _response.Headers.TryGetValue("x-ms-file-last-write-time", out DateTimeOffset? value) ? value : null;
+        /// <summary> Indicates the structured message body was accepted and mirrors back the message schema version and properties. </summary>
+        public string StructuredBodyType => _response.Headers.TryGetValue("x-ms-structured-body", out string value) ? value : null;
     }
 }

@@ -32,6 +32,9 @@ namespace Azure.Messaging.EventHubs.Amqp
         /// <summary>An empty set of events which can be dispatched when no events are available.</summary>
         private static readonly IReadOnlyList<EventData> EmptyEventSet = Array.Empty<EventData>();
 
+        /// <summary>The interval that an attempt to receive events should wait for additional events when less than the requested count was available.</summary>
+        private static readonly TimeSpan ReceiveBuildBatchInterval = TimeSpan.FromMilliseconds(20);
+
         /// <summary>A captured exception that indicates the partition was stolen by another consumer; this should be surfaced when an attempt is made to open a consumer link.</summary>
         private volatile Exception _activePartitionStolenException;
 
@@ -243,6 +246,7 @@ namespace Azure.Messaging.EventHubs.Amqp
             var link = default(ReceivingAmqpLink);
             var retryDelay = default(TimeSpan?);
             var receivedEvents = default(List<EventData>);
+            var firstReceivedEvent = default(EventData);
             var lastReceivedEvent = default(EventData);
 
             var stopWatch = ValueStopwatch.StartNew();
@@ -258,30 +262,14 @@ namespace Azure.Messaging.EventHubs.Amqp
                         // again after the operation completes to provide best efforts in respecting it.
 
                         EventHubsEventSource.Log.EventReceiveStart(EventHubName, ConsumerGroup, PartitionId, operationId);
-                        cancellationToken.ThrowIfCancellationRequested<TaskCanceledException>();
 
-                        link = await ReceiveLink.GetOrCreateAsync(UseMinimum(ConnectionScope.SessionTimeout, tryTimeout)).ConfigureAwait(false);
-                        cancellationToken.ThrowIfCancellationRequested<TaskCanceledException>();
-
-                        var messagesReceived = await Task.Factory.FromAsync<(ReceivingAmqpLink, int, TimeSpan), IEnumerable<AmqpMessage>>
-                        (
-                            static (arguments, callback, state) =>
-                            {
-                                var (link, maximumEventCount, waitTime) = arguments;
-                                return link.BeginReceiveMessages(maximumEventCount, waitTime, callback, link);
-                            },
-                            static asyncResult =>
-                            {
-                                var link = (ReceivingAmqpLink)asyncResult.AsyncState;
-                                var received = link.EndReceiveMessages(asyncResult, out var amqpMessages);
-
-                                return received ? amqpMessages : null;
-                            },
-                            (link, maximumEventCount, waitTime),
-                            default
-                        ).ConfigureAwait(false);
+                        if (!ReceiveLink.TryGetOpenedObject(out link))
+                        {
+                            link = await ReceiveLink.GetOrCreateAsync(tryTimeout, cancellationToken).ConfigureAwait(false);
+                        }
 
                         cancellationToken.ThrowIfCancellationRequested<TaskCanceledException>();
+                        var messagesReceived = await link.ReceiveMessagesAsync(maximumEventCount, ReceiveBuildBatchInterval, waitTime, cancellationToken).ConfigureAwait(false);
 
                         // If no messages were received, then just return the empty set.
 
@@ -306,11 +294,12 @@ namespace Azure.Messaging.EventHubs.Amqp
 
                         if (receivedEventCount > 0)
                         {
+                            firstReceivedEvent = receivedEvents[0];
                             lastReceivedEvent = receivedEvents[receivedEventCount - 1];
 
-                            if (lastReceivedEvent.Offset > long.MinValue)
+                            if (!string.IsNullOrEmpty(lastReceivedEvent.OffsetString))
                             {
-                                CurrentEventPosition = EventPosition.FromOffset(lastReceivedEvent.Offset, false);
+                                CurrentEventPosition = EventPosition.FromOffset(lastReceivedEvent.OffsetString, false);
                             }
 
                             if (TrackLastEnqueuedEventProperties)
@@ -369,7 +358,7 @@ namespace Azure.Messaging.EventHubs.Amqp
                         if ((retryDelay.HasValue) && (!ConnectionScope.IsDisposed) && (!_closed) && (!cancellationToken.IsCancellationRequested))
                         {
                             EventHubsEventSource.Log.EventReceiveError(EventHubName, ConsumerGroup, PartitionId, operationId, activeEx.Message);
-                            await Task.Delay(UseMinimum(retryDelay.Value, waitTime.CalculateRemaining(stopWatch.GetElapsedTime())), cancellationToken).ConfigureAwait(false);
+                            await Task.Delay(waitTime.CalculateRemaining(stopWatch.GetElapsedTime()), cancellationToken).ConfigureAwait(false);
 
                             tryTimeout = RetryPolicy.CalculateTryTimeout(failedAttemptCount);
                         }
@@ -400,7 +389,18 @@ namespace Azure.Messaging.EventHubs.Amqp
             }
             finally
             {
-                EventHubsEventSource.Log.EventReceiveComplete(EventHubName, ConsumerGroup, PartitionId, operationId, failedAttemptCount, receivedEventCount);
+                EventHubsEventSource.Log.EventReceiveComplete(
+                    EventHubName,
+                    ConsumerGroup,
+                    PartitionId,
+                    operationId,
+                    failedAttemptCount,
+                    receivedEventCount,
+                    stopWatch.GetElapsedTime().TotalSeconds,
+                    firstReceivedEvent?.SequenceNumber.ToString(),
+                    LastReceivedEvent?.SequenceNumber.ToString(),
+                    maximumEventCount,
+                    waitTime.TotalSeconds);
             }
         }
 
@@ -417,6 +417,7 @@ namespace Azure.Messaging.EventHubs.Amqp
                 return;
             }
 
+            cancellationToken.ThrowIfCancellationRequested<TaskCanceledException>();
             _closed = true;
 
             var clientId = GetHashCode().ToString(CultureInfo.InvariantCulture);
@@ -425,12 +426,10 @@ namespace Azure.Messaging.EventHubs.Amqp
             try
             {
                 EventHubsEventSource.Log.ClientCloseStart(clientType, EventHubName, clientId);
-                cancellationToken.ThrowIfCancellationRequested<TaskCanceledException>();
 
                 if (ReceiveLink?.TryGetOpenedObject(out var _) == true)
                 {
-                    cancellationToken.ThrowIfCancellationRequested<TaskCanceledException>();
-                    await ReceiveLink.CloseAsync().ConfigureAwait(false);
+                    await ReceiveLink.CloseAsync(CancellationToken.None).ConfigureAwait(false);
                 }
 
                 ReceiveLink?.Dispose();
@@ -460,7 +459,7 @@ namespace Azure.Messaging.EventHubs.Amqp
         /// <param name="prefetchSizeInBytes">The cache size of the prefetch queue. When set, the link makes a best effort to ensure prefetched messages fit into the specified size.</param>
         /// <param name="ownerLevel">The relative priority to associate with the link; for a non-exclusive link, this value should be <c>null</c>.</param>
         /// <param name="trackLastEnqueuedEventProperties">Indicates whether information on the last enqueued event on the partition is sent as events are received.</param>
-        /// <param name="timeout">The timeout to apply when creating the link.</param>
+        /// <param name="timeout">The timeout to apply for creating the link.</param>
         /// <param name="cancellationToken">The cancellation token to consider when creating the link.</param>
         ///
         /// <returns>The AMQP link to use for consumer-related operations.</returns>
@@ -496,13 +495,14 @@ namespace Azure.Messaging.EventHubs.Amqp
                     Interlocked.CompareExchange(ref _activePartitionStolenException, null, activeException);
                 }
 
-                EventHubsEventSource.Log.AmqpConsumerLinkCreateCapturedErrorThrow(EventHubName, consumerGroup, partitionId, ownerLevel?.ToString(CultureInfo.InvariantCulture), eventStartingPosition.ToString(), activeException.Message);
+                EventHubsEventSource.Log.AmqpConsumerLinkCreateCapturedErrorThrow(EventHubName, consumerGroup, partitionId, ownerLevel?.ToString(CultureInfo.InvariantCulture), eventStartingPosition.ToString(), activeException.Message, consumerIdentifier);
                 ExceptionDispatchInfo.Capture(activeException).Throw();
             }
 
             // Create and open the consumer link.
 
             var link = default(ReceivingAmqpLink);
+            var tryTimeout = RetryPolicy.CalculateTryTimeout(0);
 
             try
             {
@@ -510,6 +510,7 @@ namespace Azure.Messaging.EventHubs.Amqp
                     consumerGroup,
                     partitionId,
                     eventStartingPosition,
+                    tryTimeout,
                     timeout,
                     prefetchCount,
                     prefetchSizeInBytes,
@@ -580,17 +581,5 @@ namespace Azure.Messaging.EventHubs.Amqp
                 null => null,
                 _ => link.TerminalException
             };
-
-        /// <summary>
-        ///   Uses the minimum value of the two specified <see cref="TimeSpan" /> instances.
-        /// </summary>
-        ///
-        /// <param name="firstOption">The first option to consider.</param>
-        /// <param name="secondOption">The second option to consider.</param>
-        ///
-        /// <returns>The smaller of the two specified intervals.</returns>
-        ///
-        private static TimeSpan UseMinimum(TimeSpan firstOption,
-                                           TimeSpan secondOption) => (firstOption < secondOption) ? firstOption : secondOption;
     }
 }

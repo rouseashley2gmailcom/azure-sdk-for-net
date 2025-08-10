@@ -4,8 +4,10 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Azure.Core;
+using Azure.Core.Pipeline;
 using Azure.Storage.Blobs;
 
 namespace Azure.Storage.Blobs.ChangeFeed
@@ -21,14 +23,17 @@ namespace Azure.Storage.Blobs.ChangeFeed
     {
         private BlobServiceClient _blobServiceClient;
 
+        private BlobChangeFeedClientOptions _changeFeedOptions;
+
         /// <summary>
         /// Constructor.
         /// </summary>
         protected BlobChangeFeedClient() { }
 
-        internal BlobChangeFeedClient(BlobServiceClient blobServiceClient)
+        internal BlobChangeFeedClient(BlobServiceClient blobServiceClient, BlobChangeFeedClientOptions changeFeedOptions = null)
         {
             _blobServiceClient = blobServiceClient;
+            _changeFeedOptions = changeFeedOptions;
         }
 
         /// <summary>
@@ -67,9 +72,15 @@ namespace Azure.Storage.Blobs.ChangeFeed
         /// policies for authentication, retries, etc., that are applied to
         /// every request.
         /// </param>
-        public BlobChangeFeedClient(string connectionString, BlobClientOptions options)
+        /// <param name="changeFeedOptions">
+        /// Change Feed-specific client options.
+        /// </param>
+        public BlobChangeFeedClient(string connectionString,
+            BlobClientOptions options,
+            BlobChangeFeedClientOptions changeFeedOptions)
         {
             _blobServiceClient = new BlobServiceClient(connectionString, options);
+            _changeFeedOptions = changeFeedOptions;
         }
 
         /// <summary>
@@ -85,9 +96,15 @@ namespace Azure.Storage.Blobs.ChangeFeed
         /// policies for authentication, retries, etc., that are applied to
         /// every request.
         /// </param>
-        public BlobChangeFeedClient(Uri serviceUri, BlobClientOptions options = default)
+        /// <param name="changeFeedOptions">
+        /// Change Feed-specific client options.
+        /// </param>
+        public BlobChangeFeedClient(Uri serviceUri,
+            BlobClientOptions options = default,
+            BlobChangeFeedClientOptions changeFeedOptions = default)
         {
             _blobServiceClient = new BlobServiceClient(serviceUri, options);
+            _changeFeedOptions = changeFeedOptions;
         }
 
         /// <summary>
@@ -106,9 +123,16 @@ namespace Azure.Storage.Blobs.ChangeFeed
         /// policies for authentication, retries, etc., that are applied to
         /// every request.
         /// </param>
-        public BlobChangeFeedClient(Uri serviceUri, StorageSharedKeyCredential credential, BlobClientOptions options = default)
+        /// <param name="changeFeedOptions">
+        /// Change Feed-specific client options.
+        /// </param>
+        public BlobChangeFeedClient(Uri serviceUri,
+            StorageSharedKeyCredential credential,
+            BlobClientOptions options = default,
+            BlobChangeFeedClientOptions changeFeedOptions = default)
         {
             _blobServiceClient = new BlobServiceClient(serviceUri, credential, options);
+            _changeFeedOptions = changeFeedOptions;
         }
 
         /// <summary>
@@ -128,12 +152,19 @@ namespace Azure.Storage.Blobs.ChangeFeed
         /// policies for authentication, retries, etc., that are applied to
         /// every request.
         /// </param>
+        /// <param name="changeFeedOptions">
+        /// Change Feed-specific client options.
+        /// </param>
         /// <remarks>
         /// This constructor should only be used when shared access signature needs to be updated during lifespan of this client.
         /// </remarks>
-        public BlobChangeFeedClient(Uri serviceUri, AzureSasCredential credential, BlobClientOptions options = default)
+        public BlobChangeFeedClient(Uri serviceUri,
+            AzureSasCredential credential,
+            BlobClientOptions options = default,
+            BlobChangeFeedClientOptions changeFeedOptions = default)
         {
             _blobServiceClient = new BlobServiceClient(serviceUri, credential, options);
+            _changeFeedOptions = changeFeedOptions;
         }
 
         /// <summary>
@@ -152,9 +183,16 @@ namespace Azure.Storage.Blobs.ChangeFeed
         /// policies for authentication, retries, etc., that are applied to
         /// every request.
         /// </param>
-        public BlobChangeFeedClient(Uri serviceUri, TokenCredential credential, BlobClientOptions options = default)
+        /// <param name="changeFeedOptions">
+        /// Change Feed-specific client options.
+        /// </param>
+        public BlobChangeFeedClient(Uri serviceUri,
+            TokenCredential credential,
+            BlobClientOptions options = default,
+            BlobChangeFeedClientOptions changeFeedOptions = default)
         {
             _blobServiceClient = new BlobServiceClient(serviceUri, credential, options);
+            _changeFeedOptions = changeFeedOptions;
         }
 
         /// <summary>
@@ -166,7 +204,8 @@ namespace Azure.Storage.Blobs.ChangeFeed
 #pragma warning restore AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         {
             BlobChangeFeedPageable pageable = new BlobChangeFeedPageable(
-                _blobServiceClient);
+                _blobServiceClient,
+                _changeFeedOptions?.MaximumTransferSize);
             return pageable;
         }
 
@@ -181,6 +220,7 @@ namespace Azure.Storage.Blobs.ChangeFeed
         {
             BlobChangeFeedPageable pageable = new BlobChangeFeedPageable(
                 _blobServiceClient,
+                _changeFeedOptions?.MaximumTransferSize,
                 continuationToken);
             return pageable;
         }
@@ -197,6 +237,7 @@ namespace Azure.Storage.Blobs.ChangeFeed
         {
             BlobChangeFeedPageable pageable = new BlobChangeFeedPageable(
                 _blobServiceClient,
+                _changeFeedOptions?.MaximumTransferSize,
                 start,
                 end);
             return pageable;
@@ -210,7 +251,9 @@ namespace Azure.Storage.Blobs.ChangeFeed
         public virtual AsyncPageable<BlobChangeFeedEvent> GetChangesAsync()
 #pragma warning restore AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         {
-            BlobChangeFeedAsyncPageable asyncPagable = new BlobChangeFeedAsyncPageable(_blobServiceClient);
+            BlobChangeFeedAsyncPageable asyncPagable = new BlobChangeFeedAsyncPageable(
+                _blobServiceClient,
+                _changeFeedOptions?.MaximumTransferSize);
             return asyncPagable;
         }
 
@@ -223,7 +266,9 @@ namespace Azure.Storage.Blobs.ChangeFeed
         public virtual AsyncPageable<BlobChangeFeedEvent> GetChangesAsync(string continuationToken)
 #pragma warning restore AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         {
-            BlobChangeFeedAsyncPageable asyncPagable = new BlobChangeFeedAsyncPageable(_blobServiceClient,
+            BlobChangeFeedAsyncPageable asyncPagable = new BlobChangeFeedAsyncPageable(
+                _blobServiceClient,
+                _changeFeedOptions?.MaximumTransferSize,
                 continuationToken);
             return asyncPagable;
         }
@@ -242,9 +287,48 @@ namespace Azure.Storage.Blobs.ChangeFeed
         {
             BlobChangeFeedAsyncPageable asyncPagable = new BlobChangeFeedAsyncPageable(
                 _blobServiceClient,
+                _changeFeedOptions?.MaximumTransferSize,
                 start,
                 end);
             return asyncPagable;
+        }
+
+        /// <summary>
+        /// Returns the LastConsumable <see cref="DateTimeOffset"/> of the ChangeFeed, or null if the ChangeFeed is empty or has not been initialized.
+        /// </summary>
+        /// <param name="cancellationToken">
+        /// Optional <see cref="CancellationToken"/> to propagate
+        /// notifications that the operation should be cancelled.
+        /// </param>
+#pragma warning disable AZC0015
+
+        public virtual DateTimeOffset? GetLastConsumable(CancellationToken cancellationToken = default)
+#pragma warning restore AZC0015
+        {
+            BlobContainerClient containerClient = _blobServiceClient.GetBlobContainerClient(Constants.ChangeFeed.ChangeFeedContainerName);
+            return ChangeFeedFactory.GetLastConsumableInternal(
+                containerClient,
+                async: false,
+                cancellationToken)
+                .EnsureCompleted();
+        }
+
+        /// <summary>
+        /// Returns the LastConsumable <see cref="DateTimeOffset"/> of the ChangeFeed, or null if the ChangeFeed is empty or has not been initialized.
+        /// </summary>
+        /// <param name="cancellationToken">
+        /// Optional <see cref="CancellationToken"/> to propagate
+        /// notifications that the operation should be cancelled.
+        /// </param>
+#pragma warning disable AZC0015
+        public virtual Task<DateTimeOffset?> GetLastConsumableAsync(CancellationToken cancellationToken = default)
+#pragma warning restore AZC0015
+        {
+            BlobContainerClient containerClient = _blobServiceClient.GetBlobContainerClient(Constants.ChangeFeed.ChangeFeedContainerName);
+            return ChangeFeedFactory.GetLastConsumableInternal(
+                containerClient,
+                async: true,
+                cancellationToken);
         }
     }
 }

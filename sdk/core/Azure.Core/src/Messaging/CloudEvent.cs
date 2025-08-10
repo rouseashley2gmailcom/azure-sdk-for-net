@@ -3,14 +3,18 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Azure.Core;
+using Azure.Core.Serialization;
 
 namespace Azure.Messaging
 {
     /// <summary> Represents a CloudEvent conforming to the 1.0 schema. This type has built-in serialization using System.Text.Json.</summary>
     [JsonConverter(typeof(CloudEventConverter))]
+    [RequiresUnreferencedCode(DynamicData.SerializationRequiresUnreferencedCode)]
+    [RequiresDynamicCode(DynamicData.SerializationRequiresUnreferencedCode)]
     public class CloudEvent
     {
         /// <summary> Initializes a new instance of the <see cref="CloudEvent"/> class. </summary>
@@ -199,7 +203,7 @@ namespace Azure.Messaging
         {
             Argument.AssertNotNull(json, nameof(json));
 
-            JsonDocument requestDocument = JsonDocument.Parse(json);
+            using JsonDocument requestDocument = JsonDocument.Parse(json);
             CloudEvent? cloudEvent = null;
             if (requestDocument.RootElement.ValueKind == JsonValueKind.Object)
             {

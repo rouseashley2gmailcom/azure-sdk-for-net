@@ -1,7 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-namespace Azure.Messaging.EventHubs.Processor
+namespace Azure.Messaging.EventHubs.Primitives
 {
     /// <summary>
     ///   The set of keys to access or modify metadata for a blob.
@@ -22,5 +22,8 @@ namespace Azure.Messaging.EventHubs.Processor
 
         /// <summary>The key to the sequence number metadata.</summary>
         public const string SequenceNumber = "sequencenumber";
+
+        /// <summary>The unique identifier of the client that authored this checkpoint.</summary>
+        public const string ClientIdentifier = "clientidentifier";
     }
 }

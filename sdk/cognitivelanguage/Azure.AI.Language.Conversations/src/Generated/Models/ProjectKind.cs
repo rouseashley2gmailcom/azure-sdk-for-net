@@ -8,10 +8,10 @@
 using System;
 using System.ComponentModel;
 
-namespace Azure.AI.Language.Conversations
+namespace Azure.AI.Language.Conversations.Models
 {
     /// <summary> The type of the project. </summary>
-    public readonly partial struct ProjectKind : IEquatable<ProjectKind>
+    internal readonly partial struct ProjectKind : IEquatable<ProjectKind>
     {
         private readonly string _value;
 
@@ -22,18 +22,21 @@ namespace Azure.AI.Language.Conversations
             _value = value ?? throw new ArgumentNullException(nameof(value));
         }
 
-        private const string ConversationValue = "conversation";
-        private const string WorkflowValue = "workflow";
+        private const string ConversationValue = "Conversation";
+        private const string OrchestrationValue = "Orchestration";
+        private const string ConversationalAIValue = "ConversationalAI";
 
-        /// <summary> conversation. </summary>
+        /// <summary> Conversation type. </summary>
         public static ProjectKind Conversation { get; } = new ProjectKind(ConversationValue);
-        /// <summary> workflow. </summary>
-        public static ProjectKind Workflow { get; } = new ProjectKind(WorkflowValue);
+        /// <summary> Orchestration type. </summary>
+        public static ProjectKind Orchestration { get; } = new ProjectKind(OrchestrationValue);
+        /// <summary> Conversation type. </summary>
+        public static ProjectKind ConversationalAI { get; } = new ProjectKind(ConversationalAIValue);
         /// <summary> Determines if two <see cref="ProjectKind"/> values are the same. </summary>
         public static bool operator ==(ProjectKind left, ProjectKind right) => left.Equals(right);
         /// <summary> Determines if two <see cref="ProjectKind"/> values are not the same. </summary>
         public static bool operator !=(ProjectKind left, ProjectKind right) => !left.Equals(right);
-        /// <summary> Converts a string to a <see cref="ProjectKind"/>. </summary>
+        /// <summary> Converts a <see cref="string"/> to a <see cref="ProjectKind"/>. </summary>
         public static implicit operator ProjectKind(string value) => new ProjectKind(value);
 
         /// <inheritdoc />
@@ -44,7 +47,7 @@ namespace Azure.AI.Language.Conversations
 
         /// <inheritdoc />
         [EditorBrowsable(EditorBrowsableState.Never)]
-        public override int GetHashCode() => _value?.GetHashCode() ?? 0;
+        public override int GetHashCode() => _value != null ? StringComparer.InvariantCultureIgnoreCase.GetHashCode(_value) : 0;
         /// <inheritdoc />
         public override string ToString() => _value;
     }

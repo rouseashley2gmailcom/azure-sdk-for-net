@@ -237,14 +237,19 @@ namespace Azure.Data.Tables
             if (type != null)
             {
                 var valueType = value.GetType();
-                if (type == typeof(BinaryData) && valueType == typeof(byte[]))
+                if (type == typeof(DateTime?) && valueType == typeof(DateTimeOffset))
                 {
-                    value = new BinaryData(value);
+                    return ((DateTimeOffset)value).UtcDateTime;
                 }
-                else
+                if (type == typeof(DateTimeOffset?) && valueType == typeof(DateTime))
                 {
-                    EnforceType(type, valueType);
+                    return new DateTimeOffset((DateTime)value);
                 }
+                if (type == typeof(BinaryData) && value is byte[] byteArray)
+                {
+                     return new BinaryData(byteArray);
+                }
+                EnforceType(type, valueType);
             }
 
             return value;
@@ -289,6 +294,7 @@ namespace Azure.Data.Tables
                         int newIntValue => (long)newIntValue,
                         _ => newValue
                     },
+                    string when newValue is DateTime || newValue is DateTimeOffset _ => newValue.ToString(),
                     _ => newValue
                 };
             }

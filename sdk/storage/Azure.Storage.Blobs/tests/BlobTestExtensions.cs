@@ -6,6 +6,7 @@ using Azure.Core;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Azure.Storage.Blobs.Specialized;
+using Azure.Storage.Test.Shared;
 
 namespace Azure.Storage
 {
@@ -23,28 +24,6 @@ namespace Azure.Storage
             return builder.ToUri();
         }
 
-        private static BlobClientConfiguration BuildClientConfigurationWithEncryptionScope(
-            BlobClientConfiguration clientConfiguration,
-            string encryptionScope)
-            => new BlobClientConfiguration(
-                pipeline: clientConfiguration.Pipeline,
-                sharedKeyCredential: clientConfiguration.SharedKeyCredential,
-                clientDiagnostics: clientConfiguration.ClientDiagnostics,
-                version: clientConfiguration.Version,
-                customerProvidedKey: null,
-                encryptionScope: encryptionScope);
-
-        private static BlobClientConfiguration BuildClientConfigurationWithCpk(
-            BlobClientConfiguration clientConfiguration,
-            CustomerProvidedKey customerProvidedKey)
-            => new BlobClientConfiguration(
-                pipeline: clientConfiguration.Pipeline,
-                sharedKeyCredential: clientConfiguration.SharedKeyCredential,
-                clientDiagnostics: clientConfiguration.ClientDiagnostics,
-                version: clientConfiguration.Version,
-                customerProvidedKey: customerProvidedKey,
-                encryptionScope: null);
-
         /// <summary>
         /// Convert a base RequestConditions to BlobRequestConditions.
         /// </summary>
@@ -60,5 +39,23 @@ namespace Azure.Storage
                     IfModifiedSince = conditions.IfModifiedSince,
                     IfUnmodifiedSince = conditions.IfUnmodifiedSince
                 };
+
+        public static BlobHttpHeaders ToBlobHttpHeaders(this HttpHeaderParameters headers)
+        {
+            if (headers == default)
+            {
+                return default;
+            }
+
+            return new BlobHttpHeaders
+            {
+                ContentEncoding = headers.ContentEncoding,
+                ContentDisposition = headers.ContentDisposition,
+                CacheControl = headers.CacheControl,
+                ContentHash = headers.ContentHash,
+                ContentLanguage = headers.ContentLanguage,
+                ContentType = headers.ContentType
+            };
+        }
     }
 }

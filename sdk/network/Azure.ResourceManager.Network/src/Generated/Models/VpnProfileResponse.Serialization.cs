@@ -5,25 +5,129 @@
 
 #nullable disable
 
+using System;
+using System.ClientModel.Primitives;
+using System.Collections.Generic;
 using System.Text.Json;
 using Azure.Core;
 
 namespace Azure.ResourceManager.Network.Models
 {
-    public partial class VpnProfileResponse
+    public partial class VpnProfileResponse : IUtf8JsonSerializable, IJsonModel<VpnProfileResponse>
     {
-        internal static VpnProfileResponse DeserializeVpnProfileResponse(JsonElement element)
+        void IUtf8JsonSerializable.Write(Utf8JsonWriter writer) => ((IJsonModel<VpnProfileResponse>)this).Write(writer, ModelSerializationExtensions.WireOptions);
+
+        void IJsonModel<VpnProfileResponse>.Write(Utf8JsonWriter writer, ModelReaderWriterOptions options)
         {
-            Optional<string> profileUrl = default;
-            foreach (var property in element.EnumerateObject())
+            writer.WriteStartObject();
+            JsonModelWriteCore(writer, options);
+            writer.WriteEndObject();
+        }
+
+        /// <param name="writer"> The JSON writer. </param>
+        /// <param name="options"> The client options for reading and writing models. </param>
+        protected virtual void JsonModelWriteCore(Utf8JsonWriter writer, ModelReaderWriterOptions options)
+        {
+            var format = options.Format == "W" ? ((IPersistableModel<VpnProfileResponse>)this).GetFormatFromOptions(options) : options.Format;
+            if (format != "J")
             {
-                if (property.NameEquals("profileUrl"))
+                throw new FormatException($"The model {nameof(VpnProfileResponse)} does not support writing '{format}' format.");
+            }
+
+            if (Optional.IsDefined(ProfileUri))
+            {
+                writer.WritePropertyName("profileUrl"u8);
+                writer.WriteStringValue(ProfileUri.AbsoluteUri);
+            }
+            if (options.Format != "W" && _serializedAdditionalRawData != null)
+            {
+                foreach (var item in _serializedAdditionalRawData)
                 {
-                    profileUrl = property.Value.GetString();
-                    continue;
+                    writer.WritePropertyName(item.Key);
+#if NET6_0_OR_GREATER
+				writer.WriteRawValue(item.Value);
+#else
+                    using (JsonDocument document = JsonDocument.Parse(item.Value, ModelSerializationExtensions.JsonDocumentOptions))
+                    {
+                        JsonSerializer.Serialize(writer, document.RootElement);
+                    }
+#endif
                 }
             }
-            return new VpnProfileResponse(profileUrl.Value);
         }
+
+        VpnProfileResponse IJsonModel<VpnProfileResponse>.Create(ref Utf8JsonReader reader, ModelReaderWriterOptions options)
+        {
+            var format = options.Format == "W" ? ((IPersistableModel<VpnProfileResponse>)this).GetFormatFromOptions(options) : options.Format;
+            if (format != "J")
+            {
+                throw new FormatException($"The model {nameof(VpnProfileResponse)} does not support reading '{format}' format.");
+            }
+
+            using JsonDocument document = JsonDocument.ParseValue(ref reader);
+            return DeserializeVpnProfileResponse(document.RootElement, options);
+        }
+
+        internal static VpnProfileResponse DeserializeVpnProfileResponse(JsonElement element, ModelReaderWriterOptions options = null)
+        {
+            options ??= ModelSerializationExtensions.WireOptions;
+
+            if (element.ValueKind == JsonValueKind.Null)
+            {
+                return null;
+            }
+            Uri profileUrl = default;
+            IDictionary<string, BinaryData> serializedAdditionalRawData = default;
+            Dictionary<string, BinaryData> rawDataDictionary = new Dictionary<string, BinaryData>();
+            foreach (var property in element.EnumerateObject())
+            {
+                if (property.NameEquals("profileUrl"u8))
+                {
+                    if (property.Value.ValueKind == JsonValueKind.Null)
+                    {
+                        continue;
+                    }
+                    profileUrl = new Uri(property.Value.GetString());
+                    continue;
+                }
+                if (options.Format != "W")
+                {
+                    rawDataDictionary.Add(property.Name, BinaryData.FromString(property.Value.GetRawText()));
+                }
+            }
+            serializedAdditionalRawData = rawDataDictionary;
+            return new VpnProfileResponse(profileUrl, serializedAdditionalRawData);
+        }
+
+        BinaryData IPersistableModel<VpnProfileResponse>.Write(ModelReaderWriterOptions options)
+        {
+            var format = options.Format == "W" ? ((IPersistableModel<VpnProfileResponse>)this).GetFormatFromOptions(options) : options.Format;
+
+            switch (format)
+            {
+                case "J":
+                    return ModelReaderWriter.Write(this, options, AzureResourceManagerNetworkContext.Default);
+                default:
+                    throw new FormatException($"The model {nameof(VpnProfileResponse)} does not support writing '{options.Format}' format.");
+            }
+        }
+
+        VpnProfileResponse IPersistableModel<VpnProfileResponse>.Create(BinaryData data, ModelReaderWriterOptions options)
+        {
+            var format = options.Format == "W" ? ((IPersistableModel<VpnProfileResponse>)this).GetFormatFromOptions(options) : options.Format;
+
+            switch (format)
+            {
+                case "J":
+                    {
+                        using JsonDocument document = JsonDocument.Parse(data, ModelSerializationExtensions.JsonDocumentOptions);
+                        return DeserializeVpnProfileResponse(document.RootElement, options);
+                    }
+                default:
+                    throw new FormatException($"The model {nameof(VpnProfileResponse)} does not support reading '{options.Format}' format.");
+            }
+        }
+
+        string IPersistableModel<VpnProfileResponse>.GetFormatFromOptions(ModelReaderWriterOptions options) => "J";
     }
 }

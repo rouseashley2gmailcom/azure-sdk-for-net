@@ -9,7 +9,6 @@ using System;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Azure;
 using Azure.Core;
 using Azure.Core.Pipeline;
 using Azure.Monitor.Query.Models;
@@ -18,19 +17,22 @@ namespace Azure.Monitor.Query
 {
     internal partial class MetricDefinitionsRestClient
     {
-        private Uri endpoint;
-        private ClientDiagnostics _clientDiagnostics;
-        private HttpPipeline _pipeline;
+        private readonly HttpPipeline _pipeline;
+        private readonly Uri _endpoint;
+
+        /// <summary> The ClientDiagnostics is used to provide tracing support for the client library. </summary>
+        internal ClientDiagnostics ClientDiagnostics { get; }
 
         /// <summary> Initializes a new instance of MetricDefinitionsRestClient. </summary>
         /// <param name="clientDiagnostics"> The handler for diagnostic messaging in the client. </param>
         /// <param name="pipeline"> The HTTP pipeline for sending and receiving REST requests and responses. </param>
         /// <param name="endpoint"> server parameter. </param>
+        /// <exception cref="ArgumentNullException"> <paramref name="clientDiagnostics"/> or <paramref name="pipeline"/> is null. </exception>
         public MetricDefinitionsRestClient(ClientDiagnostics clientDiagnostics, HttpPipeline pipeline, Uri endpoint = null)
         {
-            this.endpoint = endpoint ?? new Uri("https://management.azure.com");
-            _clientDiagnostics = clientDiagnostics;
-            _pipeline = pipeline;
+            ClientDiagnostics = clientDiagnostics ?? throw new ArgumentNullException(nameof(clientDiagnostics));
+            _pipeline = pipeline ?? throw new ArgumentNullException(nameof(pipeline));
+            _endpoint = endpoint ?? new Uri("https://management.azure.com");
         }
 
         internal HttpMessage CreateListRequest(string resourceUri, string metricnamespace)
@@ -39,11 +41,11 @@ namespace Azure.Monitor.Query
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.Reset(endpoint);
+            uri.Reset(_endpoint);
             uri.AppendPath("/", false);
             uri.AppendPath(resourceUri, false);
             uri.AppendPath("/providers/Microsoft.Insights/metricDefinitions", false);
-            uri.AppendQuery("api-version", "2018-01-01", true);
+            uri.AppendQuery("api-version", "2023-10-01", true);
             if (metricnamespace != null)
             {
                 uri.AppendQuery("metricnamespace", metricnamespace, true);
@@ -55,7 +57,7 @@ namespace Azure.Monitor.Query
 
         /// <summary> Lists the metric definitions for the resource. </summary>
         /// <param name="resourceUri"> The identifier of the resource. </param>
-        /// <param name="metricnamespace"> Metric namespace to query metric definitions for. </param>
+        /// <param name="metricnamespace"> Metric namespace where the metrics you want reside. </param>
         /// <param name="cancellationToken"> The cancellation token to use. </param>
         /// <exception cref="ArgumentNullException"> <paramref name="resourceUri"/> is null. </exception>
         public async Task<Response<MetricDefinitionCollection>> ListAsync(string resourceUri, string metricnamespace = null, CancellationToken cancellationToken = default)
@@ -72,18 +74,18 @@ namespace Azure.Monitor.Query
                 case 200:
                     {
                         MetricDefinitionCollection value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = MetricDefinitionCollection.DeserializeMetricDefinitionCollection(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
         /// <summary> Lists the metric definitions for the resource. </summary>
         /// <param name="resourceUri"> The identifier of the resource. </param>
-        /// <param name="metricnamespace"> Metric namespace to query metric definitions for. </param>
+        /// <param name="metricnamespace"> Metric namespace where the metrics you want reside. </param>
         /// <param name="cancellationToken"> The cancellation token to use. </param>
         /// <exception cref="ArgumentNullException"> <paramref name="resourceUri"/> is null. </exception>
         public Response<MetricDefinitionCollection> List(string resourceUri, string metricnamespace = null, CancellationToken cancellationToken = default)
@@ -100,12 +102,12 @@ namespace Azure.Monitor.Query
                 case 200:
                     {
                         MetricDefinitionCollection value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = MetricDefinitionCollection.DeserializeMetricDefinitionCollection(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
     }

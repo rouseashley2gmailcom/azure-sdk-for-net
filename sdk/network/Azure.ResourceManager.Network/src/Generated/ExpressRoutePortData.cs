@@ -5,29 +5,35 @@
 
 #nullable disable
 
+using System;
 using System.Collections.Generic;
 using Azure.Core;
+using Azure.ResourceManager.Models;
 using Azure.ResourceManager.Network.Models;
 using Azure.ResourceManager.Resources.Models;
 
 namespace Azure.ResourceManager.Network
 {
-    /// <summary> A class representing the ExpressRoutePort data model. </summary>
-    public partial class ExpressRoutePortData : Resource
+    /// <summary>
+    /// A class representing the ExpressRoutePort data model.
+    /// ExpressRoutePort resource definition.
+    /// </summary>
+    public partial class ExpressRoutePortData : NetworkTrackedResourceData
     {
-        /// <summary> Initializes a new instance of ExpressRoutePortData. </summary>
+        /// <summary> Initializes a new instance of <see cref="ExpressRoutePortData"/>. </summary>
         public ExpressRoutePortData()
         {
-            Links = new ChangeTrackingList<ExpressRouteLink>();
+            Links = new ChangeTrackingList<ExpressRouteLinkData>();
             Circuits = new ChangeTrackingList<WritableSubResource>();
         }
 
-        /// <summary> Initializes a new instance of ExpressRoutePortData. </summary>
+        /// <summary> Initializes a new instance of <see cref="ExpressRoutePortData"/>. </summary>
         /// <param name="id"> Resource ID. </param>
         /// <param name="name"> Resource name. </param>
-        /// <param name="type"> Resource type. </param>
+        /// <param name="resourceType"> Resource type. </param>
         /// <param name="location"> Resource location. </param>
         /// <param name="tags"> Resource tags. </param>
+        /// <param name="serializedAdditionalRawData"> Keeps track of any properties unknown to the library. </param>
         /// <param name="etag"> A unique read-only string that changes whenever the resource is updated. </param>
         /// <param name="identity"> The identity of ExpressRoutePort, if configured. </param>
         /// <param name="peeringLocation"> The name of the peering location that the ExpressRoutePort is mapped to physically. </param>
@@ -41,9 +47,10 @@ namespace Azure.ResourceManager.Network
         /// <param name="circuits"> Reference the ExpressRoute circuit(s) that are provisioned on this ExpressRoutePort resource. </param>
         /// <param name="provisioningState"> The provisioning state of the express route port resource. </param>
         /// <param name="resourceGuid"> The resource GUID property of the express route port resource. </param>
-        internal ExpressRoutePortData(string id, string name, string type, string location, IDictionary<string, string> tags, string etag, ResourceIdentity identity, string peeringLocation, int? bandwidthInGbps, float? provisionedBandwidthInGbps, string mtu, ExpressRoutePortsEncapsulation? encapsulation, string etherType, string allocationDate, IList<ExpressRouteLink> links, IReadOnlyList<WritableSubResource> circuits, ProvisioningState? provisioningState, string resourceGuid) : base(id, name, type, location, tags)
+        /// <param name="billingType"> The billing type of the ExpressRoutePort resource. </param>
+        internal ExpressRoutePortData(ResourceIdentifier id, string name, ResourceType? resourceType, AzureLocation? location, IDictionary<string, string> tags, IDictionary<string, BinaryData> serializedAdditionalRawData, ETag? etag, ManagedServiceIdentity identity, string peeringLocation, int? bandwidthInGbps, float? provisionedBandwidthInGbps, string mtu, ExpressRoutePortsEncapsulation? encapsulation, string etherType, string allocationDate, IList<ExpressRouteLinkData> links, IReadOnlyList<WritableSubResource> circuits, NetworkProvisioningState? provisioningState, Guid? resourceGuid, ExpressRoutePortsBillingType? billingType) : base(id, name, resourceType, location, tags, serializedAdditionalRawData)
         {
-            Etag = etag;
+            ETag = etag;
             Identity = identity;
             PeeringLocation = peeringLocation;
             BandwidthInGbps = bandwidthInGbps;
@@ -56,12 +63,13 @@ namespace Azure.ResourceManager.Network
             Circuits = circuits;
             ProvisioningState = provisioningState;
             ResourceGuid = resourceGuid;
+            BillingType = billingType;
         }
 
         /// <summary> A unique read-only string that changes whenever the resource is updated. </summary>
-        public string Etag { get; }
+        public ETag? ETag { get; }
         /// <summary> The identity of ExpressRoutePort, if configured. </summary>
-        public ResourceIdentity Identity { get; set; }
+        public ManagedServiceIdentity Identity { get; set; }
         /// <summary> The name of the peering location that the ExpressRoutePort is mapped to physically. </summary>
         public string PeeringLocation { get; set; }
         /// <summary> Bandwidth of procured ports in Gbps. </summary>
@@ -77,12 +85,14 @@ namespace Azure.ResourceManager.Network
         /// <summary> Date of the physical port allocation to be used in Letter of Authorization. </summary>
         public string AllocationDate { get; }
         /// <summary> The set of physical links of the ExpressRoutePort resource. </summary>
-        public IList<ExpressRouteLink> Links { get; }
+        public IList<ExpressRouteLinkData> Links { get; }
         /// <summary> Reference the ExpressRoute circuit(s) that are provisioned on this ExpressRoutePort resource. </summary>
         public IReadOnlyList<WritableSubResource> Circuits { get; }
         /// <summary> The provisioning state of the express route port resource. </summary>
-        public ProvisioningState? ProvisioningState { get; }
+        public NetworkProvisioningState? ProvisioningState { get; }
         /// <summary> The resource GUID property of the express route port resource. </summary>
-        public string ResourceGuid { get; }
+        public Guid? ResourceGuid { get; }
+        /// <summary> The billing type of the ExpressRoutePort resource. </summary>
+        public ExpressRoutePortsBillingType? BillingType { get; set; }
     }
 }

@@ -13,6 +13,12 @@ namespace Azure.ResourceManager.KeyVault.Models
         /// <summary> Standard_B1. </summary>
         StandardB1,
         /// <summary> Custom_B32. </summary>
-        CustomB32
+        CustomB32,
+        /// <summary> Custom_B6. </summary>
+        CustomB6,
+        /// <summary> Custom_C42. </summary>
+        CustomC42,
+        /// <summary> Custom_C10. </summary>
+        CustomC10
     }
 }

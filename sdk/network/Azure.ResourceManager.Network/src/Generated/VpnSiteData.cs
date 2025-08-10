@@ -5,6 +5,7 @@
 
 #nullable disable
 
+using System;
 using System.Collections.Generic;
 using Azure.Core;
 using Azure.ResourceManager.Network.Models;
@@ -12,21 +13,25 @@ using Azure.ResourceManager.Resources.Models;
 
 namespace Azure.ResourceManager.Network
 {
-    /// <summary> A class representing the VpnSite data model. </summary>
-    public partial class VpnSiteData : Resource
+    /// <summary>
+    /// A class representing the VpnSite data model.
+    /// VpnSite Resource.
+    /// </summary>
+    public partial class VpnSiteData : NetworkTrackedResourceData
     {
-        /// <summary> Initializes a new instance of VpnSiteData. </summary>
+        /// <summary> Initializes a new instance of <see cref="VpnSiteData"/>. </summary>
         public VpnSiteData()
         {
-            VpnSiteLinks = new ChangeTrackingList<VpnSiteLink>();
+            VpnSiteLinks = new ChangeTrackingList<VpnSiteLinkData>();
         }
 
-        /// <summary> Initializes a new instance of VpnSiteData. </summary>
+        /// <summary> Initializes a new instance of <see cref="VpnSiteData"/>. </summary>
         /// <param name="id"> Resource ID. </param>
         /// <param name="name"> Resource name. </param>
-        /// <param name="type"> Resource type. </param>
+        /// <param name="resourceType"> Resource type. </param>
         /// <param name="location"> Resource location. </param>
         /// <param name="tags"> Resource tags. </param>
+        /// <param name="serializedAdditionalRawData"> Keeps track of any properties unknown to the library. </param>
         /// <param name="etag"> A unique read-only string that changes whenever the resource is updated. </param>
         /// <param name="virtualWan"> The VirtualWAN to which the vpnSite belongs. </param>
         /// <param name="deviceProperties"> The device properties. </param>
@@ -38,12 +43,12 @@ namespace Azure.ResourceManager.Network
         /// <param name="isSecuritySite"> IsSecuritySite flag. </param>
         /// <param name="vpnSiteLinks"> List of all vpn site links. </param>
         /// <param name="o365Policy"> Office365 Policy. </param>
-        internal VpnSiteData(string id, string name, string type, string location, IDictionary<string, string> tags, string etag, WritableSubResource virtualWan, DeviceProperties deviceProperties, string ipAddress, string siteKey, AddressSpace addressSpace, BgpSettings bgpProperties, ProvisioningState? provisioningState, bool? isSecuritySite, IList<VpnSiteLink> vpnSiteLinks, O365PolicyProperties o365Policy) : base(id, name, type, location, tags)
+        internal VpnSiteData(ResourceIdentifier id, string name, ResourceType? resourceType, AzureLocation? location, IDictionary<string, string> tags, IDictionary<string, BinaryData> serializedAdditionalRawData, ETag? etag, WritableSubResource virtualWan, DeviceProperties deviceProperties, string ipAddress, string siteKey, VirtualNetworkAddressSpace addressSpace, BgpSettings bgpProperties, NetworkProvisioningState? provisioningState, bool? isSecuritySite, IList<VpnSiteLinkData> vpnSiteLinks, O365PolicyProperties o365Policy) : base(id, name, resourceType, location, tags, serializedAdditionalRawData)
         {
-            Etag = etag;
+            ETag = etag;
             VirtualWan = virtualWan;
             DeviceProperties = deviceProperties;
-            IpAddress = ipAddress;
+            IPAddress = ipAddress;
             SiteKey = siteKey;
             AddressSpace = addressSpace;
             BgpProperties = bgpProperties;
@@ -54,26 +59,49 @@ namespace Azure.ResourceManager.Network
         }
 
         /// <summary> A unique read-only string that changes whenever the resource is updated. </summary>
-        public string Etag { get; }
+        public ETag? ETag { get; }
         /// <summary> The VirtualWAN to which the vpnSite belongs. </summary>
-        public WritableSubResource VirtualWan { get; set; }
+        internal WritableSubResource VirtualWan { get; set; }
+        /// <summary> Gets or sets Id. </summary>
+        public ResourceIdentifier VirtualWanId
+        {
+            get => VirtualWan is null ? default : VirtualWan.Id;
+            set
+            {
+                if (VirtualWan is null)
+                    VirtualWan = new WritableSubResource();
+                VirtualWan.Id = value;
+            }
+        }
+
         /// <summary> The device properties. </summary>
         public DeviceProperties DeviceProperties { get; set; }
         /// <summary> The ip-address for the vpn-site. </summary>
-        public string IpAddress { get; set; }
+        public string IPAddress { get; set; }
         /// <summary> The key for vpn-site that can be used for connections. </summary>
         public string SiteKey { get; set; }
         /// <summary> The AddressSpace that contains an array of IP address ranges. </summary>
-        public AddressSpace AddressSpace { get; set; }
+        public VirtualNetworkAddressSpace AddressSpace { get; set; }
         /// <summary> The set of bgp properties. </summary>
         public BgpSettings BgpProperties { get; set; }
         /// <summary> The provisioning state of the VPN site resource. </summary>
-        public ProvisioningState? ProvisioningState { get; }
+        public NetworkProvisioningState? ProvisioningState { get; }
         /// <summary> IsSecuritySite flag. </summary>
         public bool? IsSecuritySite { get; set; }
         /// <summary> List of all vpn site links. </summary>
-        public IList<VpnSiteLink> VpnSiteLinks { get; }
+        public IList<VpnSiteLinkData> VpnSiteLinks { get; }
         /// <summary> Office365 Policy. </summary>
-        public O365PolicyProperties O365Policy { get; set; }
+        internal O365PolicyProperties O365Policy { get; set; }
+        /// <summary> Office365 breakout categories. </summary>
+        public O365BreakOutCategoryPolicies O365BreakOutCategories
+        {
+            get => O365Policy is null ? default : O365Policy.BreakOutCategories;
+            set
+            {
+                if (O365Policy is null)
+                    O365Policy = new O365PolicyProperties();
+                O365Policy.BreakOutCategories = value;
+            }
+        }
     }
 }

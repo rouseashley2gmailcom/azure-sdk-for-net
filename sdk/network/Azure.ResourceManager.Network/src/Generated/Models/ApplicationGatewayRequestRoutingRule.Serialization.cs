@@ -5,111 +5,169 @@
 
 #nullable disable
 
+using System;
+using System.ClientModel.Primitives;
+using System.Collections.Generic;
+using System.Text;
 using System.Text.Json;
 using Azure.Core;
 using Azure.ResourceManager.Resources.Models;
 
 namespace Azure.ResourceManager.Network.Models
 {
-    public partial class ApplicationGatewayRequestRoutingRule : IUtf8JsonSerializable
+    public partial class ApplicationGatewayRequestRoutingRule : IUtf8JsonSerializable, IJsonModel<ApplicationGatewayRequestRoutingRule>
     {
-        void IUtf8JsonSerializable.Write(Utf8JsonWriter writer)
+        void IUtf8JsonSerializable.Write(Utf8JsonWriter writer) => ((IJsonModel<ApplicationGatewayRequestRoutingRule>)this).Write(writer, ModelSerializationExtensions.WireOptions);
+
+        void IJsonModel<ApplicationGatewayRequestRoutingRule>.Write(Utf8JsonWriter writer, ModelReaderWriterOptions options)
         {
             writer.WriteStartObject();
-            if (Optional.IsDefined(Name))
+            JsonModelWriteCore(writer, options);
+            writer.WriteEndObject();
+        }
+
+        /// <param name="writer"> The JSON writer. </param>
+        /// <param name="options"> The client options for reading and writing models. </param>
+        protected override void JsonModelWriteCore(Utf8JsonWriter writer, ModelReaderWriterOptions options)
+        {
+            var format = options.Format == "W" ? ((IPersistableModel<ApplicationGatewayRequestRoutingRule>)this).GetFormatFromOptions(options) : options.Format;
+            if (format != "J")
             {
-                writer.WritePropertyName("name");
-                writer.WriteStringValue(Name);
+                throw new FormatException($"The model {nameof(ApplicationGatewayRequestRoutingRule)} does not support writing '{format}' format.");
             }
-            if (Optional.IsDefined(Id))
+
+            base.JsonModelWriteCore(writer, options);
+            if (options.Format != "W" && Optional.IsDefined(ETag))
             {
-                writer.WritePropertyName("id");
-                writer.WriteStringValue(Id);
+                writer.WritePropertyName("etag"u8);
+                writer.WriteStringValue(ETag.Value.ToString());
             }
-            writer.WritePropertyName("properties");
+            writer.WritePropertyName("properties"u8);
             writer.WriteStartObject();
             if (Optional.IsDefined(RuleType))
             {
-                writer.WritePropertyName("ruleType");
+                writer.WritePropertyName("ruleType"u8);
                 writer.WriteStringValue(RuleType.Value.ToString());
             }
             if (Optional.IsDefined(Priority))
             {
-                writer.WritePropertyName("priority");
+                writer.WritePropertyName("priority"u8);
                 writer.WriteNumberValue(Priority.Value);
             }
             if (Optional.IsDefined(BackendAddressPool))
             {
-                writer.WritePropertyName("backendAddressPool");
-                JsonSerializer.Serialize(writer, BackendAddressPool);
+                writer.WritePropertyName("backendAddressPool"u8);
+                ((IJsonModel<WritableSubResource>)BackendAddressPool).Write(writer, options);
             }
             if (Optional.IsDefined(BackendHttpSettings))
             {
-                writer.WritePropertyName("backendHttpSettings");
-                JsonSerializer.Serialize(writer, BackendHttpSettings);
+                writer.WritePropertyName("backendHttpSettings"u8);
+                ((IJsonModel<WritableSubResource>)BackendHttpSettings).Write(writer, options);
             }
             if (Optional.IsDefined(HttpListener))
             {
-                writer.WritePropertyName("httpListener");
-                JsonSerializer.Serialize(writer, HttpListener);
+                writer.WritePropertyName("httpListener"u8);
+                ((IJsonModel<WritableSubResource>)HttpListener).Write(writer, options);
             }
             if (Optional.IsDefined(UrlPathMap))
             {
-                writer.WritePropertyName("urlPathMap");
-                JsonSerializer.Serialize(writer, UrlPathMap);
+                writer.WritePropertyName("urlPathMap"u8);
+                ((IJsonModel<WritableSubResource>)UrlPathMap).Write(writer, options);
             }
             if (Optional.IsDefined(RewriteRuleSet))
             {
-                writer.WritePropertyName("rewriteRuleSet");
-                JsonSerializer.Serialize(writer, RewriteRuleSet);
+                writer.WritePropertyName("rewriteRuleSet"u8);
+                ((IJsonModel<WritableSubResource>)RewriteRuleSet).Write(writer, options);
             }
             if (Optional.IsDefined(RedirectConfiguration))
             {
-                writer.WritePropertyName("redirectConfiguration");
-                JsonSerializer.Serialize(writer, RedirectConfiguration);
+                writer.WritePropertyName("redirectConfiguration"u8);
+                ((IJsonModel<WritableSubResource>)RedirectConfiguration).Write(writer, options);
             }
-            writer.WriteEndObject();
+            if (Optional.IsDefined(LoadDistributionPolicy))
+            {
+                writer.WritePropertyName("loadDistributionPolicy"u8);
+                ((IJsonModel<WritableSubResource>)LoadDistributionPolicy).Write(writer, options);
+            }
+            if (options.Format != "W" && Optional.IsDefined(ProvisioningState))
+            {
+                writer.WritePropertyName("provisioningState"u8);
+                writer.WriteStringValue(ProvisioningState.Value.ToString());
+            }
             writer.WriteEndObject();
         }
 
-        internal static ApplicationGatewayRequestRoutingRule DeserializeApplicationGatewayRequestRoutingRule(JsonElement element)
+        ApplicationGatewayRequestRoutingRule IJsonModel<ApplicationGatewayRequestRoutingRule>.Create(ref Utf8JsonReader reader, ModelReaderWriterOptions options)
         {
-            Optional<string> name = default;
-            Optional<string> etag = default;
-            Optional<string> type = default;
-            Optional<string> id = default;
-            Optional<ApplicationGatewayRequestRoutingRuleType> ruleType = default;
-            Optional<int> priority = default;
-            Optional<WritableSubResource> backendAddressPool = default;
-            Optional<WritableSubResource> backendHttpSettings = default;
-            Optional<WritableSubResource> httpListener = default;
-            Optional<WritableSubResource> urlPathMap = default;
-            Optional<WritableSubResource> rewriteRuleSet = default;
-            Optional<WritableSubResource> redirectConfiguration = default;
-            Optional<ProvisioningState> provisioningState = default;
+            var format = options.Format == "W" ? ((IPersistableModel<ApplicationGatewayRequestRoutingRule>)this).GetFormatFromOptions(options) : options.Format;
+            if (format != "J")
+            {
+                throw new FormatException($"The model {nameof(ApplicationGatewayRequestRoutingRule)} does not support reading '{format}' format.");
+            }
+
+            using JsonDocument document = JsonDocument.ParseValue(ref reader);
+            return DeserializeApplicationGatewayRequestRoutingRule(document.RootElement, options);
+        }
+
+        internal static ApplicationGatewayRequestRoutingRule DeserializeApplicationGatewayRequestRoutingRule(JsonElement element, ModelReaderWriterOptions options = null)
+        {
+            options ??= ModelSerializationExtensions.WireOptions;
+
+            if (element.ValueKind == JsonValueKind.Null)
+            {
+                return null;
+            }
+            ETag? etag = default;
+            ResourceIdentifier id = default;
+            string name = default;
+            ResourceType? type = default;
+            ApplicationGatewayRequestRoutingRuleType? ruleType = default;
+            int? priority = default;
+            WritableSubResource backendAddressPool = default;
+            WritableSubResource backendHttpSettings = default;
+            WritableSubResource httpListener = default;
+            WritableSubResource urlPathMap = default;
+            WritableSubResource rewriteRuleSet = default;
+            WritableSubResource redirectConfiguration = default;
+            WritableSubResource loadDistributionPolicy = default;
+            NetworkProvisioningState? provisioningState = default;
+            IDictionary<string, BinaryData> serializedAdditionalRawData = default;
+            Dictionary<string, BinaryData> rawDataDictionary = new Dictionary<string, BinaryData>();
             foreach (var property in element.EnumerateObject())
             {
-                if (property.NameEquals("name"))
+                if (property.NameEquals("etag"u8))
+                {
+                    if (property.Value.ValueKind == JsonValueKind.Null)
+                    {
+                        continue;
+                    }
+                    etag = new ETag(property.Value.GetString());
+                    continue;
+                }
+                if (property.NameEquals("id"u8))
+                {
+                    if (property.Value.ValueKind == JsonValueKind.Null)
+                    {
+                        continue;
+                    }
+                    id = new ResourceIdentifier(property.Value.GetString());
+                    continue;
+                }
+                if (property.NameEquals("name"u8))
                 {
                     name = property.Value.GetString();
                     continue;
                 }
-                if (property.NameEquals("etag"))
+                if (property.NameEquals("type"u8))
                 {
-                    etag = property.Value.GetString();
+                    if (property.Value.ValueKind == JsonValueKind.Null)
+                    {
+                        continue;
+                    }
+                    type = new ResourceType(property.Value.GetString());
                     continue;
                 }
-                if (property.NameEquals("type"))
-                {
-                    type = property.Value.GetString();
-                    continue;
-                }
-                if (property.NameEquals("id"))
-                {
-                    id = property.Value.GetString();
-                    continue;
-                }
-                if (property.NameEquals("properties"))
+                if (property.NameEquals("properties"u8))
                 {
                     if (property.Value.ValueKind == JsonValueKind.Null)
                     {
@@ -118,101 +176,152 @@ namespace Azure.ResourceManager.Network.Models
                     }
                     foreach (var property0 in property.Value.EnumerateObject())
                     {
-                        if (property0.NameEquals("ruleType"))
+                        if (property0.NameEquals("ruleType"u8))
                         {
                             if (property0.Value.ValueKind == JsonValueKind.Null)
                             {
-                                property0.ThrowNonNullablePropertyIsNull();
                                 continue;
                             }
                             ruleType = new ApplicationGatewayRequestRoutingRuleType(property0.Value.GetString());
                             continue;
                         }
-                        if (property0.NameEquals("priority"))
+                        if (property0.NameEquals("priority"u8))
                         {
                             if (property0.Value.ValueKind == JsonValueKind.Null)
                             {
-                                property0.ThrowNonNullablePropertyIsNull();
                                 continue;
                             }
                             priority = property0.Value.GetInt32();
                             continue;
                         }
-                        if (property0.NameEquals("backendAddressPool"))
+                        if (property0.NameEquals("backendAddressPool"u8))
                         {
                             if (property0.Value.ValueKind == JsonValueKind.Null)
                             {
-                                property0.ThrowNonNullablePropertyIsNull();
                                 continue;
                             }
-                            backendAddressPool = JsonSerializer.Deserialize<WritableSubResource>(property0.Value.ToString());
+                            backendAddressPool = ModelReaderWriter.Read<WritableSubResource>(new BinaryData(Encoding.UTF8.GetBytes(property0.Value.GetRawText())), options, AzureResourceManagerNetworkContext.Default);
                             continue;
                         }
-                        if (property0.NameEquals("backendHttpSettings"))
+                        if (property0.NameEquals("backendHttpSettings"u8))
                         {
                             if (property0.Value.ValueKind == JsonValueKind.Null)
                             {
-                                property0.ThrowNonNullablePropertyIsNull();
                                 continue;
                             }
-                            backendHttpSettings = JsonSerializer.Deserialize<WritableSubResource>(property0.Value.ToString());
+                            backendHttpSettings = ModelReaderWriter.Read<WritableSubResource>(new BinaryData(Encoding.UTF8.GetBytes(property0.Value.GetRawText())), options, AzureResourceManagerNetworkContext.Default);
                             continue;
                         }
-                        if (property0.NameEquals("httpListener"))
+                        if (property0.NameEquals("httpListener"u8))
                         {
                             if (property0.Value.ValueKind == JsonValueKind.Null)
                             {
-                                property0.ThrowNonNullablePropertyIsNull();
                                 continue;
                             }
-                            httpListener = JsonSerializer.Deserialize<WritableSubResource>(property0.Value.ToString());
+                            httpListener = ModelReaderWriter.Read<WritableSubResource>(new BinaryData(Encoding.UTF8.GetBytes(property0.Value.GetRawText())), options, AzureResourceManagerNetworkContext.Default);
                             continue;
                         }
-                        if (property0.NameEquals("urlPathMap"))
+                        if (property0.NameEquals("urlPathMap"u8))
                         {
                             if (property0.Value.ValueKind == JsonValueKind.Null)
                             {
-                                property0.ThrowNonNullablePropertyIsNull();
                                 continue;
                             }
-                            urlPathMap = JsonSerializer.Deserialize<WritableSubResource>(property0.Value.ToString());
+                            urlPathMap = ModelReaderWriter.Read<WritableSubResource>(new BinaryData(Encoding.UTF8.GetBytes(property0.Value.GetRawText())), options, AzureResourceManagerNetworkContext.Default);
                             continue;
                         }
-                        if (property0.NameEquals("rewriteRuleSet"))
+                        if (property0.NameEquals("rewriteRuleSet"u8))
                         {
                             if (property0.Value.ValueKind == JsonValueKind.Null)
                             {
-                                property0.ThrowNonNullablePropertyIsNull();
                                 continue;
                             }
-                            rewriteRuleSet = JsonSerializer.Deserialize<WritableSubResource>(property0.Value.ToString());
+                            rewriteRuleSet = ModelReaderWriter.Read<WritableSubResource>(new BinaryData(Encoding.UTF8.GetBytes(property0.Value.GetRawText())), options, AzureResourceManagerNetworkContext.Default);
                             continue;
                         }
-                        if (property0.NameEquals("redirectConfiguration"))
+                        if (property0.NameEquals("redirectConfiguration"u8))
                         {
                             if (property0.Value.ValueKind == JsonValueKind.Null)
                             {
-                                property0.ThrowNonNullablePropertyIsNull();
                                 continue;
                             }
-                            redirectConfiguration = JsonSerializer.Deserialize<WritableSubResource>(property0.Value.ToString());
+                            redirectConfiguration = ModelReaderWriter.Read<WritableSubResource>(new BinaryData(Encoding.UTF8.GetBytes(property0.Value.GetRawText())), options, AzureResourceManagerNetworkContext.Default);
                             continue;
                         }
-                        if (property0.NameEquals("provisioningState"))
+                        if (property0.NameEquals("loadDistributionPolicy"u8))
                         {
                             if (property0.Value.ValueKind == JsonValueKind.Null)
                             {
-                                property0.ThrowNonNullablePropertyIsNull();
                                 continue;
                             }
-                            provisioningState = new ProvisioningState(property0.Value.GetString());
+                            loadDistributionPolicy = ModelReaderWriter.Read<WritableSubResource>(new BinaryData(Encoding.UTF8.GetBytes(property0.Value.GetRawText())), options, AzureResourceManagerNetworkContext.Default);
+                            continue;
+                        }
+                        if (property0.NameEquals("provisioningState"u8))
+                        {
+                            if (property0.Value.ValueKind == JsonValueKind.Null)
+                            {
+                                continue;
+                            }
+                            provisioningState = new NetworkProvisioningState(property0.Value.GetString());
                             continue;
                         }
                     }
                     continue;
                 }
+                if (options.Format != "W")
+                {
+                    rawDataDictionary.Add(property.Name, BinaryData.FromString(property.Value.GetRawText()));
+                }
             }
-            return new ApplicationGatewayRequestRoutingRule(id.Value, name.Value, etag.Value, type.Value, Optional.ToNullable(ruleType), Optional.ToNullable(priority), backendAddressPool, backendHttpSettings, httpListener, urlPathMap, rewriteRuleSet, redirectConfiguration, Optional.ToNullable(provisioningState));
+            serializedAdditionalRawData = rawDataDictionary;
+            return new ApplicationGatewayRequestRoutingRule(
+                id,
+                name,
+                type,
+                serializedAdditionalRawData,
+                etag,
+                ruleType,
+                priority,
+                backendAddressPool,
+                backendHttpSettings,
+                httpListener,
+                urlPathMap,
+                rewriteRuleSet,
+                redirectConfiguration,
+                loadDistributionPolicy,
+                provisioningState);
         }
+
+        BinaryData IPersistableModel<ApplicationGatewayRequestRoutingRule>.Write(ModelReaderWriterOptions options)
+        {
+            var format = options.Format == "W" ? ((IPersistableModel<ApplicationGatewayRequestRoutingRule>)this).GetFormatFromOptions(options) : options.Format;
+
+            switch (format)
+            {
+                case "J":
+                    return ModelReaderWriter.Write(this, options, AzureResourceManagerNetworkContext.Default);
+                default:
+                    throw new FormatException($"The model {nameof(ApplicationGatewayRequestRoutingRule)} does not support writing '{options.Format}' format.");
+            }
+        }
+
+        ApplicationGatewayRequestRoutingRule IPersistableModel<ApplicationGatewayRequestRoutingRule>.Create(BinaryData data, ModelReaderWriterOptions options)
+        {
+            var format = options.Format == "W" ? ((IPersistableModel<ApplicationGatewayRequestRoutingRule>)this).GetFormatFromOptions(options) : options.Format;
+
+            switch (format)
+            {
+                case "J":
+                    {
+                        using JsonDocument document = JsonDocument.Parse(data, ModelSerializationExtensions.JsonDocumentOptions);
+                        return DeserializeApplicationGatewayRequestRoutingRule(document.RootElement, options);
+                    }
+                default:
+                    throw new FormatException($"The model {nameof(ApplicationGatewayRequestRoutingRule)} does not support reading '{options.Format}' format.");
+            }
+        }
+
+        string IPersistableModel<ApplicationGatewayRequestRoutingRule>.GetFormatFromOptions(ModelReaderWriterOptions options) => "J";
     }
 }

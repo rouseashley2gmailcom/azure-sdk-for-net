@@ -1,7 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-#if NET5_0
+#if NET5_0_OR_GREATER
 
 using System;
 using System.Collections.Generic;
@@ -39,7 +39,7 @@ namespace Azure.Core.Tests
             try
             {
                 List<EventWrittenEventArgs> events = new();
-                using var listener = new AzureEventSourceListener((args, s) => events.Add(args), EventLevel.Verbose);
+                using var listener = new AzureEventSourceListener(events.Add, EventLevel.Verbose);
 
                 alc.LoadFromAssemblyPath(typeof(TestEventSource).Assembly.Location);
                 alc2.LoadFromAssemblyPath(typeof(TestEventSource).Assembly.Location);

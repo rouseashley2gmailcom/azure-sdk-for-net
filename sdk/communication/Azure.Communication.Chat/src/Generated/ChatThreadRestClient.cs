@@ -11,8 +11,6 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Azure;
-using Azure.Communication;
 using Azure.Core;
 using Azure.Core.Pipeline;
 
@@ -20,23 +18,25 @@ namespace Azure.Communication.Chat
 {
     internal partial class ChatThreadRestClient
     {
-        private string endpoint;
-        private string apiVersion;
-        private ClientDiagnostics _clientDiagnostics;
-        private HttpPipeline _pipeline;
+        private readonly HttpPipeline _pipeline;
+        private readonly string _endpoint;
+        private readonly string _apiVersion;
+
+        /// <summary> The ClientDiagnostics is used to provide tracing support for the client library. </summary>
+        internal ClientDiagnostics ClientDiagnostics { get; }
 
         /// <summary> Initializes a new instance of ChatThreadRestClient. </summary>
         /// <param name="clientDiagnostics"> The handler for diagnostic messaging in the client. </param>
         /// <param name="pipeline"> The HTTP pipeline for sending and receiving REST requests and responses. </param>
         /// <param name="endpoint"> The endpoint of the Azure Communication resource. </param>
         /// <param name="apiVersion"> Api Version. </param>
-        /// <exception cref="ArgumentNullException"> <paramref name="endpoint"/> or <paramref name="apiVersion"/> is null. </exception>
-        public ChatThreadRestClient(ClientDiagnostics clientDiagnostics, HttpPipeline pipeline, string endpoint, string apiVersion = "2021-09-07")
+        /// <exception cref="ArgumentNullException"> <paramref name="clientDiagnostics"/>, <paramref name="pipeline"/>, <paramref name="endpoint"/> or <paramref name="apiVersion"/> is null. </exception>
+        public ChatThreadRestClient(ClientDiagnostics clientDiagnostics, HttpPipeline pipeline, string endpoint, string apiVersion = "2025-03-15")
         {
-            this.endpoint = endpoint ?? throw new ArgumentNullException(nameof(endpoint));
-            this.apiVersion = apiVersion ?? throw new ArgumentNullException(nameof(apiVersion));
-            _clientDiagnostics = clientDiagnostics;
-            _pipeline = pipeline;
+            ClientDiagnostics = clientDiagnostics ?? throw new ArgumentNullException(nameof(clientDiagnostics));
+            _pipeline = pipeline ?? throw new ArgumentNullException(nameof(pipeline));
+            _endpoint = endpoint ?? throw new ArgumentNullException(nameof(endpoint));
+            _apiVersion = apiVersion ?? throw new ArgumentNullException(nameof(apiVersion));
         }
 
         internal HttpMessage CreateListChatReadReceiptsRequest(string chatThreadId, int? maxPageSize, int? skip)
@@ -45,7 +45,7 @@ namespace Azure.Communication.Chat
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendPath("/chat/threads/", false);
             uri.AppendPath(chatThreadId, true);
             uri.AppendPath("/readReceipts", false);
@@ -57,7 +57,7 @@ namespace Azure.Communication.Chat
             {
                 uri.AppendQuery("skip", skip.Value, true);
             }
-            uri.AppendQuery("api-version", apiVersion, true);
+            uri.AppendQuery("api-version", _apiVersion, true);
             request.Uri = uri;
             request.Headers.Add("Accept", "application/json");
             return message;
@@ -83,12 +83,12 @@ namespace Azure.Communication.Chat
                 case 200:
                     {
                         ChatMessageReadReceiptsCollection value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = ChatMessageReadReceiptsCollection.DeserializeChatMessageReadReceiptsCollection(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -112,12 +112,12 @@ namespace Azure.Communication.Chat
                 case 200:
                     {
                         ChatMessageReadReceiptsCollection value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = ChatMessageReadReceiptsCollection.DeserializeChatMessageReadReceiptsCollection(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -127,11 +127,11 @@ namespace Azure.Communication.Chat
             var request = message.Request;
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendPath("/chat/threads/", false);
             uri.AppendPath(chatThreadId, true);
             uri.AppendPath("/readReceipts", false);
-            uri.AppendQuery("api-version", apiVersion, true);
+            uri.AppendQuery("api-version", _apiVersion, true);
             request.Uri = uri;
             request.Headers.Add("Accept", "application/json");
             request.Headers.Add("Content-Type", "application/json");
@@ -165,7 +165,7 @@ namespace Azure.Communication.Chat
                 case 200:
                     return message.Response;
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -192,7 +192,7 @@ namespace Azure.Communication.Chat
                 case 200:
                     return message.Response;
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -202,11 +202,11 @@ namespace Azure.Communication.Chat
             var request = message.Request;
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendPath("/chat/threads/", false);
             uri.AppendPath(chatThreadId, true);
             uri.AppendPath("/messages", false);
-            uri.AppendQuery("api-version", apiVersion, true);
+            uri.AppendQuery("api-version", _apiVersion, true);
             request.Uri = uri;
             request.Headers.Add("Accept", "application/json");
             request.Headers.Add("Content-Type", "application/json");
@@ -255,12 +255,12 @@ namespace Azure.Communication.Chat
                 case 201:
                     {
                         SendChatMessageResultInternal value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = SendChatMessageResultInternal.DeserializeSendChatMessageResultInternal(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -290,12 +290,12 @@ namespace Azure.Communication.Chat
                 case 201:
                     {
                         SendChatMessageResultInternal value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = SendChatMessageResultInternal.DeserializeSendChatMessageResultInternal(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -305,7 +305,7 @@ namespace Azure.Communication.Chat
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendPath("/chat/threads/", false);
             uri.AppendPath(chatThreadId, true);
             uri.AppendPath("/messages", false);
@@ -317,7 +317,7 @@ namespace Azure.Communication.Chat
             {
                 uri.AppendQuery("startTime", startTime.Value, "O", true);
             }
-            uri.AppendQuery("api-version", apiVersion, true);
+            uri.AppendQuery("api-version", _apiVersion, true);
             request.Uri = uri;
             request.Headers.Add("Accept", "application/json");
             return message;
@@ -326,7 +326,7 @@ namespace Azure.Communication.Chat
         /// <summary> Gets a list of messages from a thread. </summary>
         /// <param name="chatThreadId"> The thread id of the message. </param>
         /// <param name="maxPageSize"> The maximum number of messages to be returned per page. </param>
-        /// <param name="startTime"> The earliest point in time to get messages up to. The timestamp should be in RFC3339 format: `yyyy-MM-ddTHH:mm:ssZ`. </param>
+        /// <param name="startTime"> The earliest point in time to get messages after. The timestamp should be in RFC3339 format: `yyyy-MM-ddTHH:mm:ssZ`. </param>
         /// <param name="cancellationToken"> The cancellation token to use. </param>
         /// <exception cref="ArgumentNullException"> <paramref name="chatThreadId"/> is null. </exception>
         public async Task<Response<ChatMessagesCollection>> ListChatMessagesAsync(string chatThreadId, int? maxPageSize = null, DateTimeOffset? startTime = null, CancellationToken cancellationToken = default)
@@ -343,19 +343,19 @@ namespace Azure.Communication.Chat
                 case 200:
                     {
                         ChatMessagesCollection value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = ChatMessagesCollection.DeserializeChatMessagesCollection(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
         /// <summary> Gets a list of messages from a thread. </summary>
         /// <param name="chatThreadId"> The thread id of the message. </param>
         /// <param name="maxPageSize"> The maximum number of messages to be returned per page. </param>
-        /// <param name="startTime"> The earliest point in time to get messages up to. The timestamp should be in RFC3339 format: `yyyy-MM-ddTHH:mm:ssZ`. </param>
+        /// <param name="startTime"> The earliest point in time to get messages after. The timestamp should be in RFC3339 format: `yyyy-MM-ddTHH:mm:ssZ`. </param>
         /// <param name="cancellationToken"> The cancellation token to use. </param>
         /// <exception cref="ArgumentNullException"> <paramref name="chatThreadId"/> is null. </exception>
         public Response<ChatMessagesCollection> ListChatMessages(string chatThreadId, int? maxPageSize = null, DateTimeOffset? startTime = null, CancellationToken cancellationToken = default)
@@ -372,12 +372,12 @@ namespace Azure.Communication.Chat
                 case 200:
                     {
                         ChatMessagesCollection value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = ChatMessagesCollection.DeserializeChatMessagesCollection(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -387,12 +387,12 @@ namespace Azure.Communication.Chat
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendPath("/chat/threads/", false);
             uri.AppendPath(chatThreadId, true);
             uri.AppendPath("/messages/", false);
             uri.AppendPath(chatMessageId, true);
-            uri.AppendQuery("api-version", apiVersion, true);
+            uri.AppendQuery("api-version", _apiVersion, true);
             request.Uri = uri;
             request.Headers.Add("Accept", "application/json");
             return message;
@@ -421,12 +421,12 @@ namespace Azure.Communication.Chat
                 case 200:
                     {
                         ChatMessageInternal value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = ChatMessageInternal.DeserializeChatMessageInternal(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -453,12 +453,12 @@ namespace Azure.Communication.Chat
                 case 200:
                     {
                         ChatMessageInternal value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = ChatMessageInternal.DeserializeChatMessageInternal(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -468,12 +468,12 @@ namespace Azure.Communication.Chat
             var request = message.Request;
             request.Method = RequestMethod.Patch;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendPath("/chat/threads/", false);
             uri.AppendPath(chatThreadId, true);
             uri.AppendPath("/messages/", false);
             uri.AppendPath(chatMessageId, true);
-            uri.AppendQuery("api-version", apiVersion, true);
+            uri.AppendQuery("api-version", _apiVersion, true);
             request.Uri = uri;
             request.Headers.Add("Accept", "application/json");
             request.Headers.Add("Content-Type", "application/merge-patch+json");
@@ -520,7 +520,7 @@ namespace Azure.Communication.Chat
                 case 204:
                     return message.Response;
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -549,7 +549,7 @@ namespace Azure.Communication.Chat
                 case 204:
                     return message.Response;
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -559,12 +559,12 @@ namespace Azure.Communication.Chat
             var request = message.Request;
             request.Method = RequestMethod.Delete;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendPath("/chat/threads/", false);
             uri.AppendPath(chatThreadId, true);
             uri.AppendPath("/messages/", false);
             uri.AppendPath(chatMessageId, true);
-            uri.AppendQuery("api-version", apiVersion, true);
+            uri.AppendQuery("api-version", _apiVersion, true);
             request.Uri = uri;
             request.Headers.Add("Accept", "application/json");
             return message;
@@ -593,7 +593,7 @@ namespace Azure.Communication.Chat
                 case 204:
                     return message.Response;
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -620,7 +620,7 @@ namespace Azure.Communication.Chat
                 case 204:
                     return message.Response;
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -630,7 +630,7 @@ namespace Azure.Communication.Chat
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendPath("/chat/threads/", false);
             uri.AppendPath(chatThreadId, true);
             uri.AppendPath("/participants", false);
@@ -642,7 +642,7 @@ namespace Azure.Communication.Chat
             {
                 uri.AppendQuery("skip", skip.Value, true);
             }
-            uri.AppendQuery("api-version", apiVersion, true);
+            uri.AppendQuery("api-version", _apiVersion, true);
             request.Uri = uri;
             request.Headers.Add("Accept", "application/json");
             return message;
@@ -668,12 +668,12 @@ namespace Azure.Communication.Chat
                 case 200:
                     {
                         ChatParticipantsCollection value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = ChatParticipantsCollection.DeserializeChatParticipantsCollection(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -697,35 +697,37 @@ namespace Azure.Communication.Chat
                 case 200:
                     {
                         ChatParticipantsCollection value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = ChatParticipantsCollection.DeserializeChatParticipantsCollection(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
-        internal HttpMessage CreateRemoveChatParticipantRequest(string chatThreadId, string rawId, CommunicationUserIdentifierModel communicationUser, PhoneNumberIdentifierModel phoneNumber, MicrosoftTeamsUserIdentifierModel microsoftTeamsUser)
+        internal HttpMessage CreateRemoveChatParticipantRequest(string chatThreadId, CommunicationIdentifierModelKind? kind, string rawId, CommunicationUserIdentifierModel communicationUser, PhoneNumberIdentifierModel phoneNumber, MicrosoftTeamsUserIdentifierModel microsoftTeamsUser, MicrosoftTeamsAppIdentifierModel microsoftTeamsApp)
         {
             var message = _pipeline.CreateMessage();
             var request = message.Request;
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendPath("/chat/threads/", false);
             uri.AppendPath(chatThreadId, true);
             uri.AppendPath("/participants/:remove", false);
-            uri.AppendQuery("api-version", apiVersion, true);
+            uri.AppendQuery("api-version", _apiVersion, true);
             request.Uri = uri;
             request.Headers.Add("Accept", "application/json");
             request.Headers.Add("Content-Type", "application/json");
             var model = new CommunicationIdentifierModel()
             {
+                Kind = kind,
                 RawId = rawId,
                 CommunicationUser = communicationUser,
                 PhoneNumber = phoneNumber,
-                MicrosoftTeamsUser = microsoftTeamsUser
+                MicrosoftTeamsUser = microsoftTeamsUser,
+                MicrosoftTeamsApp = microsoftTeamsApp
             };
             var content = new Utf8JsonRequestContent();
             content.JsonWriter.WriteObjectValue(model);
@@ -735,53 +737,57 @@ namespace Azure.Communication.Chat
 
         /// <summary> Remove a participant from a thread. </summary>
         /// <param name="chatThreadId"> Thread id to remove the participant from. </param>
+        /// <param name="kind"> The identifier kind. Only required in responses. </param>
         /// <param name="rawId"> Raw Id of the identifier. Optional in requests, required in responses. </param>
         /// <param name="communicationUser"> The communication user. </param>
         /// <param name="phoneNumber"> The phone number. </param>
         /// <param name="microsoftTeamsUser"> The Microsoft Teams user. </param>
+        /// <param name="microsoftTeamsApp"> The Microsoft Teams application. </param>
         /// <param name="cancellationToken"> The cancellation token to use. </param>
         /// <exception cref="ArgumentNullException"> <paramref name="chatThreadId"/> is null. </exception>
-        public async Task<Response> RemoveChatParticipantAsync(string chatThreadId, string rawId = null, CommunicationUserIdentifierModel communicationUser = null, PhoneNumberIdentifierModel phoneNumber = null, MicrosoftTeamsUserIdentifierModel microsoftTeamsUser = null, CancellationToken cancellationToken = default)
+        public async Task<Response> RemoveChatParticipantAsync(string chatThreadId, CommunicationIdentifierModelKind? kind = null, string rawId = null, CommunicationUserIdentifierModel communicationUser = null, PhoneNumberIdentifierModel phoneNumber = null, MicrosoftTeamsUserIdentifierModel microsoftTeamsUser = null, MicrosoftTeamsAppIdentifierModel microsoftTeamsApp = null, CancellationToken cancellationToken = default)
         {
             if (chatThreadId == null)
             {
                 throw new ArgumentNullException(nameof(chatThreadId));
             }
 
-            using var message = CreateRemoveChatParticipantRequest(chatThreadId, rawId, communicationUser, phoneNumber, microsoftTeamsUser);
+            using var message = CreateRemoveChatParticipantRequest(chatThreadId, kind, rawId, communicationUser, phoneNumber, microsoftTeamsUser, microsoftTeamsApp);
             await _pipeline.SendAsync(message, cancellationToken).ConfigureAwait(false);
             switch (message.Response.Status)
             {
                 case 204:
                     return message.Response;
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
         /// <summary> Remove a participant from a thread. </summary>
         /// <param name="chatThreadId"> Thread id to remove the participant from. </param>
+        /// <param name="kind"> The identifier kind. Only required in responses. </param>
         /// <param name="rawId"> Raw Id of the identifier. Optional in requests, required in responses. </param>
         /// <param name="communicationUser"> The communication user. </param>
         /// <param name="phoneNumber"> The phone number. </param>
         /// <param name="microsoftTeamsUser"> The Microsoft Teams user. </param>
+        /// <param name="microsoftTeamsApp"> The Microsoft Teams application. </param>
         /// <param name="cancellationToken"> The cancellation token to use. </param>
         /// <exception cref="ArgumentNullException"> <paramref name="chatThreadId"/> is null. </exception>
-        public Response RemoveChatParticipant(string chatThreadId, string rawId = null, CommunicationUserIdentifierModel communicationUser = null, PhoneNumberIdentifierModel phoneNumber = null, MicrosoftTeamsUserIdentifierModel microsoftTeamsUser = null, CancellationToken cancellationToken = default)
+        public Response RemoveChatParticipant(string chatThreadId, CommunicationIdentifierModelKind? kind = null, string rawId = null, CommunicationUserIdentifierModel communicationUser = null, PhoneNumberIdentifierModel phoneNumber = null, MicrosoftTeamsUserIdentifierModel microsoftTeamsUser = null, MicrosoftTeamsAppIdentifierModel microsoftTeamsApp = null, CancellationToken cancellationToken = default)
         {
             if (chatThreadId == null)
             {
                 throw new ArgumentNullException(nameof(chatThreadId));
             }
 
-            using var message = CreateRemoveChatParticipantRequest(chatThreadId, rawId, communicationUser, phoneNumber, microsoftTeamsUser);
+            using var message = CreateRemoveChatParticipantRequest(chatThreadId, kind, rawId, communicationUser, phoneNumber, microsoftTeamsUser, microsoftTeamsApp);
             _pipeline.Send(message, cancellationToken);
             switch (message.Response.Status)
             {
                 case 204:
                     return message.Response;
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -791,11 +797,11 @@ namespace Azure.Communication.Chat
             var request = message.Request;
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendPath("/chat/threads/", false);
             uri.AppendPath(chatThreadId, true);
             uri.AppendPath("/participants/:add", false);
-            uri.AppendQuery("api-version", apiVersion, true);
+            uri.AppendQuery("api-version", _apiVersion, true);
             request.Uri = uri;
             request.Headers.Add("Accept", "application/json");
             request.Headers.Add("Content-Type", "application/json");
@@ -829,12 +835,12 @@ namespace Azure.Communication.Chat
                 case 201:
                     {
                         AddChatParticipantsResult value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = AddChatParticipantsResult.DeserializeAddChatParticipantsResult(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -861,81 +867,94 @@ namespace Azure.Communication.Chat
                 case 201:
                     {
                         AddChatParticipantsResult value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = AddChatParticipantsResult.DeserializeAddChatParticipantsResult(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
-        internal HttpMessage CreateUpdateChatThreadPropertiesRequest(string chatThreadId, string topic)
+        internal HttpMessage CreateUpdateChatThreadPropertiesRequest(string chatThreadId, string topic, IDictionary<string, string> metadata, ChatRetentionPolicyInternal retentionPolicy)
         {
             var message = _pipeline.CreateMessage();
             var request = message.Request;
             request.Method = RequestMethod.Patch;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendPath("/chat/threads/", false);
             uri.AppendPath(chatThreadId, true);
-            uri.AppendQuery("api-version", apiVersion, true);
+            uri.AppendQuery("api-version", _apiVersion, true);
             request.Uri = uri;
             request.Headers.Add("Accept", "application/json");
             request.Headers.Add("Content-Type", "application/merge-patch+json");
-            var model = new UpdateChatThreadRequest()
+            UpdateChatThreadRequest updateChatThreadRequest = new UpdateChatThreadRequest()
             {
-                Topic = topic
+                Topic = topic,
+                RetentionPolicy = retentionPolicy
             };
+            if (metadata != null)
+            {
+                foreach (var value in metadata)
+                {
+                    updateChatThreadRequest.Metadata.Add(value);
+                }
+            }
+            var model = updateChatThreadRequest;
             var content = new Utf8JsonRequestContent();
             content.JsonWriter.WriteObjectValue(model);
             request.Content = content;
             return message;
         }
 
-        /// <summary> Updates a thread&apos;s properties. </summary>
+        /// <summary> Updates a thread's properties. </summary>
         /// <param name="chatThreadId"> The id of the thread to update. </param>
         /// <param name="topic"> Chat thread topic. </param>
+        /// <param name="metadata"> Contextual metadata for the thread. The metadata consists of name/value pairs. The total size of all metadata pairs can be up to 1KB in size. </param>
+        /// <param name="retentionPolicy"> Data retention policy for auto deletion. </param>
         /// <param name="cancellationToken"> The cancellation token to use. </param>
         /// <exception cref="ArgumentNullException"> <paramref name="chatThreadId"/> is null. </exception>
-        public async Task<Response> UpdateChatThreadPropertiesAsync(string chatThreadId, string topic = null, CancellationToken cancellationToken = default)
+        public async Task<Response> UpdateChatThreadPropertiesAsync(string chatThreadId, string topic = null, IDictionary<string, string> metadata = null, ChatRetentionPolicyInternal retentionPolicy = null, CancellationToken cancellationToken = default)
         {
             if (chatThreadId == null)
             {
                 throw new ArgumentNullException(nameof(chatThreadId));
             }
 
-            using var message = CreateUpdateChatThreadPropertiesRequest(chatThreadId, topic);
+            using var message = CreateUpdateChatThreadPropertiesRequest(chatThreadId, topic, metadata, retentionPolicy);
             await _pipeline.SendAsync(message, cancellationToken).ConfigureAwait(false);
             switch (message.Response.Status)
             {
                 case 204:
                     return message.Response;
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
-        /// <summary> Updates a thread&apos;s properties. </summary>
+        /// <summary> Updates a thread's properties. </summary>
         /// <param name="chatThreadId"> The id of the thread to update. </param>
         /// <param name="topic"> Chat thread topic. </param>
+        /// <param name="metadata"> Contextual metadata for the thread. The metadata consists of name/value pairs. The total size of all metadata pairs can be up to 1KB in size. </param>
+        /// <param name="retentionPolicy"> Data retention policy for auto deletion. </param>
         /// <param name="cancellationToken"> The cancellation token to use. </param>
         /// <exception cref="ArgumentNullException"> <paramref name="chatThreadId"/> is null. </exception>
-        public Response UpdateChatThreadProperties(string chatThreadId, string topic = null, CancellationToken cancellationToken = default)
+        public Response UpdateChatThreadProperties(string chatThreadId, string topic = null, IDictionary<string, string> metadata = null, ChatRetentionPolicyInternal retentionPolicy = null, CancellationToken cancellationToken = default)
         {
             if (chatThreadId == null)
             {
                 throw new ArgumentNullException(nameof(chatThreadId));
             }
 
-            using var message = CreateUpdateChatThreadPropertiesRequest(chatThreadId, topic);
+            using var message = CreateUpdateChatThreadPropertiesRequest(chatThreadId, topic, metadata, retentionPolicy);
             _pipeline.Send(message, cancellationToken);
             switch (message.Response.Status)
             {
                 case 204:
                     return message.Response;
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -945,16 +964,16 @@ namespace Azure.Communication.Chat
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendPath("/chat/threads/", false);
             uri.AppendPath(chatThreadId, true);
-            uri.AppendQuery("api-version", apiVersion, true);
+            uri.AppendQuery("api-version", _apiVersion, true);
             request.Uri = uri;
             request.Headers.Add("Accept", "application/json");
             return message;
         }
 
-        /// <summary> Gets a chat thread&apos;s properties. </summary>
+        /// <summary> Gets a chat thread's properties. </summary>
         /// <param name="chatThreadId"> Id of the thread. </param>
         /// <param name="cancellationToken"> The cancellation token to use. </param>
         /// <exception cref="ArgumentNullException"> <paramref name="chatThreadId"/> is null. </exception>
@@ -972,16 +991,16 @@ namespace Azure.Communication.Chat
                 case 200:
                     {
                         ChatThreadPropertiesInternal value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = ChatThreadPropertiesInternal.DeserializeChatThreadPropertiesInternal(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
-        /// <summary> Gets a chat thread&apos;s properties. </summary>
+        /// <summary> Gets a chat thread's properties. </summary>
         /// <param name="chatThreadId"> Id of the thread. </param>
         /// <param name="cancellationToken"> The cancellation token to use. </param>
         /// <exception cref="ArgumentNullException"> <paramref name="chatThreadId"/> is null. </exception>
@@ -999,12 +1018,12 @@ namespace Azure.Communication.Chat
                 case 200:
                     {
                         ChatThreadPropertiesInternal value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = ChatThreadPropertiesInternal.DeserializeChatThreadPropertiesInternal(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1014,11 +1033,11 @@ namespace Azure.Communication.Chat
             var request = message.Request;
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendPath("/chat/threads/", false);
             uri.AppendPath(chatThreadId, true);
             uri.AppendPath("/typing", false);
-            uri.AppendQuery("api-version", apiVersion, true);
+            uri.AppendQuery("api-version", _apiVersion, true);
             request.Uri = uri;
             request.Headers.Add("Accept", "application/json");
             request.Headers.Add("Content-Type", "application/json");
@@ -1051,7 +1070,7 @@ namespace Azure.Communication.Chat
                 case 200:
                     return message.Response;
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1074,7 +1093,7 @@ namespace Azure.Communication.Chat
                 case 200:
                     return message.Response;
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1084,7 +1103,7 @@ namespace Azure.Communication.Chat
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRawNextLink(nextLink, false);
             request.Uri = uri;
             request.Headers.Add("Accept", "application/json");
@@ -1116,12 +1135,12 @@ namespace Azure.Communication.Chat
                 case 200:
                     {
                         ChatMessageReadReceiptsCollection value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = ChatMessageReadReceiptsCollection.DeserializeChatMessageReadReceiptsCollection(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1150,12 +1169,12 @@ namespace Azure.Communication.Chat
                 case 200:
                     {
                         ChatMessageReadReceiptsCollection value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = ChatMessageReadReceiptsCollection.DeserializeChatMessageReadReceiptsCollection(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1165,7 +1184,7 @@ namespace Azure.Communication.Chat
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRawNextLink(nextLink, false);
             request.Uri = uri;
             request.Headers.Add("Accept", "application/json");
@@ -1176,7 +1195,7 @@ namespace Azure.Communication.Chat
         /// <param name="nextLink"> The URL to the next page of results. </param>
         /// <param name="chatThreadId"> The thread id of the message. </param>
         /// <param name="maxPageSize"> The maximum number of messages to be returned per page. </param>
-        /// <param name="startTime"> The earliest point in time to get messages up to. The timestamp should be in RFC3339 format: `yyyy-MM-ddTHH:mm:ssZ`. </param>
+        /// <param name="startTime"> The earliest point in time to get messages after. The timestamp should be in RFC3339 format: `yyyy-MM-ddTHH:mm:ssZ`. </param>
         /// <param name="cancellationToken"> The cancellation token to use. </param>
         /// <exception cref="ArgumentNullException"> <paramref name="nextLink"/> or <paramref name="chatThreadId"/> is null. </exception>
         public async Task<Response<ChatMessagesCollection>> ListChatMessagesNextPageAsync(string nextLink, string chatThreadId, int? maxPageSize = null, DateTimeOffset? startTime = null, CancellationToken cancellationToken = default)
@@ -1197,12 +1216,12 @@ namespace Azure.Communication.Chat
                 case 200:
                     {
                         ChatMessagesCollection value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = ChatMessagesCollection.DeserializeChatMessagesCollection(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1210,7 +1229,7 @@ namespace Azure.Communication.Chat
         /// <param name="nextLink"> The URL to the next page of results. </param>
         /// <param name="chatThreadId"> The thread id of the message. </param>
         /// <param name="maxPageSize"> The maximum number of messages to be returned per page. </param>
-        /// <param name="startTime"> The earliest point in time to get messages up to. The timestamp should be in RFC3339 format: `yyyy-MM-ddTHH:mm:ssZ`. </param>
+        /// <param name="startTime"> The earliest point in time to get messages after. The timestamp should be in RFC3339 format: `yyyy-MM-ddTHH:mm:ssZ`. </param>
         /// <param name="cancellationToken"> The cancellation token to use. </param>
         /// <exception cref="ArgumentNullException"> <paramref name="nextLink"/> or <paramref name="chatThreadId"/> is null. </exception>
         public Response<ChatMessagesCollection> ListChatMessagesNextPage(string nextLink, string chatThreadId, int? maxPageSize = null, DateTimeOffset? startTime = null, CancellationToken cancellationToken = default)
@@ -1231,12 +1250,12 @@ namespace Azure.Communication.Chat
                 case 200:
                     {
                         ChatMessagesCollection value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = ChatMessagesCollection.DeserializeChatMessagesCollection(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1246,7 +1265,7 @@ namespace Azure.Communication.Chat
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(endpoint, false);
+            uri.AppendRaw(_endpoint, false);
             uri.AppendRawNextLink(nextLink, false);
             request.Uri = uri;
             request.Headers.Add("Accept", "application/json");
@@ -1278,12 +1297,12 @@ namespace Azure.Communication.Chat
                 case 200:
                     {
                         ChatParticipantsCollection value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = ChatParticipantsCollection.DeserializeChatParticipantsCollection(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -1312,12 +1331,12 @@ namespace Azure.Communication.Chat
                 case 200:
                     {
                         ChatParticipantsCollection value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = ChatParticipantsCollection.DeserializeChatParticipantsCollection(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
     }

@@ -9,7 +9,6 @@ using System;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Azure;
 using Azure.Core;
 using Azure.Core.Pipeline;
 using Azure.Quantum.Jobs.Models;
@@ -18,12 +17,14 @@ namespace Azure.Quantum.Jobs
 {
     internal partial class ProvidersRestClient
     {
-        private string subscriptionId;
-        private string resourceGroupName;
-        private string workspaceName;
-        private Uri endpoint;
-        private ClientDiagnostics _clientDiagnostics;
-        private HttpPipeline _pipeline;
+        private readonly HttpPipeline _pipeline;
+        private readonly string _subscriptionId;
+        private readonly string _resourceGroupName;
+        private readonly string _workspaceName;
+        private readonly Uri _endpoint;
+
+        /// <summary> The ClientDiagnostics is used to provide tracing support for the client library. </summary>
+        internal ClientDiagnostics ClientDiagnostics { get; }
 
         /// <summary> Initializes a new instance of ProvidersRestClient. </summary>
         /// <param name="clientDiagnostics"> The handler for diagnostic messaging in the client. </param>
@@ -32,15 +33,16 @@ namespace Azure.Quantum.Jobs
         /// <param name="resourceGroupName"> Name of an Azure resource group. </param>
         /// <param name="workspaceName"> Name of the workspace. </param>
         /// <param name="endpoint"> server parameter. </param>
-        /// <exception cref="ArgumentNullException"> <paramref name="subscriptionId"/>, <paramref name="resourceGroupName"/>, or <paramref name="workspaceName"/> is null. </exception>
+        /// <exception cref="ArgumentNullException"> <paramref name="clientDiagnostics"/>, <paramref name="pipeline"/>, <paramref name="subscriptionId"/>, <paramref name="resourceGroupName"/> or <paramref name="workspaceName"/> is null. </exception>
+        /// <exception cref="ArgumentException"> <paramref name="subscriptionId"/>, <paramref name="resourceGroupName"/> or <paramref name="workspaceName"/> is an empty string, and was expected to be non-empty. </exception>
         public ProvidersRestClient(ClientDiagnostics clientDiagnostics, HttpPipeline pipeline, string subscriptionId, string resourceGroupName, string workspaceName, Uri endpoint = null)
         {
-            this.subscriptionId = subscriptionId ?? throw new ArgumentNullException(nameof(subscriptionId));
-            this.resourceGroupName = resourceGroupName ?? throw new ArgumentNullException(nameof(resourceGroupName));
-            this.workspaceName = workspaceName ?? throw new ArgumentNullException(nameof(workspaceName));
-            this.endpoint = endpoint ?? new Uri("https://quantum.azure.com");
-            _clientDiagnostics = clientDiagnostics;
-            _pipeline = pipeline;
+            ClientDiagnostics = clientDiagnostics ?? throw new ArgumentNullException(nameof(clientDiagnostics));
+            _pipeline = pipeline ?? throw new ArgumentNullException(nameof(pipeline));
+            _subscriptionId = subscriptionId ?? throw new ArgumentNullException(nameof(subscriptionId));
+            _resourceGroupName = resourceGroupName ?? throw new ArgumentNullException(nameof(resourceGroupName));
+            _workspaceName = workspaceName ?? throw new ArgumentNullException(nameof(workspaceName));
+            _endpoint = endpoint ?? new Uri("https://quantum.azure.com");
         }
 
         internal HttpMessage CreateGetStatusRequest()
@@ -49,13 +51,13 @@ namespace Azure.Quantum.Jobs
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.Reset(endpoint);
+            uri.Reset(_endpoint);
             uri.AppendPath("/v1.0/subscriptions/", false);
-            uri.AppendPath(subscriptionId, true);
+            uri.AppendPath(_subscriptionId, true);
             uri.AppendPath("/resourceGroups/", false);
-            uri.AppendPath(resourceGroupName, true);
+            uri.AppendPath(_resourceGroupName, true);
             uri.AppendPath("/providers/Microsoft.Quantum/workspaces/", false);
-            uri.AppendPath(workspaceName, true);
+            uri.AppendPath(_workspaceName, true);
             uri.AppendPath("/providerStatus", false);
             request.Uri = uri;
             request.Headers.Add("Accept", "application/json");
@@ -73,12 +75,12 @@ namespace Azure.Quantum.Jobs
                 case 200:
                     {
                         ProviderStatusList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = ProviderStatusList.DeserializeProviderStatusList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -93,12 +95,12 @@ namespace Azure.Quantum.Jobs
                 case 200:
                     {
                         ProviderStatusList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = ProviderStatusList.DeserializeProviderStatusList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -108,7 +110,7 @@ namespace Azure.Quantum.Jobs
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.Reset(endpoint);
+            uri.Reset(_endpoint);
             uri.AppendRawNextLink(nextLink, false);
             request.Uri = uri;
             request.Headers.Add("Accept", "application/json");
@@ -133,12 +135,12 @@ namespace Azure.Quantum.Jobs
                 case 200:
                     {
                         ProviderStatusList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = ProviderStatusList.DeserializeProviderStatusList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -160,12 +162,12 @@ namespace Azure.Quantum.Jobs
                 case 200:
                     {
                         ProviderStatusList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = ProviderStatusList.DeserializeProviderStatusList(document.RootElement);
                         return Response.FromValue(value, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
     }

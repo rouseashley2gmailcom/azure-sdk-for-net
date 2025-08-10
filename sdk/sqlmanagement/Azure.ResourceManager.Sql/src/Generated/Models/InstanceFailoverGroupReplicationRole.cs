@@ -15,7 +15,7 @@ namespace Azure.ResourceManager.Sql.Models
     {
         private readonly string _value;
 
-        /// <summary> Determines if two <see cref="InstanceFailoverGroupReplicationRole"/> values are the same. </summary>
+        /// <summary> Initializes a new instance of <see cref="InstanceFailoverGroupReplicationRole"/>. </summary>
         /// <exception cref="ArgumentNullException"> <paramref name="value"/> is null. </exception>
         public InstanceFailoverGroupReplicationRole(string value)
         {
@@ -33,7 +33,7 @@ namespace Azure.ResourceManager.Sql.Models
         public static bool operator ==(InstanceFailoverGroupReplicationRole left, InstanceFailoverGroupReplicationRole right) => left.Equals(right);
         /// <summary> Determines if two <see cref="InstanceFailoverGroupReplicationRole"/> values are not the same. </summary>
         public static bool operator !=(InstanceFailoverGroupReplicationRole left, InstanceFailoverGroupReplicationRole right) => !left.Equals(right);
-        /// <summary> Converts a string to a <see cref="InstanceFailoverGroupReplicationRole"/>. </summary>
+        /// <summary> Converts a <see cref="string"/> to a <see cref="InstanceFailoverGroupReplicationRole"/>. </summary>
         public static implicit operator InstanceFailoverGroupReplicationRole(string value) => new InstanceFailoverGroupReplicationRole(value);
 
         /// <inheritdoc />
@@ -44,7 +44,7 @@ namespace Azure.ResourceManager.Sql.Models
 
         /// <inheritdoc />
         [EditorBrowsable(EditorBrowsableState.Never)]
-        public override int GetHashCode() => _value?.GetHashCode() ?? 0;
+        public override int GetHashCode() => _value != null ? StringComparer.InvariantCultureIgnoreCase.GetHashCode(_value) : 0;
         /// <inheritdoc />
         public override string ToString() => _value;
     }

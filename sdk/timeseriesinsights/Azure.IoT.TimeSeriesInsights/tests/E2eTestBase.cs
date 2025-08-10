@@ -28,10 +28,12 @@ namespace Azure.IoT.TimeSeriesInsights.Tests
 
         private static readonly SemaphoreSlim s_semaphore = new SemaphoreSlim(1, 1);
 
+        internal const string FAKE_HOST = "fakeHost.api.wus2.timeseriesinsights.azure.com";
+
         public E2eTestBase(bool isAsync)
          : base(isAsync, TestSettings.Instance.TestMode)
         {
-            Sanitizer = new TestUrlSanitizer();
+            ReplacementHost = FAKE_HOST;
         }
 
         [SetUp]
@@ -40,7 +42,9 @@ namespace Azure.IoT.TimeSeriesInsights.Tests
             TestDiagnostics = false;
 
             // TODO: set via client options and pipeline instead
+#pragma warning disable SYSLIB0014 // ServicePointManager is obsolete, there's already a TODO to fix this above
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+#pragma warning restore SYSLib0014
         }
 
         protected TimeSeriesInsightsClient GetClient(TimeSeriesInsightsClientOptions options = null)

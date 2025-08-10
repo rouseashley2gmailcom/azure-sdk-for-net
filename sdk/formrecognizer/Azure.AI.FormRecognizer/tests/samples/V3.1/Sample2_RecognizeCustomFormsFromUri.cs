@@ -11,14 +11,15 @@ using NUnit.Framework;
 
 namespace Azure.AI.FormRecognizer.Samples
 {
-    public partial class FormRecognizerSamples : SamplesBase<FormRecognizerTestEnvironment>
+    public partial class FormRecognizerSamples
     {
-        [Test]
+        [RecordedTest]
+        [Ignore("https://github.com/Azure/azure-sdk-for-net/issues/47689")]
         public async Task RecognizeCustomFormsFromUri()
         {
             string endpoint = TestEnvironment.Endpoint;
             string apiKey = TestEnvironment.ApiKey;
-            string trainingFileUrl = TestEnvironment.BlobContainerSasUrlV2;
+            string trainingFileUrl = TestEnvironment.BlobContainerSasUrl;
 
             // Firstly, create a trained model we can use to recognize the custom form. Please note that
             // models can also be trained using a graphical user interface such as the Form Recognizer
@@ -35,7 +36,7 @@ namespace Azure.AI.FormRecognizer.Samples
             #region Snippet:FormRecognizerSampleRecognizeCustomFormsFromUri
 #if SNIPPET
             string modelId = "<modelId>";
-            Uri formUri = <formUri>;
+            Uri formUri = new Uri("<formUri>");
 #else
             Uri formUri = FormRecognizerTestEnvironment.CreateUri("Form_1.jpg");
             string modelId = model.ModelId;

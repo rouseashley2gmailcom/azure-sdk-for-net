@@ -1,9 +1,12 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Azure.Core;
 using Azure.Storage.Blobs.Models;
+using Azure.Storage.Blobs.Specialized;
 using Azure.Storage.Test.Shared;
 using BlobsClientBuilder = Azure.Storage.Test.Shared.ClientBuilder<
     Azure.Storage.Blobs.BlobServiceClient,
@@ -11,7 +14,7 @@ using BlobsClientBuilder = Azure.Storage.Test.Shared.ClientBuilder<
 
 namespace Azure.Storage.Blobs.Tests
 {
-    public static class ClientBuilderExtensions
+    public static partial class ClientBuilderExtensions
     {
         /// <summary>
         /// Creates a new <see cref="ClientBuilder{TServiceClient, TServiceClientOptions}"/>
@@ -52,8 +55,8 @@ namespace Azure.Storage.Blobs.Tests
         public static BlobServiceClient GetServiceClient_PremiumBlobAccount_SharedKey(this BlobsClientBuilder clientBuilder)
             => clientBuilder.GetServiceClientFromSharedKeyConfig(clientBuilder.Tenants.TestConfigPremiumBlob);
 
-        public static BlobServiceClient GetServiceClient_OAuth(this BlobsClientBuilder clientBuilder)
-            => clientBuilder.GetServiceClientFromOauthConfig(clientBuilder.Tenants.TestConfigOAuth);
+        public static BlobServiceClient GetServiceClient_OAuth(this BlobsClientBuilder clientBuilder, TokenCredential tokenCredential)
+            => clientBuilder.GetServiceClientFromOauthConfig(clientBuilder.Tenants.TestConfigOAuth, tokenCredential);
 
         public static BlobServiceClient GetServiceClient_OAuthAccount_SharedKey(this BlobsClientBuilder clientBuilder) =>
             clientBuilder.GetServiceClientFromSharedKeyConfig(clientBuilder.Tenants.TestConfigOAuth);
@@ -80,12 +83,35 @@ namespace Azure.Storage.Blobs.Tests
 
             if (publicAccessType == default)
             {
-                publicAccessType = premium ? PublicAccessType.None : PublicAccessType.BlobContainer;
+                publicAccessType = PublicAccessType.None;
             }
 
             BlobContainerClient container = clientBuilder.AzureCoreRecordedTestBase.InstrumentClient(service.GetBlobContainerClient(containerName));
             await container.CreateIfNotExistsAsync(metadata: metadata, publicAccessType: publicAccessType.Value);
             return new DisposingContainer(container);
+        }
+
+        /// <summary>
+        /// Makes a new instrumented BlobClient pointing to the same resource but with new client options.
+        /// </summary>
+        /// <param name="oldClient">
+        /// Client to copy.
+        /// </param>
+        /// <param name="modifyOptions">
+        /// How to modify prebuild instrumented clientoptions.
+        /// </param>
+        /// <param name="credential">
+        /// Optional shared key credential to use. Defaults to <see cref="TenantConfigurationBuilder.GetNewSharedKeyCredentials"/>.
+        /// </param>
+        public static BlobClient RotateBlobClientSharedKey(
+            this BlobsClientBuilder clientBuilder,
+            BlobClient oldClient,
+            Action<BlobClientOptions> modifyOptions,
+            StorageSharedKeyCredential credential = default)
+        {
+            var newOptions = clientBuilder.GetOptions();
+            modifyOptions?.Invoke(newOptions);
+            return clientBuilder.AzureCoreRecordedTestBase.InstrumentClient(new BlobClient(oldClient.Uri, credential ?? clientBuilder.Tenants.GetNewSharedKeyCredentials(), newOptions));
         }
     }
 }

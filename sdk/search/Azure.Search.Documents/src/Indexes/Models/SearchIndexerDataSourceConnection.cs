@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Generic;
 using Azure.Core;
 
 namespace Azure.Search.Documents.Indexes.Models
@@ -10,7 +11,7 @@ namespace Azure.Search.Documents.Indexes.Models
     [CodeGenSuppress(nameof(SearchIndexerDataSourceConnection), typeof(string), typeof(SearchIndexerDataSourceType), typeof(DataSourceCredentials), typeof(SearchIndexerDataContainer))]
     public partial class SearchIndexerDataSourceConnection
     {
-        [CodeGenMember("etag")]
+        [CodeGenMember("ETag")]
         private string _etag;
 
         /// <summary>
@@ -27,6 +28,7 @@ namespace Azure.Search.Documents.Indexes.Models
             ConnectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
             Container = container ?? throw new ArgumentNullException(nameof(container));
             Type = type;
+            IndexerPermissionOptions = new ChangeTrackingList<IndexerPermissionOption>();
         }
 
         /// <summary>
@@ -46,12 +48,12 @@ namespace Azure.Search.Documents.Indexes.Models
         /// <summary>
         /// Gets or sets an <see cref="DataSourceCredentials"/> for de/serialization purposes only.
         /// </summary>
-        [CodeGenMember("credentials")]
+        [CodeGenMember("Credentials")]
         private DataSourceCredentials CredentialsInternal
         {
             get
             {
-                return new DataSourceCredentials(ConnectionString ?? DataSourceCredentials.UnchangedValue);
+                return new DataSourceCredentials(ConnectionString ?? DataSourceCredentials.UnchangedValue, serializedAdditionalRawData: null);
             }
 
             set

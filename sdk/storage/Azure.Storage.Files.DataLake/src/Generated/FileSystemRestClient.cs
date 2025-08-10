@@ -13,32 +13,35 @@ using System.Threading.Tasks;
 using System.Xml.Linq;
 using Azure.Core;
 using Azure.Core.Pipeline;
+using Azure.Storage.Common;
 using Azure.Storage.Files.DataLake.Models;
 
 namespace Azure.Storage.Files.DataLake
 {
     internal partial class FileSystemRestClient
     {
-        private string url;
-        private string resource;
-        private string version;
-        private ClientDiagnostics _clientDiagnostics;
-        private HttpPipeline _pipeline;
+        private readonly HttpPipeline _pipeline;
+        private readonly string _url;
+        private readonly string _resource;
+        private readonly string _version;
+
+        /// <summary> The ClientDiagnostics is used to provide tracing support for the client library. </summary>
+        internal ClientDiagnostics ClientDiagnostics { get; }
 
         /// <summary> Initializes a new instance of FileSystemRestClient. </summary>
         /// <param name="clientDiagnostics"> The handler for diagnostic messaging in the client. </param>
         /// <param name="pipeline"> The HTTP pipeline for sending and receiving REST requests and responses. </param>
         /// <param name="url"> The URL of the service account, container, or blob that is the target of the desired operation. </param>
-        /// <param name="resource"> The value must be &quot;filesystem&quot; for all filesystem operations. </param>
-        /// <param name="version"> Specifies the version of the operation to use for this request. </param>
-        /// <exception cref="ArgumentNullException"> <paramref name="url"/>, <paramref name="resource"/>, or <paramref name="version"/> is null. </exception>
-        public FileSystemRestClient(ClientDiagnostics clientDiagnostics, HttpPipeline pipeline, string url, string resource = "filesystem", string version = "2020-06-12")
+        /// <param name="resource"> The value must be "filesystem" for all filesystem operations. The default value is "filesystem". </param>
+        /// <param name="version"> Specifies the version of the operation to use for this request. The default value is "2025-01-05". </param>
+        /// <exception cref="ArgumentNullException"> <paramref name="clientDiagnostics"/>, <paramref name="pipeline"/>, <paramref name="url"/>, <paramref name="resource"/> or <paramref name="version"/> is null. </exception>
+        public FileSystemRestClient(ClientDiagnostics clientDiagnostics, HttpPipeline pipeline, string url, string resource, string version)
         {
-            this.url = url ?? throw new ArgumentNullException(nameof(url));
-            this.resource = resource ?? throw new ArgumentNullException(nameof(resource));
-            this.version = version ?? throw new ArgumentNullException(nameof(version));
-            _clientDiagnostics = clientDiagnostics;
-            _pipeline = pipeline;
+            ClientDiagnostics = clientDiagnostics ?? throw new ArgumentNullException(nameof(clientDiagnostics));
+            _pipeline = pipeline ?? throw new ArgumentNullException(nameof(pipeline));
+            _url = url ?? throw new ArgumentNullException(nameof(url));
+            _resource = resource ?? throw new ArgumentNullException(nameof(resource));
+            _version = version ?? throw new ArgumentNullException(nameof(version));
         }
 
         internal HttpMessage CreateCreateRequest(int? timeout, string properties)
@@ -47,14 +50,14 @@ namespace Azure.Storage.Files.DataLake
             var request = message.Request;
             request.Method = RequestMethod.Put;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(url, false);
-            uri.AppendQuery("resource", resource, true);
+            uri.AppendRaw(_url, false);
+            uri.AppendQuery("resource", _resource, true);
             if (timeout != null)
             {
                 uri.AppendQuery("timeout", timeout.Value, true);
             }
             request.Uri = uri;
-            request.Headers.Add("x-ms-version", version);
+            request.Headers.Add("x-ms-version", _version);
             if (properties != null)
             {
                 request.Headers.Add("x-ms-properties", properties);
@@ -63,10 +66,11 @@ namespace Azure.Storage.Files.DataLake
             return message;
         }
 
-        /// <summary> Create a FileSystem rooted at the specified location. If the FileSystem already exists, the operation fails.  This operation does not support conditional HTTP requests. </summary>
-        /// <param name="timeout"> The timeout parameter is expressed in seconds. For more information, see &lt;a href=&quot;https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/setting-timeouts-for-blob-service-operations&quot;&gt;Setting Timeouts for Blob Service Operations.&lt;/a&gt;. </param>
-        /// <param name="properties"> Optional. User-defined properties to be stored with the filesystem, in the format of a comma-separated list of name and value pairs &quot;n1=v1, n2=v2, ...&quot;, where each value is a base64 encoded string. Note that the string may only contain ASCII characters in the ISO-8859-1 character set.  If the filesystem exists, any properties not included in the list will be removed.  All properties are removed if the header is omitted.  To merge new and existing properties, first get all existing properties and the current E-Tag, then make a conditional request with the E-Tag and include values for all properties. </param>
+        /// <summary> Create FileSystem. </summary>
+        /// <param name="timeout"> The timeout parameter is expressed in seconds. For more information, see &lt;a href="https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/setting-timeouts-for-blob-service-operations"&gt;Setting Timeouts for Blob Service Operations.&lt;/a&gt;. </param>
+        /// <param name="properties"> Optional. User-defined properties to be stored with the filesystem, in the format of a comma-separated list of name and value pairs "n1=v1, n2=v2, ...", where each value is a base64 encoded string. Note that the string may only contain ASCII characters in the ISO-8859-1 character set.  If the filesystem exists, any properties not included in the list will be removed.  All properties are removed if the header is omitted.  To merge new and existing properties, first get all existing properties and the current E-Tag, then make a conditional request with the E-Tag and include values for all properties. </param>
         /// <param name="cancellationToken"> The cancellation token to use. </param>
+        /// <remarks> Create a FileSystem rooted at the specified location. If the FileSystem already exists, the operation fails.  This operation does not support conditional HTTP requests. </remarks>
         public async Task<ResponseWithHeaders<FileSystemCreateHeaders>> CreateAsync(int? timeout = null, string properties = null, CancellationToken cancellationToken = default)
         {
             using var message = CreateCreateRequest(timeout, properties);
@@ -77,14 +81,15 @@ namespace Azure.Storage.Files.DataLake
                 case 201:
                     return ResponseWithHeaders.FromValue(headers, message.Response);
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
-        /// <summary> Create a FileSystem rooted at the specified location. If the FileSystem already exists, the operation fails.  This operation does not support conditional HTTP requests. </summary>
-        /// <param name="timeout"> The timeout parameter is expressed in seconds. For more information, see &lt;a href=&quot;https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/setting-timeouts-for-blob-service-operations&quot;&gt;Setting Timeouts for Blob Service Operations.&lt;/a&gt;. </param>
-        /// <param name="properties"> Optional. User-defined properties to be stored with the filesystem, in the format of a comma-separated list of name and value pairs &quot;n1=v1, n2=v2, ...&quot;, where each value is a base64 encoded string. Note that the string may only contain ASCII characters in the ISO-8859-1 character set.  If the filesystem exists, any properties not included in the list will be removed.  All properties are removed if the header is omitted.  To merge new and existing properties, first get all existing properties and the current E-Tag, then make a conditional request with the E-Tag and include values for all properties. </param>
+        /// <summary> Create FileSystem. </summary>
+        /// <param name="timeout"> The timeout parameter is expressed in seconds. For more information, see &lt;a href="https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/setting-timeouts-for-blob-service-operations"&gt;Setting Timeouts for Blob Service Operations.&lt;/a&gt;. </param>
+        /// <param name="properties"> Optional. User-defined properties to be stored with the filesystem, in the format of a comma-separated list of name and value pairs "n1=v1, n2=v2, ...", where each value is a base64 encoded string. Note that the string may only contain ASCII characters in the ISO-8859-1 character set.  If the filesystem exists, any properties not included in the list will be removed.  All properties are removed if the header is omitted.  To merge new and existing properties, first get all existing properties and the current E-Tag, then make a conditional request with the E-Tag and include values for all properties. </param>
         /// <param name="cancellationToken"> The cancellation token to use. </param>
+        /// <remarks> Create a FileSystem rooted at the specified location. If the FileSystem already exists, the operation fails.  This operation does not support conditional HTTP requests. </remarks>
         public ResponseWithHeaders<FileSystemCreateHeaders> Create(int? timeout = null, string properties = null, CancellationToken cancellationToken = default)
         {
             using var message = CreateCreateRequest(timeout, properties);
@@ -95,7 +100,7 @@ namespace Azure.Storage.Files.DataLake
                 case 201:
                     return ResponseWithHeaders.FromValue(headers, message.Response);
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -105,14 +110,14 @@ namespace Azure.Storage.Files.DataLake
             var request = message.Request;
             request.Method = RequestMethod.Patch;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(url, false);
-            uri.AppendQuery("resource", resource, true);
+            uri.AppendRaw(_url, false);
+            uri.AppendQuery("resource", _resource, true);
             if (timeout != null)
             {
                 uri.AppendQuery("timeout", timeout.Value, true);
             }
             request.Uri = uri;
-            request.Headers.Add("x-ms-version", version);
+            request.Headers.Add("x-ms-version", _version);
             if (properties != null)
             {
                 request.Headers.Add("x-ms-properties", properties);
@@ -129,12 +134,13 @@ namespace Azure.Storage.Files.DataLake
             return message;
         }
 
-        /// <summary> Set properties for the FileSystem.  This operation supports conditional HTTP requests.  For more information, see [Specifying Conditional Headers for Blob Service Operations](https://docs.microsoft.com/en-us/rest/api/storageservices/specifying-conditional-headers-for-blob-service-operations). </summary>
-        /// <param name="timeout"> The timeout parameter is expressed in seconds. For more information, see &lt;a href=&quot;https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/setting-timeouts-for-blob-service-operations&quot;&gt;Setting Timeouts for Blob Service Operations.&lt;/a&gt;. </param>
-        /// <param name="properties"> Optional. User-defined properties to be stored with the filesystem, in the format of a comma-separated list of name and value pairs &quot;n1=v1, n2=v2, ...&quot;, where each value is a base64 encoded string. Note that the string may only contain ASCII characters in the ISO-8859-1 character set.  If the filesystem exists, any properties not included in the list will be removed.  All properties are removed if the header is omitted.  To merge new and existing properties, first get all existing properties and the current E-Tag, then make a conditional request with the E-Tag and include values for all properties. </param>
+        /// <summary> Set FileSystem Properties. </summary>
+        /// <param name="timeout"> The timeout parameter is expressed in seconds. For more information, see &lt;a href="https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/setting-timeouts-for-blob-service-operations"&gt;Setting Timeouts for Blob Service Operations.&lt;/a&gt;. </param>
+        /// <param name="properties"> Optional. User-defined properties to be stored with the filesystem, in the format of a comma-separated list of name and value pairs "n1=v1, n2=v2, ...", where each value is a base64 encoded string. Note that the string may only contain ASCII characters in the ISO-8859-1 character set.  If the filesystem exists, any properties not included in the list will be removed.  All properties are removed if the header is omitted.  To merge new and existing properties, first get all existing properties and the current E-Tag, then make a conditional request with the E-Tag and include values for all properties. </param>
         /// <param name="ifModifiedSince"> Specify this header value to operate only on a blob if it has been modified since the specified date/time. </param>
         /// <param name="ifUnmodifiedSince"> Specify this header value to operate only on a blob if it has not been modified since the specified date/time. </param>
         /// <param name="cancellationToken"> The cancellation token to use. </param>
+        /// <remarks> Set properties for the FileSystem.  This operation supports conditional HTTP requests.  For more information, see [Specifying Conditional Headers for Blob Service Operations](https://docs.microsoft.com/en-us/rest/api/storageservices/specifying-conditional-headers-for-blob-service-operations). </remarks>
         public async Task<ResponseWithHeaders<FileSystemSetPropertiesHeaders>> SetPropertiesAsync(int? timeout = null, string properties = null, DateTimeOffset? ifModifiedSince = null, DateTimeOffset? ifUnmodifiedSince = null, CancellationToken cancellationToken = default)
         {
             using var message = CreateSetPropertiesRequest(timeout, properties, ifModifiedSince, ifUnmodifiedSince);
@@ -145,16 +151,17 @@ namespace Azure.Storage.Files.DataLake
                 case 200:
                     return ResponseWithHeaders.FromValue(headers, message.Response);
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
-        /// <summary> Set properties for the FileSystem.  This operation supports conditional HTTP requests.  For more information, see [Specifying Conditional Headers for Blob Service Operations](https://docs.microsoft.com/en-us/rest/api/storageservices/specifying-conditional-headers-for-blob-service-operations). </summary>
-        /// <param name="timeout"> The timeout parameter is expressed in seconds. For more information, see &lt;a href=&quot;https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/setting-timeouts-for-blob-service-operations&quot;&gt;Setting Timeouts for Blob Service Operations.&lt;/a&gt;. </param>
-        /// <param name="properties"> Optional. User-defined properties to be stored with the filesystem, in the format of a comma-separated list of name and value pairs &quot;n1=v1, n2=v2, ...&quot;, where each value is a base64 encoded string. Note that the string may only contain ASCII characters in the ISO-8859-1 character set.  If the filesystem exists, any properties not included in the list will be removed.  All properties are removed if the header is omitted.  To merge new and existing properties, first get all existing properties and the current E-Tag, then make a conditional request with the E-Tag and include values for all properties. </param>
+        /// <summary> Set FileSystem Properties. </summary>
+        /// <param name="timeout"> The timeout parameter is expressed in seconds. For more information, see &lt;a href="https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/setting-timeouts-for-blob-service-operations"&gt;Setting Timeouts for Blob Service Operations.&lt;/a&gt;. </param>
+        /// <param name="properties"> Optional. User-defined properties to be stored with the filesystem, in the format of a comma-separated list of name and value pairs "n1=v1, n2=v2, ...", where each value is a base64 encoded string. Note that the string may only contain ASCII characters in the ISO-8859-1 character set.  If the filesystem exists, any properties not included in the list will be removed.  All properties are removed if the header is omitted.  To merge new and existing properties, first get all existing properties and the current E-Tag, then make a conditional request with the E-Tag and include values for all properties. </param>
         /// <param name="ifModifiedSince"> Specify this header value to operate only on a blob if it has been modified since the specified date/time. </param>
         /// <param name="ifUnmodifiedSince"> Specify this header value to operate only on a blob if it has not been modified since the specified date/time. </param>
         /// <param name="cancellationToken"> The cancellation token to use. </param>
+        /// <remarks> Set properties for the FileSystem.  This operation supports conditional HTTP requests.  For more information, see [Specifying Conditional Headers for Blob Service Operations](https://docs.microsoft.com/en-us/rest/api/storageservices/specifying-conditional-headers-for-blob-service-operations). </remarks>
         public ResponseWithHeaders<FileSystemSetPropertiesHeaders> SetProperties(int? timeout = null, string properties = null, DateTimeOffset? ifModifiedSince = null, DateTimeOffset? ifUnmodifiedSince = null, CancellationToken cancellationToken = default)
         {
             using var message = CreateSetPropertiesRequest(timeout, properties, ifModifiedSince, ifUnmodifiedSince);
@@ -165,7 +172,7 @@ namespace Azure.Storage.Files.DataLake
                 case 200:
                     return ResponseWithHeaders.FromValue(headers, message.Response);
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -175,21 +182,22 @@ namespace Azure.Storage.Files.DataLake
             var request = message.Request;
             request.Method = RequestMethod.Head;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(url, false);
-            uri.AppendQuery("resource", resource, true);
+            uri.AppendRaw(_url, false);
+            uri.AppendQuery("resource", _resource, true);
             if (timeout != null)
             {
                 uri.AppendQuery("timeout", timeout.Value, true);
             }
             request.Uri = uri;
-            request.Headers.Add("x-ms-version", version);
+            request.Headers.Add("x-ms-version", _version);
             request.Headers.Add("Accept", "application/json");
             return message;
         }
 
-        /// <summary> All system and user-defined filesystem properties are specified in the response headers. </summary>
-        /// <param name="timeout"> The timeout parameter is expressed in seconds. For more information, see &lt;a href=&quot;https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/setting-timeouts-for-blob-service-operations&quot;&gt;Setting Timeouts for Blob Service Operations.&lt;/a&gt;. </param>
+        /// <summary> Get FileSystem Properties. </summary>
+        /// <param name="timeout"> The timeout parameter is expressed in seconds. For more information, see &lt;a href="https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/setting-timeouts-for-blob-service-operations"&gt;Setting Timeouts for Blob Service Operations.&lt;/a&gt;. </param>
         /// <param name="cancellationToken"> The cancellation token to use. </param>
+        /// <remarks> All system and user-defined filesystem properties are specified in the response headers. </remarks>
         public async Task<ResponseWithHeaders<FileSystemGetPropertiesHeaders>> GetPropertiesAsync(int? timeout = null, CancellationToken cancellationToken = default)
         {
             using var message = CreateGetPropertiesRequest(timeout);
@@ -200,13 +208,14 @@ namespace Azure.Storage.Files.DataLake
                 case 200:
                     return ResponseWithHeaders.FromValue(headers, message.Response);
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
-        /// <summary> All system and user-defined filesystem properties are specified in the response headers. </summary>
-        /// <param name="timeout"> The timeout parameter is expressed in seconds. For more information, see &lt;a href=&quot;https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/setting-timeouts-for-blob-service-operations&quot;&gt;Setting Timeouts for Blob Service Operations.&lt;/a&gt;. </param>
+        /// <summary> Get FileSystem Properties. </summary>
+        /// <param name="timeout"> The timeout parameter is expressed in seconds. For more information, see &lt;a href="https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/setting-timeouts-for-blob-service-operations"&gt;Setting Timeouts for Blob Service Operations.&lt;/a&gt;. </param>
         /// <param name="cancellationToken"> The cancellation token to use. </param>
+        /// <remarks> All system and user-defined filesystem properties are specified in the response headers. </remarks>
         public ResponseWithHeaders<FileSystemGetPropertiesHeaders> GetProperties(int? timeout = null, CancellationToken cancellationToken = default)
         {
             using var message = CreateGetPropertiesRequest(timeout);
@@ -217,7 +226,7 @@ namespace Azure.Storage.Files.DataLake
                 case 200:
                     return ResponseWithHeaders.FromValue(headers, message.Response);
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -227,14 +236,14 @@ namespace Azure.Storage.Files.DataLake
             var request = message.Request;
             request.Method = RequestMethod.Delete;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(url, false);
-            uri.AppendQuery("resource", resource, true);
+            uri.AppendRaw(_url, false);
+            uri.AppendQuery("resource", _resource, true);
             if (timeout != null)
             {
                 uri.AppendQuery("timeout", timeout.Value, true);
             }
             request.Uri = uri;
-            request.Headers.Add("x-ms-version", version);
+            request.Headers.Add("x-ms-version", _version);
             if (ifModifiedSince != null)
             {
                 request.Headers.Add("If-Modified-Since", ifModifiedSince.Value, "R");
@@ -247,11 +256,12 @@ namespace Azure.Storage.Files.DataLake
             return message;
         }
 
-        /// <summary> Marks the FileSystem for deletion.  When a FileSystem is deleted, a FileSystem with the same identifier cannot be created for at least 30 seconds. While the filesystem is being deleted, attempts to create a filesystem with the same identifier will fail with status code 409 (Conflict), with the service returning additional error information indicating that the filesystem is being deleted. All other operations, including operations on any files or directories within the filesystem, will fail with status code 404 (Not Found) while the filesystem is being deleted. This operation supports conditional HTTP requests.  For more information, see [Specifying Conditional Headers for Blob Service Operations](https://docs.microsoft.com/en-us/rest/api/storageservices/specifying-conditional-headers-for-blob-service-operations). </summary>
-        /// <param name="timeout"> The timeout parameter is expressed in seconds. For more information, see &lt;a href=&quot;https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/setting-timeouts-for-blob-service-operations&quot;&gt;Setting Timeouts for Blob Service Operations.&lt;/a&gt;. </param>
+        /// <summary> Delete FileSystem. </summary>
+        /// <param name="timeout"> The timeout parameter is expressed in seconds. For more information, see &lt;a href="https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/setting-timeouts-for-blob-service-operations"&gt;Setting Timeouts for Blob Service Operations.&lt;/a&gt;. </param>
         /// <param name="ifModifiedSince"> Specify this header value to operate only on a blob if it has been modified since the specified date/time. </param>
         /// <param name="ifUnmodifiedSince"> Specify this header value to operate only on a blob if it has not been modified since the specified date/time. </param>
         /// <param name="cancellationToken"> The cancellation token to use. </param>
+        /// <remarks> Marks the FileSystem for deletion.  When a FileSystem is deleted, a FileSystem with the same identifier cannot be created for at least 30 seconds. While the filesystem is being deleted, attempts to create a filesystem with the same identifier will fail with status code 409 (Conflict), with the service returning additional error information indicating that the filesystem is being deleted. All other operations, including operations on any files or directories within the filesystem, will fail with status code 404 (Not Found) while the filesystem is being deleted. This operation supports conditional HTTP requests.  For more information, see [Specifying Conditional Headers for Blob Service Operations](https://docs.microsoft.com/en-us/rest/api/storageservices/specifying-conditional-headers-for-blob-service-operations). </remarks>
         public async Task<ResponseWithHeaders<FileSystemDeleteHeaders>> DeleteAsync(int? timeout = null, DateTimeOffset? ifModifiedSince = null, DateTimeOffset? ifUnmodifiedSince = null, CancellationToken cancellationToken = default)
         {
             using var message = CreateDeleteRequest(timeout, ifModifiedSince, ifUnmodifiedSince);
@@ -262,15 +272,16 @@ namespace Azure.Storage.Files.DataLake
                 case 202:
                     return ResponseWithHeaders.FromValue(headers, message.Response);
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
-        /// <summary> Marks the FileSystem for deletion.  When a FileSystem is deleted, a FileSystem with the same identifier cannot be created for at least 30 seconds. While the filesystem is being deleted, attempts to create a filesystem with the same identifier will fail with status code 409 (Conflict), with the service returning additional error information indicating that the filesystem is being deleted. All other operations, including operations on any files or directories within the filesystem, will fail with status code 404 (Not Found) while the filesystem is being deleted. This operation supports conditional HTTP requests.  For more information, see [Specifying Conditional Headers for Blob Service Operations](https://docs.microsoft.com/en-us/rest/api/storageservices/specifying-conditional-headers-for-blob-service-operations). </summary>
-        /// <param name="timeout"> The timeout parameter is expressed in seconds. For more information, see &lt;a href=&quot;https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/setting-timeouts-for-blob-service-operations&quot;&gt;Setting Timeouts for Blob Service Operations.&lt;/a&gt;. </param>
+        /// <summary> Delete FileSystem. </summary>
+        /// <param name="timeout"> The timeout parameter is expressed in seconds. For more information, see &lt;a href="https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/setting-timeouts-for-blob-service-operations"&gt;Setting Timeouts for Blob Service Operations.&lt;/a&gt;. </param>
         /// <param name="ifModifiedSince"> Specify this header value to operate only on a blob if it has been modified since the specified date/time. </param>
         /// <param name="ifUnmodifiedSince"> Specify this header value to operate only on a blob if it has not been modified since the specified date/time. </param>
         /// <param name="cancellationToken"> The cancellation token to use. </param>
+        /// <remarks> Marks the FileSystem for deletion.  When a FileSystem is deleted, a FileSystem with the same identifier cannot be created for at least 30 seconds. While the filesystem is being deleted, attempts to create a filesystem with the same identifier will fail with status code 409 (Conflict), with the service returning additional error information indicating that the filesystem is being deleted. All other operations, including operations on any files or directories within the filesystem, will fail with status code 404 (Not Found) while the filesystem is being deleted. This operation supports conditional HTTP requests.  For more information, see [Specifying Conditional Headers for Blob Service Operations](https://docs.microsoft.com/en-us/rest/api/storageservices/specifying-conditional-headers-for-blob-service-operations). </remarks>
         public ResponseWithHeaders<FileSystemDeleteHeaders> Delete(int? timeout = null, DateTimeOffset? ifModifiedSince = null, DateTimeOffset? ifUnmodifiedSince = null, CancellationToken cancellationToken = default)
         {
             using var message = CreateDeleteRequest(timeout, ifModifiedSince, ifUnmodifiedSince);
@@ -281,7 +292,7 @@ namespace Azure.Storage.Files.DataLake
                 case 202:
                     return ResponseWithHeaders.FromValue(headers, message.Response);
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -291,8 +302,8 @@ namespace Azure.Storage.Files.DataLake
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(url, false);
-            uri.AppendQuery("resource", resource, true);
+            uri.AppendRaw(_url, false);
+            uri.AppendQuery("resource", _resource, true);
             if (timeout != null)
             {
                 uri.AppendQuery("timeout", timeout.Value, true);
@@ -315,19 +326,20 @@ namespace Azure.Storage.Files.DataLake
                 uri.AppendQuery("upn", upn.Value, true);
             }
             request.Uri = uri;
-            request.Headers.Add("x-ms-version", version);
+            request.Headers.Add("x-ms-version", _version);
             request.Headers.Add("Accept", "application/json");
             return message;
         }
 
-        /// <summary> List FileSystem paths and their properties. </summary>
+        /// <summary> List Paths. </summary>
         /// <param name="recursive"> Required. </param>
-        /// <param name="timeout"> The timeout parameter is expressed in seconds. For more information, see &lt;a href=&quot;https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/setting-timeouts-for-blob-service-operations&quot;&gt;Setting Timeouts for Blob Service Operations.&lt;/a&gt;. </param>
+        /// <param name="timeout"> The timeout parameter is expressed in seconds. For more information, see &lt;a href="https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/setting-timeouts-for-blob-service-operations"&gt;Setting Timeouts for Blob Service Operations.&lt;/a&gt;. </param>
         /// <param name="continuation"> Optional.  When deleting a directory, the number of paths that are deleted with each invocation is limited.  If the number of paths to be deleted exceeds this limit, a continuation token is returned in this response header.  When a continuation token is returned in the response, it must be specified in a subsequent invocation of the delete operation to continue deleting the directory. </param>
         /// <param name="path"> Optional.  Filters results to paths within the specified directory. An error occurs if the directory does not exist. </param>
         /// <param name="maxResults"> An optional value that specifies the maximum number of items to return. If omitted or greater than 5,000, the response will include up to 5,000 items. </param>
-        /// <param name="upn"> Optional. Valid only when Hierarchical Namespace is enabled for the account. If &quot;true&quot;, the user identity values returned in the x-ms-owner, x-ms-group, and x-ms-acl response headers will be transformed from Azure Active Directory Object IDs to User Principal Names.  If &quot;false&quot;, the values will be returned as Azure Active Directory Object IDs. The default value is false. Note that group and application Object IDs are not translated because they do not have unique friendly names. </param>
+        /// <param name="upn"> Optional. Valid only when Hierarchical Namespace is enabled for the account. If "true", the user identity values returned in the x-ms-owner, x-ms-group, and x-ms-acl response headers will be transformed from Azure Active Directory Object IDs to User Principal Names.  If "false", the values will be returned as Azure Active Directory Object IDs. The default value is false. Note that group and application Object IDs are not translated because they do not have unique friendly names. </param>
         /// <param name="cancellationToken"> The cancellation token to use. </param>
+        /// <remarks> List FileSystem paths and their properties. </remarks>
         public async Task<ResponseWithHeaders<PathList, FileSystemListPathsHeaders>> ListPathsAsync(bool recursive, int? timeout = null, string continuation = null, string path = null, int? maxResults = null, bool? upn = null, CancellationToken cancellationToken = default)
         {
             using var message = CreateListPathsRequest(recursive, timeout, continuation, path, maxResults, upn);
@@ -338,23 +350,24 @@ namespace Azure.Storage.Files.DataLake
                 case 200:
                     {
                         PathList value = default;
-                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+                        using var document = await JsonDocument.ParseAsync(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
                         value = PathList.DeserializePathList(document.RootElement);
                         return ResponseWithHeaders.FromValue(value, headers, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
-        /// <summary> List FileSystem paths and their properties. </summary>
+        /// <summary> List Paths. </summary>
         /// <param name="recursive"> Required. </param>
-        /// <param name="timeout"> The timeout parameter is expressed in seconds. For more information, see &lt;a href=&quot;https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/setting-timeouts-for-blob-service-operations&quot;&gt;Setting Timeouts for Blob Service Operations.&lt;/a&gt;. </param>
+        /// <param name="timeout"> The timeout parameter is expressed in seconds. For more information, see &lt;a href="https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/setting-timeouts-for-blob-service-operations"&gt;Setting Timeouts for Blob Service Operations.&lt;/a&gt;. </param>
         /// <param name="continuation"> Optional.  When deleting a directory, the number of paths that are deleted with each invocation is limited.  If the number of paths to be deleted exceeds this limit, a continuation token is returned in this response header.  When a continuation token is returned in the response, it must be specified in a subsequent invocation of the delete operation to continue deleting the directory. </param>
         /// <param name="path"> Optional.  Filters results to paths within the specified directory. An error occurs if the directory does not exist. </param>
         /// <param name="maxResults"> An optional value that specifies the maximum number of items to return. If omitted or greater than 5,000, the response will include up to 5,000 items. </param>
-        /// <param name="upn"> Optional. Valid only when Hierarchical Namespace is enabled for the account. If &quot;true&quot;, the user identity values returned in the x-ms-owner, x-ms-group, and x-ms-acl response headers will be transformed from Azure Active Directory Object IDs to User Principal Names.  If &quot;false&quot;, the values will be returned as Azure Active Directory Object IDs. The default value is false. Note that group and application Object IDs are not translated because they do not have unique friendly names. </param>
+        /// <param name="upn"> Optional. Valid only when Hierarchical Namespace is enabled for the account. If "true", the user identity values returned in the x-ms-owner, x-ms-group, and x-ms-acl response headers will be transformed from Azure Active Directory Object IDs to User Principal Names.  If "false", the values will be returned as Azure Active Directory Object IDs. The default value is false. Note that group and application Object IDs are not translated because they do not have unique friendly names. </param>
         /// <param name="cancellationToken"> The cancellation token to use. </param>
+        /// <remarks> List FileSystem paths and their properties. </remarks>
         public ResponseWithHeaders<PathList, FileSystemListPathsHeaders> ListPaths(bool recursive, int? timeout = null, string continuation = null, string path = null, int? maxResults = null, bool? upn = null, CancellationToken cancellationToken = default)
         {
             using var message = CreateListPathsRequest(recursive, timeout, continuation, path, maxResults, upn);
@@ -365,22 +378,22 @@ namespace Azure.Storage.Files.DataLake
                 case 200:
                     {
                         PathList value = default;
-                        using var document = JsonDocument.Parse(message.Response.ContentStream);
+                        using var document = JsonDocument.Parse(message.Response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
                         value = PathList.DeserializePathList(document.RootElement);
                         return ResponseWithHeaders.FromValue(value, headers, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
-        internal HttpMessage CreateListBlobHierarchySegmentRequest(string prefix, string delimiter, string marker, int? maxResults, IEnumerable<ListBlobsIncludeItem> include, int? timeout)
+        internal HttpMessage CreateListBlobHierarchySegmentRequest(string prefix, string delimiter, string marker, int? maxResults, IEnumerable<ListBlobsIncludeItem> include, ListBlobsShowOnly? showonly, int? timeout)
         {
             var message = _pipeline.CreateMessage();
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(url, false);
+            uri.AppendRaw(_url, false);
             uri.AppendQuery("restype", "container", true);
             uri.AppendQuery("comp", "list", true);
             if (prefix != null)
@@ -399,17 +412,20 @@ namespace Azure.Storage.Files.DataLake
             {
                 uri.AppendQuery("maxResults", maxResults.Value, true);
             }
-            if (include != null)
+            if (include != null && !(include is Common.ChangeTrackingList<ListBlobsIncludeItem> changeTrackingList && changeTrackingList.IsUndefined))
             {
                 uri.AppendQueryDelimited("include", include, ",", true);
             }
-            uri.AppendQuery("showonly", "deleted", true);
+            if (showonly != null)
+            {
+                uri.AppendQuery("showonly", showonly.Value.ToString(), true);
+            }
             if (timeout != null)
             {
                 uri.AppendQuery("timeout", timeout.Value, true);
             }
             request.Uri = uri;
-            request.Headers.Add("x-ms-version", version);
+            request.Headers.Add("x-ms-version", _version);
             request.Headers.Add("Accept", "application/xml");
             return message;
         }
@@ -420,11 +436,12 @@ namespace Azure.Storage.Files.DataLake
         /// <param name="marker"> A string value that identifies the portion of the list of containers to be returned with the next listing operation. The operation returns the NextMarker value within the response body if the listing operation did not return all containers remaining to be listed with the current page. The NextMarker value can be used as the value for the marker parameter in a subsequent call to request the next page of list items. The marker value is opaque to the client. </param>
         /// <param name="maxResults"> An optional value that specifies the maximum number of items to return. If omitted or greater than 5,000, the response will include up to 5,000 items. </param>
         /// <param name="include"> Include this parameter to specify one or more datasets to include in the response. </param>
-        /// <param name="timeout"> The timeout parameter is expressed in seconds. For more information, see &lt;a href=&quot;https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/setting-timeouts-for-blob-service-operations&quot;&gt;Setting Timeouts for Blob Service Operations.&lt;/a&gt;. </param>
+        /// <param name="showonly"> Include this parameter to specify one or more datasets to include in the response. The default value is AutoRest.CSharp.Output.Models.Types.EnumTypeValue. </param>
+        /// <param name="timeout"> The timeout parameter is expressed in seconds. For more information, see &lt;a href="https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/setting-timeouts-for-blob-service-operations"&gt;Setting Timeouts for Blob Service Operations.&lt;/a&gt;. </param>
         /// <param name="cancellationToken"> The cancellation token to use. </param>
-        public async Task<ResponseWithHeaders<ListBlobsHierarchySegmentResponse, FileSystemListBlobHierarchySegmentHeaders>> ListBlobHierarchySegmentAsync(string prefix = null, string delimiter = null, string marker = null, int? maxResults = null, IEnumerable<ListBlobsIncludeItem> include = null, int? timeout = null, CancellationToken cancellationToken = default)
+        public async Task<ResponseWithHeaders<ListBlobsHierarchySegmentResponse, FileSystemListBlobHierarchySegmentHeaders>> ListBlobHierarchySegmentAsync(string prefix = null, string delimiter = null, string marker = null, int? maxResults = null, IEnumerable<ListBlobsIncludeItem> include = null, ListBlobsShowOnly? showonly = null, int? timeout = null, CancellationToken cancellationToken = default)
         {
-            using var message = CreateListBlobHierarchySegmentRequest(prefix, delimiter, marker, maxResults, include, timeout);
+            using var message = CreateListBlobHierarchySegmentRequest(prefix, delimiter, marker, maxResults, include, showonly, timeout);
             await _pipeline.SendAsync(message, cancellationToken).ConfigureAwait(false);
             var headers = new FileSystemListBlobHierarchySegmentHeaders(message.Response);
             switch (message.Response.Status)
@@ -440,7 +457,7 @@ namespace Azure.Storage.Files.DataLake
                         return ResponseWithHeaders.FromValue(value, headers, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -450,11 +467,12 @@ namespace Azure.Storage.Files.DataLake
         /// <param name="marker"> A string value that identifies the portion of the list of containers to be returned with the next listing operation. The operation returns the NextMarker value within the response body if the listing operation did not return all containers remaining to be listed with the current page. The NextMarker value can be used as the value for the marker parameter in a subsequent call to request the next page of list items. The marker value is opaque to the client. </param>
         /// <param name="maxResults"> An optional value that specifies the maximum number of items to return. If omitted or greater than 5,000, the response will include up to 5,000 items. </param>
         /// <param name="include"> Include this parameter to specify one or more datasets to include in the response. </param>
-        /// <param name="timeout"> The timeout parameter is expressed in seconds. For more information, see &lt;a href=&quot;https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/setting-timeouts-for-blob-service-operations&quot;&gt;Setting Timeouts for Blob Service Operations.&lt;/a&gt;. </param>
+        /// <param name="showonly"> Include this parameter to specify one or more datasets to include in the response. The default value is AutoRest.CSharp.Output.Models.Types.EnumTypeValue. </param>
+        /// <param name="timeout"> The timeout parameter is expressed in seconds. For more information, see &lt;a href="https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/setting-timeouts-for-blob-service-operations"&gt;Setting Timeouts for Blob Service Operations.&lt;/a&gt;. </param>
         /// <param name="cancellationToken"> The cancellation token to use. </param>
-        public ResponseWithHeaders<ListBlobsHierarchySegmentResponse, FileSystemListBlobHierarchySegmentHeaders> ListBlobHierarchySegment(string prefix = null, string delimiter = null, string marker = null, int? maxResults = null, IEnumerable<ListBlobsIncludeItem> include = null, int? timeout = null, CancellationToken cancellationToken = default)
+        public ResponseWithHeaders<ListBlobsHierarchySegmentResponse, FileSystemListBlobHierarchySegmentHeaders> ListBlobHierarchySegment(string prefix = null, string delimiter = null, string marker = null, int? maxResults = null, IEnumerable<ListBlobsIncludeItem> include = null, ListBlobsShowOnly? showonly = null, int? timeout = null, CancellationToken cancellationToken = default)
         {
-            using var message = CreateListBlobHierarchySegmentRequest(prefix, delimiter, marker, maxResults, include, timeout);
+            using var message = CreateListBlobHierarchySegmentRequest(prefix, delimiter, marker, maxResults, include, showonly, timeout);
             _pipeline.Send(message, cancellationToken);
             var headers = new FileSystemListBlobHierarchySegmentHeaders(message.Response);
             switch (message.Response.Status)
@@ -470,20 +488,20 @@ namespace Azure.Storage.Files.DataLake
                         return ResponseWithHeaders.FromValue(value, headers, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
-        internal HttpMessage CreateListBlobHierarchySegmentNextPageRequest(string nextLink, string prefix, string delimiter, string marker, int? maxResults, IEnumerable<ListBlobsIncludeItem> include, int? timeout)
+        internal HttpMessage CreateListBlobHierarchySegmentNextPageRequest(string nextLink, string prefix, string delimiter, string marker, int? maxResults, IEnumerable<ListBlobsIncludeItem> include, ListBlobsShowOnly? showonly, int? timeout)
         {
             var message = _pipeline.CreateMessage();
             var request = message.Request;
             request.Method = RequestMethod.Get;
             var uri = new RawRequestUriBuilder();
-            uri.AppendRaw(url, false);
+            uri.AppendRaw(_url, false);
             uri.AppendRawNextLink(nextLink, false);
             request.Uri = uri;
-            request.Headers.Add("x-ms-version", version);
+            request.Headers.Add("x-ms-version", _version);
             request.Headers.Add("Accept", "application/xml");
             return message;
         }
@@ -495,17 +513,18 @@ namespace Azure.Storage.Files.DataLake
         /// <param name="marker"> A string value that identifies the portion of the list of containers to be returned with the next listing operation. The operation returns the NextMarker value within the response body if the listing operation did not return all containers remaining to be listed with the current page. The NextMarker value can be used as the value for the marker parameter in a subsequent call to request the next page of list items. The marker value is opaque to the client. </param>
         /// <param name="maxResults"> An optional value that specifies the maximum number of items to return. If omitted or greater than 5,000, the response will include up to 5,000 items. </param>
         /// <param name="include"> Include this parameter to specify one or more datasets to include in the response. </param>
-        /// <param name="timeout"> The timeout parameter is expressed in seconds. For more information, see &lt;a href=&quot;https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/setting-timeouts-for-blob-service-operations&quot;&gt;Setting Timeouts for Blob Service Operations.&lt;/a&gt;. </param>
+        /// <param name="showonly"> Include this parameter to specify one or more datasets to include in the response. The default value is AutoRest.CSharp.Output.Models.Types.EnumTypeValue. </param>
+        /// <param name="timeout"> The timeout parameter is expressed in seconds. For more information, see &lt;a href="https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/setting-timeouts-for-blob-service-operations"&gt;Setting Timeouts for Blob Service Operations.&lt;/a&gt;. </param>
         /// <param name="cancellationToken"> The cancellation token to use. </param>
         /// <exception cref="ArgumentNullException"> <paramref name="nextLink"/> is null. </exception>
-        public async Task<ResponseWithHeaders<ListBlobsHierarchySegmentResponse, FileSystemListBlobHierarchySegmentHeaders>> ListBlobHierarchySegmentNextPageAsync(string nextLink, string prefix = null, string delimiter = null, string marker = null, int? maxResults = null, IEnumerable<ListBlobsIncludeItem> include = null, int? timeout = null, CancellationToken cancellationToken = default)
+        public async Task<ResponseWithHeaders<ListBlobsHierarchySegmentResponse, FileSystemListBlobHierarchySegmentHeaders>> ListBlobHierarchySegmentNextPageAsync(string nextLink, string prefix = null, string delimiter = null, string marker = null, int? maxResults = null, IEnumerable<ListBlobsIncludeItem> include = null, ListBlobsShowOnly? showonly = null, int? timeout = null, CancellationToken cancellationToken = default)
         {
             if (nextLink == null)
             {
                 throw new ArgumentNullException(nameof(nextLink));
             }
 
-            using var message = CreateListBlobHierarchySegmentNextPageRequest(nextLink, prefix, delimiter, marker, maxResults, include, timeout);
+            using var message = CreateListBlobHierarchySegmentNextPageRequest(nextLink, prefix, delimiter, marker, maxResults, include, showonly, timeout);
             await _pipeline.SendAsync(message, cancellationToken).ConfigureAwait(false);
             var headers = new FileSystemListBlobHierarchySegmentHeaders(message.Response);
             switch (message.Response.Status)
@@ -521,7 +540,7 @@ namespace Azure.Storage.Files.DataLake
                         return ResponseWithHeaders.FromValue(value, headers, message.Response);
                     }
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -532,17 +551,18 @@ namespace Azure.Storage.Files.DataLake
         /// <param name="marker"> A string value that identifies the portion of the list of containers to be returned with the next listing operation. The operation returns the NextMarker value within the response body if the listing operation did not return all containers remaining to be listed with the current page. The NextMarker value can be used as the value for the marker parameter in a subsequent call to request the next page of list items. The marker value is opaque to the client. </param>
         /// <param name="maxResults"> An optional value that specifies the maximum number of items to return. If omitted or greater than 5,000, the response will include up to 5,000 items. </param>
         /// <param name="include"> Include this parameter to specify one or more datasets to include in the response. </param>
-        /// <param name="timeout"> The timeout parameter is expressed in seconds. For more information, see &lt;a href=&quot;https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/setting-timeouts-for-blob-service-operations&quot;&gt;Setting Timeouts for Blob Service Operations.&lt;/a&gt;. </param>
+        /// <param name="showonly"> Include this parameter to specify one or more datasets to include in the response. The default value is AutoRest.CSharp.Output.Models.Types.EnumTypeValue. </param>
+        /// <param name="timeout"> The timeout parameter is expressed in seconds. For more information, see &lt;a href="https://docs.microsoft.com/en-us/rest/api/storageservices/fileservices/setting-timeouts-for-blob-service-operations"&gt;Setting Timeouts for Blob Service Operations.&lt;/a&gt;. </param>
         /// <param name="cancellationToken"> The cancellation token to use. </param>
         /// <exception cref="ArgumentNullException"> <paramref name="nextLink"/> is null. </exception>
-        public ResponseWithHeaders<ListBlobsHierarchySegmentResponse, FileSystemListBlobHierarchySegmentHeaders> ListBlobHierarchySegmentNextPage(string nextLink, string prefix = null, string delimiter = null, string marker = null, int? maxResults = null, IEnumerable<ListBlobsIncludeItem> include = null, int? timeout = null, CancellationToken cancellationToken = default)
+        public ResponseWithHeaders<ListBlobsHierarchySegmentResponse, FileSystemListBlobHierarchySegmentHeaders> ListBlobHierarchySegmentNextPage(string nextLink, string prefix = null, string delimiter = null, string marker = null, int? maxResults = null, IEnumerable<ListBlobsIncludeItem> include = null, ListBlobsShowOnly? showonly = null, int? timeout = null, CancellationToken cancellationToken = default)
         {
             if (nextLink == null)
             {
                 throw new ArgumentNullException(nameof(nextLink));
             }
 
-            using var message = CreateListBlobHierarchySegmentNextPageRequest(nextLink, prefix, delimiter, marker, maxResults, include, timeout);
+            using var message = CreateListBlobHierarchySegmentNextPageRequest(nextLink, prefix, delimiter, marker, maxResults, include, showonly, timeout);
             _pipeline.Send(message, cancellationToken);
             var headers = new FileSystemListBlobHierarchySegmentHeaders(message.Response);
             switch (message.Response.Status)
@@ -558,7 +578,7 @@ namespace Azure.Storage.Files.DataLake
                         return ResponseWithHeaders.FromValue(value, headers, message.Response);
                     }
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
     }

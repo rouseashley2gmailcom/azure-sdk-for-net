@@ -39,7 +39,7 @@ namespace Azure.AI.Personalizer
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
             uri.AppendRaw(endpoint, false);
-            uri.AppendRaw("/personalizer/v1.1-preview.1", false);
+            uri.AppendRaw("/personalizer/v1.1-preview.3", false);
             uri.AppendPath("/multislot/events/", false);
             uri.AppendPath(eventId, true);
             uri.AppendPath("/reward", false);
@@ -75,7 +75,7 @@ namespace Azure.AI.Personalizer
                 case 204:
                     return message.Response;
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -102,7 +102,7 @@ namespace Azure.AI.Personalizer
                 case 204:
                     return message.Response;
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -113,7 +113,7 @@ namespace Azure.AI.Personalizer
             request.Method = RequestMethod.Post;
             var uri = new RawRequestUriBuilder();
             uri.AppendRaw(endpoint, false);
-            uri.AppendRaw("/personalizer/v1.1-preview.1", false);
+            uri.AppendRaw("/personalizer/v1.1-preview.3", false);
             uri.AppendPath("/multislot/events/", false);
             uri.AppendPath(eventId, true);
             uri.AppendPath("/activate", false);
@@ -140,7 +140,7 @@ namespace Azure.AI.Personalizer
                 case 204:
                     return message.Response;
                 default:
-                    throw await _clientDiagnostics.CreateRequestFailedExceptionAsync(message.Response).ConfigureAwait(false);
+                    throw new RequestFailedException(message.Response);
             }
         }
 
@@ -162,7 +162,7 @@ namespace Azure.AI.Personalizer
                 case 204:
                     return message.Response;
                 default:
-                    throw _clientDiagnostics.CreateRequestFailedException(message.Response);
+                    throw new RequestFailedException(message.Response);
             }
         }
     }

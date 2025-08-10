@@ -1,9 +1,10 @@
-﻿// Copyright (c) Microsoft Corporation. All rights reserved.
+// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Azure.Core;
 using Azure.Core.TestFramework;
@@ -12,11 +13,73 @@ using NUnit.Framework;
 
 namespace Azure.Monitor.Query.Tests
 {
-    public class LogsQueryClientSamples: SamplesBase<MonitorQueryTestEnvironment>
+    public class LogsQueryClientSamples : SamplesBase<MonitorQueryTestEnvironment>
     {
         [Test]
         [Explicit]
-        public async Task QueryLogsAsTable()
+        public async Task QueryLogsWithStatistics()
+        {
+            #region Snippet:QueryLogsWithStatistics
+#if SNIPPET
+            string workspaceId = "<workspace_id>";
+#else
+            string workspaceId = TestEnvironment.WorkspaceId;
+#endif
+            var client = new LogsQueryClient(new DefaultAzureCredential());
+
+            Response<LogsQueryResult> response = await client.QueryWorkspaceAsync(
+                workspaceId,
+                "AzureActivity | top 10 by TimeGenerated",
+                new QueryTimeRange(TimeSpan.FromDays(1)),
+                new LogsQueryOptions
+                {
+                    IncludeStatistics = true,
+                });
+
+            BinaryData stats = response.Value.GetStatistics();
+            using var statsDoc = JsonDocument.Parse(stats);
+            var queryStats = statsDoc.RootElement.GetProperty("query");
+            Console.WriteLine(queryStats.GetProperty("executionTime").GetDouble());
+
+            #endregion
+        }
+
+        [Test]
+        [Explicit]
+        public async Task QueryLogsWithVisualization()
+        {
+            #region Snippet:QueryLogsWithVisualization
+#if SNIPPET
+            string workspaceId = "<workspace_id>";
+#else
+            string workspaceId = TestEnvironment.WorkspaceId;
+#endif
+            var client = new LogsQueryClient(new DefaultAzureCredential());
+
+            Response<LogsQueryResult> response = await client.QueryWorkspaceAsync(
+                workspaceId,
+                @"StormEvents
+                    | summarize event_count = count() by State
+                    | where event_count > 10
+                    | project State, event_count
+                    | render columnchart",
+                new QueryTimeRange(TimeSpan.FromDays(1)),
+                new LogsQueryOptions
+                {
+                    IncludeVisualization = true,
+                });
+
+            BinaryData viz = response.Value.GetVisualization();
+            using var vizDoc = JsonDocument.Parse(viz);
+            var queryViz = vizDoc.RootElement.GetProperty("visualization");
+            Console.WriteLine(queryViz.GetString());
+
+            #endregion
+        }
+
+        [Test]
+        [Explicit]
+        public async Task QueryLogsByWorkspaceAsTable()
         {
             #region Snippet:QueryLogsAsTable
 #if SNIPPET
@@ -27,18 +90,18 @@ namespace Azure.Monitor.Query.Tests
             #region Snippet:CreateLogsClient
             var client = new LogsQueryClient(new DefaultAzureCredential());
             #endregion
-            Response<LogsQueryResult> response = await client.QueryWorkspaceAsync(
+
+            Response<LogsQueryResult> result = await client.QueryWorkspaceAsync(
                 workspaceId,
                 "AzureActivity | top 10 by TimeGenerated",
                 new QueryTimeRange(TimeSpan.FromDays(1)));
 
-            LogsTable table = response.Value.Table;
+            LogsTable table = result.Value.Table;
 
             foreach (var row in table.Rows)
             {
-                Console.WriteLine(row["OperationName"] + " " + row["ResourceGroup"]);
+                Console.WriteLine($"{row["OperationName"]} {row["ResourceGroup"]}");
             }
-
             #endregion
         }
 
@@ -119,10 +182,11 @@ namespace Azure.Monitor.Query.Tests
         {
             #region Snippet:QueryLogsAsModels
 
-            var client = new LogsQueryClient(TestEnvironment.LogsEndpoint, new DefaultAzureCredential());
 #if SNIPPET
+            var client = new LogsQueryClient(new DefaultAzureCredential());
             string workspaceId = "<workspace_id>";
 #else
+            var client = new LogsQueryClient(TestEnvironment.LogsEndpoint, new DefaultAzureCredential());
             string workspaceId = TestEnvironment.WorkspaceId;
 #endif
 
@@ -199,11 +263,14 @@ namespace Azure.Monitor.Query.Tests
             var client = new LogsQueryClient(new DefaultAzureCredential());
 
             // Query TOP 10 resource groups by event count
-            Response<IReadOnlyList<int>> response = await client.QueryWorkspaceAsync<int>(
+            Response<IReadOnlyList<string>> response = await client.QueryWorkspaceAsync<string>(
                 workspaceId,
-                "AzureActivity | summarize count()",
+                @"AzureActivity
+                    | summarize Count = count() by ResourceGroup
+                    | top 10 by Count
+                    | project ResourceGroup",
                 new QueryTimeRange(TimeSpan.FromDays(1)),
-                options: new LogsQueryOptions
+                new LogsQueryOptions
                 {
                     ServerTimeout = TimeSpan.FromMinutes(10)
                 });
@@ -232,11 +299,14 @@ namespace Azure.Monitor.Query.Tests
             var client = new LogsQueryClient(new DefaultAzureCredential());
 
             // Query TOP 10 resource groups by event count
-            Response<IReadOnlyList<int>> response = await client.QueryWorkspaceAsync<int>(
+            Response<IReadOnlyList<string>> response = await client.QueryWorkspaceAsync<string>(
                 workspaceId,
-                "AzureActivity | summarize count()",
+                @"AzureActivity
+                    | summarize Count = count() by ResourceGroup
+                    | top 10 by Count
+                    | project ResourceGroup",
                 new QueryTimeRange(TimeSpan.FromDays(1)),
-                options: new LogsQueryOptions
+                new LogsQueryOptions
                 {
                     AdditionalWorkspaces = { additionalWorkspaceId }
                 });
@@ -282,5 +352,64 @@ namespace Azure.Monitor.Query.Tests
             public int Count { get; set; }
         }
         #endregion
+
+        [Test]
+        [Explicit]
+        public async Task QueryLogsWithPartialSuccess()
+        {
+            var client = new LogsQueryClient(new DefaultAzureCredential());
+
+            #region Snippet:QueryLogsWithPartialSuccess
+            Response<LogsQueryResult> response = await client.QueryWorkspaceAsync(
+                TestEnvironment.WorkspaceId,
+                "My Not So Valid Query",
+                new QueryTimeRange(TimeSpan.FromDays(1)),
+                new LogsQueryOptions
+                {
+                    AllowPartialErrors = true
+                });
+            LogsQueryResult result = response.Value;
+
+            if (result.Status == LogsQueryResultStatus.PartialFailure)
+            {
+                var errorCode = result.Error.Code;
+                var errorMessage = result.Error.Message;
+
+                // code omitted for brevity
+            }
+            #endregion
+        }
+
+        [Test]
+        [Explicit]
+        public async Task QueryLogsByResourceAsTable()
+        {
+            #region Snippet:QueryResource
+            var client = new LogsQueryClient(new DefaultAzureCredential());
+
+#if SNIPPET
+            string resourceId = "/subscriptions/<subscription_id>/resourceGroups/<resource_group_name>/providers/<resource_provider>/<resource>";
+            string tableName = "<table_name>";
+#else
+            string tableName = "MyTable_CL";
+            string resourceId = TestEnvironment.WorkspacePrimaryResourceId;
+#endif
+            Response<LogsQueryResult> results = await client.QueryResourceAsync(
+                new ResourceIdentifier(resourceId),
+                $"{tableName} | distinct * | project TimeGenerated",
+                new QueryTimeRange(TimeSpan.FromDays(7)));
+
+            LogsTable resultTable = results.Value.Table;
+            foreach (LogsTableRow row in resultTable.Rows)
+            {
+                Console.WriteLine($"{row["OperationName"]} {row["ResourceGroup"]}");
+            }
+
+            foreach (LogsTableColumn columns in resultTable.Columns)
+            {
+                Console.WriteLine("Name: " + columns.Name + " Type: " + columns.Type);
+            }
+            #endregion
+        }
     }
 }

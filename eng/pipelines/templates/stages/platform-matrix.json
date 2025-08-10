@@ -5,44 +5,62 @@
   },
   "matrix": {
     "Agent": {
-      "ubuntu-20.04": {
-          "OSVmImage": "MMSUbuntu20.04",
-          "Pool": "azsdk-pool-mms-ubuntu-2004-general"
+      "Ubuntu-24.04_NET8.0": {
+        "OSVmImage": "env:LINUXVMIMAGE",
+        "Pool": "env:LINUXPOOL",
+        "TestTargetFramework": "net8.0"
       },
-      "windows-2019": {
-          "OSVmImage": "MMS2019",
-          "Pool": "azsdk-pool-mms-win-2019-general"
+      "Ubuntu-24.04_NET9.0": {
+        "OSVmImage": "env:LINUXVMIMAGE",
+        "Pool": "env:LINUXPOOL",
+        "TestTargetFramework": "net9.0"
       },
-      "macOS-10.15": {
-          "OSVmImage": "macOS-10.15",
-          "Pool": "Azure Pipelines"
+      "Windows2022_NET462": {
+        "OSVmImage": "env:WINDOWSVMIMAGE",
+        "Pool": "env:WINDOWSPOOL",
+        "TestTargetFramework": "net462"
+      },
+      "Windows2022_NET8.0": {
+        "OSVmImage": "env:WINDOWSVMIMAGE",
+        "Pool": "env:WINDOWSPOOL",
+        "TestTargetFramework": "net8.0"
+      },
+      "MacOS_NET8.0": {
+        "OSVmImage": "env:MACVMIMAGE",
+        "Pool": "env:MACPOOL",
+        "TestTargetFramework": "net8.0"
+      },
+      "MacOS_NET9.0": {
+        "OSVmImage": "env:MACVMIMAGE",
+        "Pool": "env:MACPOOL",
+        "TestTargetFramework": "net9.0"
       }
     },
-    "TestTargetFramework": [
-        "netcoreapp3.1",
-        "net461",
-        "net5.0"
-    ],
     "AdditionalTestArguments": [
-        "/p:UseProjectReferenceToAzureClients=false",
-        "/p:UseProjectReferenceToAzureClients=true"
+      "/p:UseProjectReferenceToAzureClients=false",
+      "/p:UseProjectReferenceToAzureClients=true"
+    ],
+    "BuildConfiguration": [
+      "Debug",
+      "Release"
     ]
   },
   "include": [
     {
       "Agent": {
-          "windows-2019": {
-              "OSVmImage": "MMS2019",
-              "Pool": "azsdk-pool-mms-win-2019-general"
-          }
+        "Windows2022_NET9.0": {
+          "OSVmImage": "env:WINDOWSVMIMAGE",
+          "Pool": "env:WINDOWSPOOL",
+          "TestTargetFramework": "net9.0"
+        }
       },
       "TestMode": {
-          "netcoreapp31_Coverage_Record": {
-              "SupportsRecording": true,
-              "CollectCoverage": true,
-              "TestTargetFramework": "netcoreapp3.1"
-          }
-      }
+        "Coverage_Record": {
+          "SupportsRecording": true,
+          "CollectCoverage": true
+        }
+      },
+      "AdditionalTestArguments": "/p:UseProjectReferenceToAzureClients=false"
     }
   ]
 }

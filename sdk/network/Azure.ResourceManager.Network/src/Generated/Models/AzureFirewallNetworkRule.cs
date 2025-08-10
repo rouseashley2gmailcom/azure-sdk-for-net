@@ -5,15 +5,47 @@
 
 #nullable disable
 
+using System;
 using System.Collections.Generic;
-using Azure.Core;
 
 namespace Azure.ResourceManager.Network.Models
 {
     /// <summary> Properties of the network rule. </summary>
     public partial class AzureFirewallNetworkRule
     {
-        /// <summary> Initializes a new instance of AzureFirewallNetworkRule. </summary>
+        /// <summary>
+        /// Keeps track of any properties unknown to the library.
+        /// <para>
+        /// To assign an object to the value of this property use <see cref="BinaryData.FromObjectAsJson{T}(T, System.Text.Json.JsonSerializerOptions?)"/>.
+        /// </para>
+        /// <para>
+        /// To assign an already formatted json string to this property use <see cref="BinaryData.FromString(string)"/>.
+        /// </para>
+        /// <para>
+        /// Examples:
+        /// <list type="bullet">
+        /// <item>
+        /// <term>BinaryData.FromObjectAsJson("foo")</term>
+        /// <description>Creates a payload of "foo".</description>
+        /// </item>
+        /// <item>
+        /// <term>BinaryData.FromString("\"foo\"")</term>
+        /// <description>Creates a payload of "foo".</description>
+        /// </item>
+        /// <item>
+        /// <term>BinaryData.FromObjectAsJson(new { key = "value" })</term>
+        /// <description>Creates a payload of { "key": "value" }.</description>
+        /// </item>
+        /// <item>
+        /// <term>BinaryData.FromString("{\"key\": \"value\"}")</term>
+        /// <description>Creates a payload of { "key": "value" }.</description>
+        /// </item>
+        /// </list>
+        /// </para>
+        /// </summary>
+        private IDictionary<string, BinaryData> _serializedAdditionalRawData;
+
+        /// <summary> Initializes a new instance of <see cref="AzureFirewallNetworkRule"/>. </summary>
         public AzureFirewallNetworkRule()
         {
             Protocols = new ChangeTrackingList<AzureFirewallNetworkRuleProtocol>();
@@ -21,11 +53,11 @@ namespace Azure.ResourceManager.Network.Models
             DestinationAddresses = new ChangeTrackingList<string>();
             DestinationPorts = new ChangeTrackingList<string>();
             DestinationFqdns = new ChangeTrackingList<string>();
-            SourceIpGroups = new ChangeTrackingList<string>();
-            DestinationIpGroups = new ChangeTrackingList<string>();
+            SourceIPGroups = new ChangeTrackingList<string>();
+            DestinationIPGroups = new ChangeTrackingList<string>();
         }
 
-        /// <summary> Initializes a new instance of AzureFirewallNetworkRule. </summary>
+        /// <summary> Initializes a new instance of <see cref="AzureFirewallNetworkRule"/>. </summary>
         /// <param name="name"> Name of the network rule. </param>
         /// <param name="description"> Description of the rule. </param>
         /// <param name="protocols"> Array of AzureFirewallNetworkRuleProtocols. </param>
@@ -33,9 +65,10 @@ namespace Azure.ResourceManager.Network.Models
         /// <param name="destinationAddresses"> List of destination IP addresses. </param>
         /// <param name="destinationPorts"> List of destination ports. </param>
         /// <param name="destinationFqdns"> List of destination FQDNs. </param>
-        /// <param name="sourceIpGroups"> List of source IpGroups for this rule. </param>
-        /// <param name="destinationIpGroups"> List of destination IpGroups for this rule. </param>
-        internal AzureFirewallNetworkRule(string name, string description, IList<AzureFirewallNetworkRuleProtocol> protocols, IList<string> sourceAddresses, IList<string> destinationAddresses, IList<string> destinationPorts, IList<string> destinationFqdns, IList<string> sourceIpGroups, IList<string> destinationIpGroups)
+        /// <param name="sourceIPGroups"> List of source IpGroups for this rule. </param>
+        /// <param name="destinationIPGroups"> List of destination IpGroups for this rule. </param>
+        /// <param name="serializedAdditionalRawData"> Keeps track of any properties unknown to the library. </param>
+        internal AzureFirewallNetworkRule(string name, string description, IList<AzureFirewallNetworkRuleProtocol> protocols, IList<string> sourceAddresses, IList<string> destinationAddresses, IList<string> destinationPorts, IList<string> destinationFqdns, IList<string> sourceIPGroups, IList<string> destinationIPGroups, IDictionary<string, BinaryData> serializedAdditionalRawData)
         {
             Name = name;
             Description = description;
@@ -44,8 +77,9 @@ namespace Azure.ResourceManager.Network.Models
             DestinationAddresses = destinationAddresses;
             DestinationPorts = destinationPorts;
             DestinationFqdns = destinationFqdns;
-            SourceIpGroups = sourceIpGroups;
-            DestinationIpGroups = destinationIpGroups;
+            SourceIPGroups = sourceIPGroups;
+            DestinationIPGroups = destinationIPGroups;
+            _serializedAdditionalRawData = serializedAdditionalRawData;
         }
 
         /// <summary> Name of the network rule. </summary>
@@ -63,8 +97,8 @@ namespace Azure.ResourceManager.Network.Models
         /// <summary> List of destination FQDNs. </summary>
         public IList<string> DestinationFqdns { get; }
         /// <summary> List of source IpGroups for this rule. </summary>
-        public IList<string> SourceIpGroups { get; }
+        public IList<string> SourceIPGroups { get; }
         /// <summary> List of destination IpGroups for this rule. </summary>
-        public IList<string> DestinationIpGroups { get; }
+        public IList<string> DestinationIPGroups { get; }
     }
 }

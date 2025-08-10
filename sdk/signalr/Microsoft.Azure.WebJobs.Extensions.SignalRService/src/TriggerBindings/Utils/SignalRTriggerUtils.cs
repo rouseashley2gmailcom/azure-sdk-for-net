@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http.Headers;
+using System.Reflection;
 using Microsoft.AspNetCore.WebUtilities;
 
 namespace Microsoft.Azure.WebJobs.Extensions.SignalRService
@@ -48,12 +49,16 @@ namespace Microsoft.Azure.WebJobs.Extensions.SignalRService
                 return default;
             }
 
-            return signatures.Split(HeaderSeparator, StringSplitOptions.RemoveEmptyEntries);
+            return signatures.Split(HeaderSeparator, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();
         }
 
         public static IDictionary<string, string> GetHeaderDictionary(HttpRequestHeaders headers)
         {
             return headers.ToDictionary(x => x.Key, x => string.Join(CommaSeparator, x.Value.ToArray()), StringComparer.OrdinalIgnoreCase);
         }
+
+        public static string GetConnectionNameFromAttribute(Type serverlessHubType) =>
+            serverlessHubType.GetCustomAttribute<ServerlessHub.SignalRConnectionAttribute>()?.Connection ??
+            serverlessHubType.GetCustomAttribute<SignalRConnectionAttribute>()?.Connection;
     }
 }

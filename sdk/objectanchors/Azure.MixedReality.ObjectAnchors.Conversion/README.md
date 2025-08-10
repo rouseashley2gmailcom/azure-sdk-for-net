@@ -23,18 +23,10 @@ Azure Object Anchors enables an application to detect an object in the physical 
 
 ### Install the package
 
-Install the Azure Object Anchors client library for .NET using one of the following methods.
-
-From Visual Studio Package Manager:
-
-```powershell
-Install-Package Azure.MixedReality.ObjectAnchors.Conversion
-```
-
-From .NET CLI
+Install the Azure Object Anchors client library for .NET with [NuGet](https://www.nuget.org/):
 
 ```dotnetcli
-dotnet add package Azure.MixedReality.ObjectAnchors.Conversion
+dotnet add package Azure.MixedReality.ObjectAnchors.Conversion --prerelease
 ```
 
 Add a package reference:
@@ -46,7 +38,7 @@ Add a package reference:
 ### Prerequisites
 
 - You must have an [Azure subscription](https://azure.microsoft.com/free/dotnet/).
-- You must have an [Azure Object Anchors](https://review.docs.microsoft.com/azure/object-anchors/) account.
+- You must have an [Azure Object Anchors](https://review.learn.microsoft.com/azure/object-anchors/) account.
 
 ### Authenticate the client
 
@@ -62,7 +54,7 @@ Mixed Reality services support a few different forms of authentication:
   - Otherwise, we recommend that you obtain Azure AD tokens from a web service that supports your app. We recommend this
     method for production applications because it allows you to avoid embedding the credentials for access to the Object Anchors asset conversion service in your client application.
 
-See [here](https://docs.microsoft.com/azure/spatial-anchors/concepts/authentication) for detailed instructions and information.
+See [here](https://learn.microsoft.com/azure/spatial-anchors/concepts/authentication) for detailed instructions and information.
 
 ## Key concepts
 
@@ -100,6 +92,10 @@ using (FileStream fs = File.OpenRead(localFilePath))
 ```csharp
 AssetConversionOptions assetConversionOptions = new AssetConversionOptions(uploadedInputAssetUri, AssetFileType.FromFilePath(localFilePath), assetGravity, scale);
 
+// Or you can pass in an optional parameter DisableDetectScaleUnits if you are converting a FBX, specifying whether or not you want to disable automatic detection of the embedded scale units. 
+// The detection is enabled by default.
+AssetConversionOptions assetConversionOptions = new AssetConversionOptions(uploadedInputAssetUri, AssetFileType.FromFilePath(localFilePath), assetGravity, scale, disableDetectScaleUnits: true);
+
 AssetConversionOperation operation = await client.StartAssetConversionAsync(assetConversionOptions);
 
 Guid jobId = new Guid(operation.Id);
@@ -135,7 +131,7 @@ using (FileStream file = File.OpenWrite(localFileDownloadPath))
 
 ## Next steps
 
-- Read the [Product documentation](https://review.docs.microsoft.com/azure/object-anchors/)
+- Read the [Product documentation](https://review.learn.microsoft.com/azure/object-anchors/)
 
 ## Contributing
 

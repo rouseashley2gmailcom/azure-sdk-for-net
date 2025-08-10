@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Azure.AI.MetricsAdvisor.Administration;
 using Azure.AI.MetricsAdvisor.Models;
 using Azure.Core.TestFramework;
+using Azure.Core.TestFramework.Models;
 using NUnit.Framework;
 
 namespace Azure.AI.MetricsAdvisor.Tests
@@ -16,29 +17,39 @@ namespace Azure.AI.MetricsAdvisor.Tests
         protected const string TempDataFeedMetricName = "metric";
         protected const string TempDataFeedDimensionNameA = "dimensionA";
         protected const string TempDataFeedDimensionNameB = "dimensionB";
+        protected static string EmptyGuid = Guid.Empty.ToString();
 
-        public MetricsAdvisorLiveTestBase(bool isAsync, RecordedTestMode mode) : base(isAsync, mode)
+        public MetricsAdvisorLiveTestBase(bool isAsync, RecordedTestMode? mode = default) : base(isAsync, mode)
         {
-            Sanitizer = new MetricsAdvisorRecordedTestSanitizer();
+            SanitizedHeaders.Add(Constants.SubscriptionAuthorizationHeader);
+            SanitizedHeaders.Add(Constants.ApiAuthorizationHeader);
+            JsonPathSanitizers.Add("$..password");
+            JsonPathSanitizers.Add("$..certificatePassword");
+            JsonPathSanitizers.Add("$..clientSecret");
+            JsonPathSanitizers.Add("$..keyVaultClientSecret");
+            JsonPathSanitizers.Add("$..apiKey");
+            JsonPathSanitizers.Add("$..accountKey");
+            JsonPathSanitizers.Add("$..authHeader");
+            JsonPathSanitizers.Add("$..httpHeader");
+            BodyRegexSanitizers.Add(new BodyRegexSanitizer(@"\w+@microsoft.com") { Value = "foo@contoso.com" });
         }
 
-        public MetricsAdvisorLiveTestBase(bool isAsync) : base(isAsync)
-        {
-            Sanitizer = new MetricsAdvisorRecordedTestSanitizer();
-        }
-
-        internal const string DetectionConfigurationId = "fb5a6ed6-2b9e-4b72-8b0c-0046ead1c15c";
-        internal const string IncidentId = "736eed64368bb6a372e855322a15a736-174e1756000";
-        internal const string AlertConfigurationId = "204a211a-c5f4-45f3-a30e-512fb25d1d2c";
-        internal const string AlertId = "17571a77000";
-        internal const string MetricId = "27e3015f-04fd-44ba-a20b-bc529a0aebae";
-        internal const string DataFeedId = "9860df01-e740-40ec-94a2-6351813552ba";
+        internal const string DetectionConfigurationId = "78f3a4e7-fe53-4a05-9f4d-d724ab6c23a7";
+        internal const string IncidentId = "88ecf25a0e6bd330ef9e7b49b7c5b92b-18001521c00";
+        internal const string AlertConfigurationId = "126d1470-b500-4ef0-b5c0-47f9ca914a75";
+        internal const string AlertId = "17f9f794800";
+        internal const string MetricId = "b6c0649c-0c51-4aa6-82b6-3c3b0aa55066";
+        internal const string DataFeedId = "6e48e476-33e6-4113-a299-a5740bc0db47";
 
         protected int MaximumSamplesCount => 10;
 
-        protected DateTimeOffset SamplingStartTime => DateTimeOffset.Parse("2020-10-01T00:00:00Z");
+        protected int MaxPageSizeSamples => 1;
 
-        protected DateTimeOffset SamplingEndTime => DateTimeOffset.Parse("2020-10-31T00:00:00Z");
+        protected int SkipSamples => 1;
+
+        protected DateTimeOffset SamplingStartTime => DateTimeOffset.Parse("2022-01-01T00:00:00.0000000Z");
+
+        protected DateTimeOffset SamplingEndTime => DateTimeOffset.Parse("2022-04-15T00:00:00.0000000Z");
 
         public MetricsAdvisorAdministrationClient GetMetricsAdvisorAdministrationClient(bool useTokenCredential = false)
         {
@@ -111,11 +122,11 @@ namespace Azure.AI.MetricsAdvisor.Tests
             Assert.That(seriesKey, Is.Not.Null);
 
             Assert.That(Count(seriesKey), Is.EqualTo(2));
-            Assert.That(seriesKey.TryGetValue("city", out string city));
-            Assert.That(seriesKey.TryGetValue("category", out string category));
+            Assert.That(seriesKey.TryGetValue("Dim1", out string dim1));
+            Assert.That(seriesKey.TryGetValue("Dim2", out string dim2));
 
-            Assert.That(city, Is.Not.Null.And.Not.Empty);
-            Assert.That(category, Is.Not.Null.And.Not.Empty);
+            Assert.That(dim1, Is.Not.Null.And.Not.Empty);
+            Assert.That(dim2, Is.Not.Null.And.Not.Empty);
         }
 
         protected void ValidateGroupKey(DimensionKey groupKey)
@@ -126,7 +137,7 @@ namespace Azure.AI.MetricsAdvisor.Tests
 
             foreach (KeyValuePair<string, string> dimension in groupKey)
             {
-                Assert.That(dimension.Key, Is.EqualTo("city").Or.EqualTo("category"));
+                Assert.That(dimension.Key, Is.EqualTo("Dim1").Or.EqualTo("Dim2"));
                 Assert.That(dimension.Value, Is.Not.Null.And.Not.Empty);
 
                 count++;

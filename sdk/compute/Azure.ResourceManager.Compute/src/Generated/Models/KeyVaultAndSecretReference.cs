@@ -6,6 +6,8 @@
 #nullable disable
 
 using System;
+using System.Collections.Generic;
+using Azure.Core;
 using Azure.ResourceManager.Resources.Models;
 
 namespace Azure.ResourceManager.Compute.Models
@@ -13,28 +15,82 @@ namespace Azure.ResourceManager.Compute.Models
     /// <summary> Key Vault Secret Url and vault id of the encryption key. </summary>
     public partial class KeyVaultAndSecretReference
     {
-        /// <summary> Initializes a new instance of KeyVaultAndSecretReference. </summary>
+        /// <summary>
+        /// Keeps track of any properties unknown to the library.
+        /// <para>
+        /// To assign an object to the value of this property use <see cref="BinaryData.FromObjectAsJson{T}(T, System.Text.Json.JsonSerializerOptions?)"/>.
+        /// </para>
+        /// <para>
+        /// To assign an already formatted json string to this property use <see cref="BinaryData.FromString(string)"/>.
+        /// </para>
+        /// <para>
+        /// Examples:
+        /// <list type="bullet">
+        /// <item>
+        /// <term>BinaryData.FromObjectAsJson("foo")</term>
+        /// <description>Creates a payload of "foo".</description>
+        /// </item>
+        /// <item>
+        /// <term>BinaryData.FromString("\"foo\"")</term>
+        /// <description>Creates a payload of "foo".</description>
+        /// </item>
+        /// <item>
+        /// <term>BinaryData.FromObjectAsJson(new { key = "value" })</term>
+        /// <description>Creates a payload of { "key": "value" }.</description>
+        /// </item>
+        /// <item>
+        /// <term>BinaryData.FromString("{\"key\": \"value\"}")</term>
+        /// <description>Creates a payload of { "key": "value" }.</description>
+        /// </item>
+        /// </list>
+        /// </para>
+        /// </summary>
+        private IDictionary<string, BinaryData> _serializedAdditionalRawData;
+
+        /// <summary> Initializes a new instance of <see cref="KeyVaultAndSecretReference"/>. </summary>
         /// <param name="sourceVault"> Resource id of the KeyVault containing the key or secret. </param>
-        /// <param name="secretUrl"> Url pointing to a key or secret in KeyVault. </param>
-        /// <exception cref="ArgumentNullException"> <paramref name="sourceVault"/> or <paramref name="secretUrl"/> is null. </exception>
-        public KeyVaultAndSecretReference(WritableSubResource sourceVault, string secretUrl)
+        /// <param name="secretUri"> Url pointing to a key or secret in KeyVault. </param>
+        /// <exception cref="ArgumentNullException"> <paramref name="sourceVault"/> or <paramref name="secretUri"/> is null. </exception>
+        public KeyVaultAndSecretReference(WritableSubResource sourceVault, Uri secretUri)
         {
-            if (sourceVault == null)
-            {
-                throw new ArgumentNullException(nameof(sourceVault));
-            }
-            if (secretUrl == null)
-            {
-                throw new ArgumentNullException(nameof(secretUrl));
-            }
+            Argument.AssertNotNull(sourceVault, nameof(sourceVault));
+            Argument.AssertNotNull(secretUri, nameof(secretUri));
 
             SourceVault = sourceVault;
-            SecretUrl = secretUrl;
+            SecretUri = secretUri;
+        }
+
+        /// <summary> Initializes a new instance of <see cref="KeyVaultAndSecretReference"/>. </summary>
+        /// <param name="sourceVault"> Resource id of the KeyVault containing the key or secret. </param>
+        /// <param name="secretUri"> Url pointing to a key or secret in KeyVault. </param>
+        /// <param name="serializedAdditionalRawData"> Keeps track of any properties unknown to the library. </param>
+        internal KeyVaultAndSecretReference(WritableSubResource sourceVault, Uri secretUri, IDictionary<string, BinaryData> serializedAdditionalRawData)
+        {
+            SourceVault = sourceVault;
+            SecretUri = secretUri;
+            _serializedAdditionalRawData = serializedAdditionalRawData;
+        }
+
+        /// <summary> Initializes a new instance of <see cref="KeyVaultAndSecretReference"/> for deserialization. </summary>
+        internal KeyVaultAndSecretReference()
+        {
         }
 
         /// <summary> Resource id of the KeyVault containing the key or secret. </summary>
-        public WritableSubResource SourceVault { get; set; }
+        internal WritableSubResource SourceVault { get; set; }
+        /// <summary> Gets or sets Id. </summary>
+        public ResourceIdentifier SourceVaultId
+        {
+            get => SourceVault is null ? default : SourceVault.Id;
+            set
+            {
+                if (SourceVault is null)
+                    SourceVault = new WritableSubResource();
+                SourceVault.Id = value;
+            }
+        }
+
         /// <summary> Url pointing to a key or secret in KeyVault. </summary>
-        public string SecretUrl { get; set; }
+        public Uri SecretUri { get; set; }
     }
 }

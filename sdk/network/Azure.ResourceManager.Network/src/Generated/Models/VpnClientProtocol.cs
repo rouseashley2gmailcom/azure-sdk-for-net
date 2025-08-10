@@ -24,19 +24,19 @@ namespace Azure.ResourceManager.Network.Models
 
         private const string IkeV2Value = "IkeV2";
         private const string SstpValue = "SSTP";
-        private const string OpenVPNValue = "OpenVPN";
+        private const string OpenVpnValue = "OpenVPN";
 
         /// <summary> IkeV2. </summary>
         public static VpnClientProtocol IkeV2 { get; } = new VpnClientProtocol(IkeV2Value);
         /// <summary> SSTP. </summary>
         public static VpnClientProtocol Sstp { get; } = new VpnClientProtocol(SstpValue);
         /// <summary> OpenVPN. </summary>
-        public static VpnClientProtocol OpenVPN { get; } = new VpnClientProtocol(OpenVPNValue);
+        public static VpnClientProtocol OpenVpn { get; } = new VpnClientProtocol(OpenVpnValue);
         /// <summary> Determines if two <see cref="VpnClientProtocol"/> values are the same. </summary>
         public static bool operator ==(VpnClientProtocol left, VpnClientProtocol right) => left.Equals(right);
         /// <summary> Determines if two <see cref="VpnClientProtocol"/> values are not the same. </summary>
         public static bool operator !=(VpnClientProtocol left, VpnClientProtocol right) => !left.Equals(right);
-        /// <summary> Converts a string to a <see cref="VpnClientProtocol"/>. </summary>
+        /// <summary> Converts a <see cref="string"/> to a <see cref="VpnClientProtocol"/>. </summary>
         public static implicit operator VpnClientProtocol(string value) => new VpnClientProtocol(value);
 
         /// <inheritdoc />
@@ -47,7 +47,7 @@ namespace Azure.ResourceManager.Network.Models
 
         /// <inheritdoc />
         [EditorBrowsable(EditorBrowsableState.Never)]
-        public override int GetHashCode() => _value?.GetHashCode() ?? 0;
+        public override int GetHashCode() => _value != null ? StringComparer.InvariantCultureIgnoreCase.GetHashCode(_value) : 0;
         /// <inheritdoc />
         public override string ToString() => _value;
     }

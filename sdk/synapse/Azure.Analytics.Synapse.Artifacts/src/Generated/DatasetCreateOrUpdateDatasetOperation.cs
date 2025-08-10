@@ -9,7 +9,6 @@ using System;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Azure;
 using Azure.Analytics.Synapse.Artifacts.Models;
 using Azure.Core;
 using Azure.Core.Pipeline;
@@ -19,7 +18,7 @@ namespace Azure.Analytics.Synapse.Artifacts
     /// <summary> Creates or updates a dataset. </summary>
     public partial class DatasetCreateOrUpdateDatasetOperation : Operation<DatasetResource>, IOperationSource<DatasetResource>
     {
-        private readonly OperationInternals<DatasetResource> _operation;
+        private readonly OperationInternal<DatasetResource> _operation;
 
         /// <summary> Initializes a new instance of DatasetCreateOrUpdateDatasetOperation for mocking. </summary>
         protected DatasetCreateOrUpdateDatasetOperation()
@@ -28,11 +27,14 @@ namespace Azure.Analytics.Synapse.Artifacts
 
         internal DatasetCreateOrUpdateDatasetOperation(ClientDiagnostics clientDiagnostics, HttpPipeline pipeline, Request request, Response response)
         {
-            _operation = new OperationInternals<DatasetResource>(this, clientDiagnostics, pipeline, request, response, OperationFinalStateVia.Location, "DatasetCreateOrUpdateDatasetOperation");
+            IOperation<DatasetResource> nextLinkOperation = NextLinkOperationImplementation.Create(this, pipeline, request.Method, request.Uri.ToUri(), response, OperationFinalStateVia.Location);
+            _operation = new OperationInternal<DatasetResource>(nextLinkOperation, clientDiagnostics, response, "DatasetCreateOrUpdateDatasetOperation");
         }
 
         /// <inheritdoc />
-        public override string Id => _operation.Id;
+#pragma warning disable CA1822
+        public override string Id => throw new NotImplementedException();
+#pragma warning restore CA1822
 
         /// <inheritdoc />
         public override DatasetResource Value => _operation.Value;
@@ -44,13 +46,19 @@ namespace Azure.Analytics.Synapse.Artifacts
         public override bool HasValue => _operation.HasValue;
 
         /// <inheritdoc />
-        public override Response GetRawResponse() => _operation.GetRawResponse();
+        public override Response GetRawResponse() => _operation.RawResponse;
 
         /// <inheritdoc />
         public override Response UpdateStatus(CancellationToken cancellationToken = default) => _operation.UpdateStatus(cancellationToken);
 
         /// <inheritdoc />
         public override ValueTask<Response> UpdateStatusAsync(CancellationToken cancellationToken = default) => _operation.UpdateStatusAsync(cancellationToken);
+
+        /// <inheritdoc />
+        public override Response<DatasetResource> WaitForCompletion(CancellationToken cancellationToken = default) => _operation.WaitForCompletion(cancellationToken);
+
+        /// <inheritdoc />
+        public override Response<DatasetResource> WaitForCompletion(TimeSpan pollingInterval, CancellationToken cancellationToken = default) => _operation.WaitForCompletion(pollingInterval, cancellationToken);
 
         /// <inheritdoc />
         public override ValueTask<Response<DatasetResource>> WaitForCompletionAsync(CancellationToken cancellationToken = default) => _operation.WaitForCompletionAsync(cancellationToken);
@@ -60,13 +68,13 @@ namespace Azure.Analytics.Synapse.Artifacts
 
         DatasetResource IOperationSource<DatasetResource>.CreateResult(Response response, CancellationToken cancellationToken)
         {
-            using var document = JsonDocument.Parse(response.ContentStream);
+            using var document = JsonDocument.Parse(response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions);
             return DatasetResource.DeserializeDatasetResource(document.RootElement);
         }
 
         async ValueTask<DatasetResource> IOperationSource<DatasetResource>.CreateResultAsync(Response response, CancellationToken cancellationToken)
         {
-            using var document = await JsonDocument.ParseAsync(response.ContentStream, default, cancellationToken).ConfigureAwait(false);
+            using var document = await JsonDocument.ParseAsync(response.ContentStream, ModelSerializationExtensions.JsonDocumentOptions, cancellationToken).ConfigureAwait(false);
             return DatasetResource.DeserializeDatasetResource(document.RootElement);
         }
     }

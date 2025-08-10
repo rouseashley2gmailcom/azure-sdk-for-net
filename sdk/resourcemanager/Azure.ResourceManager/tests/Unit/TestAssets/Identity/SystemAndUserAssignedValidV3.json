@@ -1,0 +1,8 @@
+﻿{
+    "type": "SystemAssigned,UserAssigned",
+    "principalId": "22fdaec1-8b9f-49dc-bd72-ddaf8f215577",
+    "tenantId": "72f988af-86f1-41af-91ab-2d7cd011db47",
+    "userAssignedIdentities": {
+        "/subscriptions/db1ab6f0-4769-4aa7-930e-01e2ef9c123c/resourceGroups/tester/providers/Microsoft.ManagedIdentity/userAssignedIdentities/testidentity": {}
+    }
+}

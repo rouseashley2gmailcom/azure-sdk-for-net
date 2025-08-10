@@ -66,7 +66,7 @@ namespace Azure.Storage.Blobs.Test
             var accountName = "accountName";
             var blobEndpoint = new Uri("https://127.0.0.1/" + accountName);
             BlobClient blob1 = InstrumentClient(new BlobClient(blobEndpoint));
-            BlobClient blob2 = InstrumentClient(new BlobClient(blobEndpoint, new SharedTokenCacheCredential()));
+            BlobClient blob2 = InstrumentClient(new BlobClient(blobEndpoint, new DefaultAzureCredential()));
 
             var builder1 = new BlobUriBuilder(blob1.Uri);
             var builder2 = new BlobUriBuilder(blob2.Uri);
@@ -104,7 +104,7 @@ namespace Azure.Storage.Blobs.Test
 
             // Act
             TestHelper.AssertExpectedException(
-                () => new BlobClient(httpUri, Tenants.GetOAuthCredential()),
+                () => new BlobClient(httpUri, TestEnvironment.Credential),
                  new ArgumentException("Cannot use TokenCredential without HTTPS."));
         }
 
@@ -194,6 +194,135 @@ namespace Azure.Storage.Blobs.Test
             StringAssert.Contains("ss=bqtf", transport.SingleRequest.Uri.ToString());
         }
 
+        [RecordedTest]
+        public async Task Ctor_DefaultAudience()
+        {
+            // Arrange
+            await using DisposingContainer test = await GetTestContainerAsync();
+
+            var data = GetRandomBuffer(Constants.KB);
+            BlobClient blob = InstrumentClient(test.Container.GetBlobClient(GetNewBlobName()));
+            using (var stream = new MemoryStream(data))
+            {
+                await blob.UploadAsync(stream);
+            }
+
+            // Act - Create new blob client with the OAuth Credential and Audience
+            BlobClientOptions options = GetOptionsWithAudience(BlobAudience.DefaultAudience);
+
+            BlobUriBuilder uriBuilder = new BlobUriBuilder(new Uri(Tenants.TestConfigOAuth.BlobServiceEndpoint))
+            {
+                BlobContainerName = blob.BlobContainerName,
+                BlobName = blob.Name
+            };
+
+            BlobClient aadBlob = InstrumentClient(new BlobClient(
+                uriBuilder.ToUri(),
+                TestEnvironment.Credential,
+                options));
+
+            // Assert
+            bool exists = await aadBlob.ExistsAsync();
+            Assert.IsTrue(exists);
+        }
+
+        [RecordedTest]
+        public async Task Ctor_CustomAudience()
+        {
+            // Arrange
+            await using DisposingContainer test = await GetTestContainerAsync();
+
+            var data = GetRandomBuffer(Constants.KB);
+            BlobClient blob = InstrumentClient(test.Container.GetBlobClient(GetNewBlobName()));
+            using (var stream = new MemoryStream(data))
+            {
+                await blob.UploadAsync(stream);
+            }
+
+            // Act - Create new blob client with the OAuth Credential and Audience
+            BlobClientOptions options = GetOptionsWithAudience(new BlobAudience($"https://{test.Container.AccountName}.blob.core.windows.net/"));
+
+            BlobUriBuilder uriBuilder = new BlobUriBuilder(new Uri(Tenants.TestConfigOAuth.BlobServiceEndpoint))
+            {
+                BlobContainerName = blob.BlobContainerName,
+                BlobName = blob.Name
+            };
+
+            BlobClient aadBlob = InstrumentClient(new BlobClient(
+                uriBuilder.ToUri(),
+                TestEnvironment.Credential,
+                options));
+
+            // Assert
+            bool exists = await aadBlob.ExistsAsync();
+            Assert.IsTrue(exists);
+        }
+
+        [RecordedTest]
+        public async Task Ctor_StorageAccountAudience()
+        {
+            // Arrange
+            await using DisposingContainer test = await GetTestContainerAsync();
+
+            var data = GetRandomBuffer(Constants.KB);
+            BlobClient blob = InstrumentClient(test.Container.GetBlobClient(GetNewBlobName()));
+            using (var stream = new MemoryStream(data))
+            {
+                await blob.UploadAsync(stream);
+            }
+
+            // Act - Create new blob client with the OAuth Credential and Audience
+            BlobClientOptions options = GetOptionsWithAudience(BlobAudience.CreateBlobServiceAccountAudience(test.Container.AccountName));
+
+            BlobUriBuilder uriBuilder = new BlobUriBuilder(new Uri(Tenants.TestConfigOAuth.BlobServiceEndpoint))
+            {
+                BlobContainerName = blob.BlobContainerName,
+                BlobName = blob.Name
+            };
+
+            BlobClient aadBlob = InstrumentClient(new BlobClient(
+                uriBuilder.ToUri(),
+                TestEnvironment.Credential,
+                options));
+
+            // Assert
+            bool exists = await aadBlob.ExistsAsync();
+            Assert.IsTrue(exists);
+        }
+
+        [RecordedTest]
+        public async Task Ctor_AudienceError()
+        {
+            // Arrange
+            await using DisposingContainer test = await GetTestContainerAsync();
+
+            var data = GetRandomBuffer(Constants.KB);
+            BlobClient blob = InstrumentClient(test.Container.GetBlobClient(GetNewBlobName()));
+            using (var stream = new MemoryStream(data))
+            {
+                await blob.UploadAsync(stream);
+            }
+
+            // Act - Create new blob client with the OAuth Credential and Audience
+            BlobClientOptions options = GetOptionsWithAudience(new BlobAudience("https://badaudience.blob.core.windows.net"));
+
+            BlobUriBuilder uriBuilder = new BlobUriBuilder(new Uri(Tenants.TestConfigOAuth.BlobServiceEndpoint))
+            {
+                BlobContainerName = blob.BlobContainerName,
+                BlobName = blob.Name
+            };
+
+            BlobClient aadBlob = InstrumentClient(new BlobClient(
+                uriBuilder.ToUri(),
+                new MockCredential(),
+                options));
+
+            // Assert
+            await TestHelper.AssertExpectedExceptionAsync<RequestFailedException>(
+                aadBlob.ExistsAsync(),
+                e => Assert.AreEqual(BlobErrorCode.InvalidAuthenticationInfo.ToString(), e.ErrorCode));
+        }
+
         #region Upload
 
         [RecordedTest]
@@ -218,6 +347,30 @@ namespace Azure.Storage.Blobs.Test
             using var actual = new MemoryStream();
             await download.Value.Content.CopyToAsync(actual);
             TestHelper.AssertSequenceEqual(data, actual.ToArray());
+        }
+
+        [RecordedTest]
+        [ServiceVersion(Min = BlobClientOptions.ServiceVersion.V2021_12_02)]
+        public async Task UploadAsync_Stream_AccessTier_Cold()
+        {
+            await using DisposingContainer test = await GetTestContainerAsync();
+
+            string name = GetNewBlobName();
+            BlobClient blob = InstrumentClient(test.Container.GetBlobClient(name));
+            byte[] data = GetRandomBuffer(Constants.KB);
+            using Stream stream = new MemoryStream(data);
+
+            BlobUploadOptions options = new BlobUploadOptions
+            {
+                AccessTier = AccessTier.Cold
+            };
+
+            // Act
+            await blob.UploadAsync(stream, options);
+
+            // Assert
+            Response<BlobProperties> response = await blob.GetPropertiesAsync();
+            Assert.AreEqual("Cold", response.Value.AccessTier);
         }
 
         [RecordedTest]
@@ -867,7 +1020,11 @@ namespace Azure.Storage.Blobs.Test
 
                 var buffer = new byte[count];
                 stream.Seek(i, SeekOrigin.Begin);
+#if NET6_0_OR_GREATER
+                await stream.ReadExactlyAsync(buffer, 0, count);
+#else
                 await stream.ReadAsync(buffer, 0, count);
+#endif
 
                 TestHelper.AssertSequenceEqual(
                     buffer,
@@ -1173,6 +1330,28 @@ namespace Azure.Storage.Blobs.Test
 
             Assert.AreEqual(size, progress.List[progress.List.Count - 1]);
         }
+
+        [RecordedTest]
+        public async Task UploadAsync_ExpectContinue()
+        {
+            AssertMessageContentsPolicy assertPolicy = new(checkRequest: req =>
+            {
+                Assert.That(req.Headers.TryGetValue("Expect", out string val), Is.True);
+                Assert.That(val, Is.EqualTo("100-continue"));
+            });
+
+            BlobClientOptions options = GetOptions();
+            options.Request100ContinueOptions = new() { Mode = Request100ContinueMode.Always };
+            options.AddPolicy(assertPolicy, Core.HttpPipelinePosition.BeforeTransport);
+            await using DisposingContainer test = await GetTestContainerAsync(
+                BlobsClientBuilder.GetServiceClient_SharedKey(options));
+            BlobClient blob = InstrumentClient(test.Container.GetBlobClient(GetNewBlobName()));
+
+            using (assertPolicy.CheckRequestScope())
+            {
+                await blob.UploadAsync(BinaryData.FromBytes(GetRandomBuffer(1024)));
+            }
+        }
         #endregion Upload
 
         [Test]
@@ -1347,7 +1526,7 @@ namespace Azure.Storage.Blobs.Test
             mock = new Mock<BlobClient>(new Uri("https://test/test"), new BlobClientOptions()).Object;
             mock = new Mock<BlobClient>(new Uri("https://test/test"), Tenants.GetNewSharedKeyCredentials(), new BlobClientOptions()).Object;
             mock = new Mock<BlobClient>(new Uri("https://test/test"), new AzureSasCredential("foo"), new BlobClientOptions()).Object;
-            mock = new Mock<BlobClient>(new Uri("https://test/test"), Tenants.GetOAuthCredential(Tenants.TestConfigHierarchicalNamespace), new BlobClientOptions()).Object;
+            mock = new Mock<BlobClient>(new Uri("https://test/test"), TestEnvironment.Credential, new BlobClientOptions()).Object;
         }
     }
 }

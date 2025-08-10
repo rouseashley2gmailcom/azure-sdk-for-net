@@ -14,6 +14,7 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace Azure.Security.Attestation.Tests
 {
+    [LiveOnly(Reason = "JWT cannot be stored in recordings.")]
     public class PolicyGetSetTests : RecordedTestBase<AttestationClientTestEnvironment>
     {
         public PolicyGetSetTests(bool isAsync) : base(isAsync)
@@ -111,7 +112,7 @@ namespace Azure.Security.Attestation.Tests
                 var policySetResult = await adminclient.SetPolicyAsync(AttestationType.OpenEnclave, disallowDebugging);
 
                 // The SetPolicyAsync API will create an UnsecuredAttestationToken to transmit the policy.
-                var shaHasher = SHA256Managed.Create();
+                var shaHasher = SHA256.Create();
                 var policySetToken = new AttestationToken(BinaryData.FromObjectAsJson(new StoredAttestationPolicy { AttestationPolicy = disallowDebugging }));
 
                 disallowDebuggingHash = shaHasher.ComputeHash(Encoding.UTF8.GetBytes(policySetToken.Serialize()));
@@ -177,7 +178,7 @@ namespace Azure.Security.Attestation.Tests
             {
                 var policySetResult = await adminClient.SetPolicyAsync(AttestationType.OpenEnclave, disallowDebugging, new AttestationTokenSigningKey(rsaKey, x509Certificate));
 
-                var shaHasher = SHA256Managed.Create();
+                var shaHasher = SHA256.Create();
 
                 var policySetToken = new AttestationToken(
                     BinaryData.FromObjectAsJson(new StoredAttestationPolicy { AttestationPolicy = disallowDebugging }), new AttestationTokenSigningKey(rsaKey, x509Certificate));

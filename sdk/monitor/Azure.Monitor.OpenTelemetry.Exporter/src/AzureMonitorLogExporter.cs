@@ -3,31 +3,39 @@
 
 using System;
 using System.Threading;
-
 using Azure.Core.Pipeline;
-
+using Azure.Monitor.OpenTelemetry.Exporter.Internals;
+using Azure.Monitor.OpenTelemetry.Exporter.Internals.Diagnostics;
 using OpenTelemetry;
 using OpenTelemetry.Logs;
 
 namespace Azure.Monitor.OpenTelemetry.Exporter
 {
-    internal class AzureMonitorLogExporter : BaseExporter<LogRecord>
+    /// <summary>
+    /// Azure Monitor Log Exporter.
+    /// </summary>
+    internal sealed class AzureMonitorLogExporter : BaseExporter<LogRecord>
     {
-        private readonly ITransmitter Transmitter;
-        private readonly AzureMonitorExporterOptions options;
-        private readonly string instrumentationKey;
+        private readonly ITransmitter _transmitter;
+        private readonly string _instrumentationKey;
+        private AzureMonitorResource? _resource;
+        private bool _disposed;
 
-        public AzureMonitorLogExporter(AzureMonitorExporterOptions options) : this(options, new AzureMonitorTransmitter(options))
+        /// <summary>
+        /// Initializes a new instance of Azure Monitor Log Exporter.
+        /// </summary>
+        /// <param name="options">Configuration options for the exporter.</param>
+        public AzureMonitorLogExporter(AzureMonitorExporterOptions options) : this(TransmitterFactory.Instance.Get(options))
         {
         }
 
-        internal AzureMonitorLogExporter(AzureMonitorExporterOptions options, ITransmitter transmitter)
+        internal AzureMonitorLogExporter(ITransmitter transmitter)
         {
-            this.options = options ?? throw new ArgumentNullException(nameof(options));
-            ConnectionString.ConnectionStringParser.GetValues(this.options.ConnectionString, out this.instrumentationKey, out _);
-
-            this.Transmitter = transmitter;
+            _transmitter = transmitter;
+            _instrumentationKey = transmitter.InstrumentationKey;
         }
+
+        internal AzureMonitorResource? LogResource => _resource ??= ParentProvider?.GetResource().CreateAzureMonitorResource(_instrumentationKey);
 
         /// <inheritdoc/>
         public override ExportResult Export(in Batch<LogRecord> batch)
@@ -35,20 +43,39 @@ namespace Azure.Monitor.OpenTelemetry.Exporter
             // Prevent Azure Monitor's HTTP operations from being instrumented.
             using var scope = SuppressInstrumentationScope.Begin();
 
+            ExportResult exportResult = ExportResult.Failure;
+
             try
             {
-                var telemetryItems = AzureMonitorConverter.Convert(batch, this.instrumentationKey);
-
-                // TODO: Handle return value, it can be converted as metrics.
-                // TODO: Validate CancellationToken and async pattern here.
-                this.Transmitter.TrackAsync(telemetryItems, false, CancellationToken.None).EnsureCompleted();
-                return ExportResult.Success;
+                var telemetryItems = LogsHelper.OtelToAzureMonitorLogs(batch, LogResource, _instrumentationKey);
+                if (telemetryItems.Count > 0)
+                {
+                    exportResult = _transmitter.TrackAsync(telemetryItems, TelemetryItemOrigin.AzureMonitorLogExporter, false, CancellationToken.None).EnsureCompleted();
+                }
             }
             catch (Exception ex)
             {
-                AzureMonitorExporterEventSource.Log.Write($"FailedToExport{EventLevelSuffix.Error}", ex.LogAsyncException());
-                return ExportResult.Failure;
+                AzureMonitorExporterEventSource.Log.FailedToExport(nameof(AzureMonitorLogExporter), _instrumentationKey, ex);
             }
+
+            return exportResult;
+        }
+
+        /// <inheritdoc/>
+        protected override void Dispose(bool disposing)
+        {
+            if (!_disposed)
+            {
+                if (disposing)
+                {
+                    AzureMonitorExporterEventSource.Log.DisposedObject(nameof(AzureMonitorLogExporter));
+                    _transmitter?.Dispose();
+                }
+
+                _disposed = true;
+            }
+
+            base.Dispose(disposing);
         }
     }
 }

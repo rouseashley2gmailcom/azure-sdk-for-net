@@ -5,37 +5,90 @@
 
 #nullable disable
 
+using System;
 using System.Collections.Generic;
-using Azure.ResourceManager;
+using Azure.Core;
 using Azure.ResourceManager.KeyVault.Models;
-using Azure.ResourceManager.Resources.Models;
+using Azure.ResourceManager.Models;
 
 namespace Azure.ResourceManager.KeyVault
 {
-    /// <summary> A class representing the ManagedHsm data model. </summary>
-    public partial class ManagedHsmData : ManagedHsmResource
+    /// <summary>
+    /// A class representing the ManagedHsm data model.
+    /// Resource information with extended details.
+    /// </summary>
+    public partial class ManagedHsmData : TrackedResourceData
     {
-        /// <summary> Initializes a new instance of ManagedHsmData. </summary>
+        /// <summary>
+        /// Keeps track of any properties unknown to the library.
+        /// <para>
+        /// To assign an object to the value of this property use <see cref="BinaryData.FromObjectAsJson{T}(T, System.Text.Json.JsonSerializerOptions?)"/>.
+        /// </para>
+        /// <para>
+        /// To assign an already formatted json string to this property use <see cref="BinaryData.FromString(string)"/>.
+        /// </para>
+        /// <para>
+        /// Examples:
+        /// <list type="bullet">
+        /// <item>
+        /// <term>BinaryData.FromObjectAsJson("foo")</term>
+        /// <description>Creates a payload of "foo".</description>
+        /// </item>
+        /// <item>
+        /// <term>BinaryData.FromString("\"foo\"")</term>
+        /// <description>Creates a payload of "foo".</description>
+        /// </item>
+        /// <item>
+        /// <term>BinaryData.FromObjectAsJson(new { key = "value" })</term>
+        /// <description>Creates a payload of { "key": "value" }.</description>
+        /// </item>
+        /// <item>
+        /// <term>BinaryData.FromString("{\"key\": \"value\"}")</term>
+        /// <description>Creates a payload of { "key": "value" }.</description>
+        /// </item>
+        /// </list>
+        /// </para>
+        /// </summary>
+        private IDictionary<string, BinaryData> _serializedAdditionalRawData;
+
+        /// <summary> Initializes a new instance of <see cref="ManagedHsmData"/>. </summary>
         /// <param name="location"> The location. </param>
-        public ManagedHsmData(Location location) : base(location)
+        public ManagedHsmData(AzureLocation location) : base(location)
         {
         }
 
-        /// <summary> Initializes a new instance of ManagedHsmData. </summary>
+        /// <summary> Initializes a new instance of <see cref="ManagedHsmData"/>. </summary>
         /// <param name="id"> The id. </param>
         /// <param name="name"> The name. </param>
-        /// <param name="type"> The type. </param>
+        /// <param name="resourceType"> The resourceType. </param>
+        /// <param name="systemData"> The systemData. </param>
         /// <param name="tags"> The tags. </param>
         /// <param name="location"> The location. </param>
-        /// <param name="sku"> SKU details. </param>
-        /// <param name="systemData"> Metadata pertaining to creation and last modification of the key vault resource. </param>
         /// <param name="properties"> Properties of the managed HSM. </param>
-        internal ManagedHsmData(ResourceIdentifier id, string name, ResourceType type, IDictionary<string, string> tags, Location location, ManagedHsmSku sku, SystemData systemData, ManagedHsmProperties properties) : base(id, name, type, tags, location, sku, systemData)
+        /// <param name="sku"> SKU details. </param>
+        /// <param name="identity"> Managed service identity (system assigned and/or user assigned identities). </param>
+        /// <param name="serializedAdditionalRawData"> Keeps track of any properties unknown to the library. </param>
+        internal ManagedHsmData(ResourceIdentifier id, string name, ResourceType resourceType, SystemData systemData, IDictionary<string, string> tags, AzureLocation location, ManagedHsmProperties properties, ManagedHsmSku sku, ManagedServiceIdentity identity, IDictionary<string, BinaryData> serializedAdditionalRawData) : base(id, name, resourceType, systemData, tags, location)
         {
             Properties = properties;
+            Sku = sku;
+            Identity = identity;
+            _serializedAdditionalRawData = serializedAdditionalRawData;
+        }
+
+        /// <summary> Initializes a new instance of <see cref="ManagedHsmData"/> for deserialization. </summary>
+        internal ManagedHsmData()
+        {
         }
 
         /// <summary> Properties of the managed HSM. </summary>
+        [WirePath("properties")]
         public ManagedHsmProperties Properties { get; set; }
+        /// <summary> SKU details. </summary>
+        [WirePath("sku")]
+        public ManagedHsmSku Sku { get; set; }
+        /// <summary> Managed service identity (system assigned and/or user assigned identities). </summary>
+        [WirePath("identity")]
+        public ManagedServiceIdentity Identity { get; set; }
     }
 }

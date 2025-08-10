@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 using Azure.Core.TestFramework;
@@ -104,7 +105,10 @@ namespace Azure.Core.Tests
         public async Task ParseBatchChangesetResponse(string batchResponse)
         {
             var stream = MakeStream(batchResponse);
-            var responses = await Multipart.ParseAsync(stream, ContentType, false, true, default);
+            var mockResponse = new MockResponse(200);
+            mockResponse.ContentStream = stream;
+            mockResponse.AddHeader("Content-Type", ContentType);
+            var responses = await MultipartResponse.ParseAsync(mockResponse, false, true, default);
 
             Assert.That(responses, Is.Not.Null);
             Assert.That(responses.Length, Is.EqualTo(1));
@@ -119,7 +123,11 @@ namespace Azure.Core.Tests
                 Assert.That(contentType, Is.EqualTo("application/json;odata=fullmetadata;streaming=true;charset=utf-8"));
 
                 var bytes = new byte[response.ContentStream.Length];
+#if NET6_0_OR_GREATER
+                await response.ContentStream.ReadExactlyAsync(bytes, 0, bytes.Length);
+#else
                 await response.ContentStream.ReadAsync(bytes, 0, bytes.Length);
+#endif
                 var content = GetString(bytes, bytes.Length);
 
                 Assert.That(content, Is.EqualTo(string.Empty));
@@ -130,7 +138,11 @@ namespace Azure.Core.Tests
         public async Task ParseBatchResponse()
         {
             var stream = MakeStream(BlobBatchResponse);
-            var responses = await Multipart.ParseAsync(stream, ContentType, true, true, default);
+            var mockResponse = new MockResponse(200);
+            mockResponse.ContentStream = stream;
+            mockResponse.AddHeader("Content-Type", ContentType);
+
+            var responses = await MultipartResponse.ParseAsync(mockResponse, true, true, default);
 
             Assert.That(responses, Is.Not.Null);
             Assert.That(responses.Length, Is.EqualTo(3));
@@ -153,7 +165,11 @@ namespace Azure.Core.Tests
             Assert.That(version, Is.EqualTo("2018-11-09"));
             Assert.That(response.TryGetHeader("x-ms-request-id", out _));
             var bytes = new byte[response.ContentStream.Length];
+#if NET6_0_OR_GREATER
+            await response.ContentStream.ReadExactlyAsync(bytes, 0, bytes.Length);
+#else
             await response.ContentStream.ReadAsync(bytes, 0, bytes.Length);
+#endif
             var content = GetString(bytes, bytes.Length);
             Assert.That(content.Contains("<Error><Code>BlobNotFound</Code><Message>The specified blob does not exist."));
         }

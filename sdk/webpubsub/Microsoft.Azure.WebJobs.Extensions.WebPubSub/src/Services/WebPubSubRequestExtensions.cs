@@ -13,6 +13,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Azure.WebPubSub.Common;
 using Microsoft.Extensions.Primitives;
+using Newtonsoft.Json.Linq;
 
 namespace Microsoft.Azure.WebJobs.Extensions.WebPubSub
 {
@@ -21,12 +22,6 @@ namespace Microsoft.Azure.WebJobs.Extensions.WebPubSub
     /// </summary>
     internal static class WebPubSubRequestExtensions
     {
-        /// <summary>
-        /// Parse request to system/user type ServiceRequest.
-        /// </summary>
-        /// <param name="request">Upstream HttpRequest.</param>
-        /// <param name="options"></param>
-        /// <returns>Deserialize <see cref="WebPubSubEventRequest"/></returns>
         public static async Task<WebPubSubEventRequest> ReadWebPubSubRequestAsync(this HttpRequest request, WebPubSubValidationOptions options)
         {
             if (request == null)
@@ -70,8 +65,16 @@ namespace Microsoft.Azure.WebJobs.Extensions.WebPubSub
                 case RequestType.Connect:
                     {
                         var content = await new StreamReader(request.Body).ReadToEndAsync().ConfigureAwait(false);
-                        var eventRequest = JsonSerializer.Deserialize<ConnectEventRequest>(content);
-                        return new ConnectEventRequest(context, eventRequest.Claims, eventRequest.Query, eventRequest.Subprotocols, eventRequest.ClientCertificates);
+                        if (context is MqttConnectionContext mqttContext)
+                        {
+                            var requestBody = JsonSerializer.Deserialize<MqttConnectEventRequestContent>(content);
+                            return new MqttConnectEventRequest(mqttContext, requestBody.Claims, requestBody.Query, requestBody.ClientCertificates, requestBody.Headers, requestBody.Mqtt);
+                        }
+                        else
+                        {
+                            var requestBody = JsonSerializer.Deserialize<ConnectEventRequest>(content);
+                            return new ConnectEventRequest(context, requestBody.Claims, requestBody.Query, requestBody.Subprotocols, requestBody.ClientCertificates, requestBody.Headers);
+                        }
                     }
                 case RequestType.User:
                     {
@@ -91,8 +94,16 @@ namespace Microsoft.Azure.WebJobs.Extensions.WebPubSub
                 case RequestType.Disconnected:
                     {
                         var content = await new StreamReader(request.Body).ReadToEndAsync().ConfigureAwait(false);
-                        var eventRequest = JsonSerializer.Deserialize<DisconnectedEventRequest>(content);
-                        return new DisconnectedEventRequest(context, eventRequest.Reason);
+                        if (context is MqttConnectionContext mqttContext)
+                        {
+                            var requestBody = JsonSerializer.Deserialize<MqttDisconnectedEventRequestContent>(content);
+                            return new MqttDisconnectedEventRequest(mqttContext, requestBody.Reason, requestBody.Mqtt);
+                        }
+                        else
+                        {
+                            var requestBody = JsonSerializer.Deserialize<DisconnectedEventRequest>(content);
+                            return new DisconnectedEventRequest(context, requestBody.Reason);
+                        }
                     }
                 default:
                     return null;
@@ -106,7 +117,7 @@ namespace Microsoft.Azure.WebJobs.Extensions.WebPubSub
                 request.Headers.TryGetValue(Constants.Headers.WebHookRequestOrigin, out StringValues requestOrigin);
                 if (requestOrigin.Any())
                 {
-                    requestHosts = requestOrigin.ToList();
+                    requestHosts = requestOrigin.SelectMany(x => x.Split(Constants.HeaderSeparator, StringSplitOptions.RemoveEmptyEntries)).ToList();
                     return true;
                 }
             }
@@ -121,49 +132,45 @@ namespace Microsoft.Azure.WebJobs.Extensions.WebPubSub
             {
                 return true;
             }
-
-            if (options.TryGetKey(connectionContext.Origin, out var accessKey))
+            foreach (var origin in connectionContext.Origin.ToHeaderList())
             {
-                // server side disable signature checks.
-                if (string.IsNullOrEmpty(accessKey))
+                if (options.TryGetKey(origin, out var accessKey))
                 {
-                    return true;
-                }
+                    // server side disable signature checks.
+                    if (string.IsNullOrEmpty(accessKey))
+                    {
+                        return true;
+                    }
 
-                var signatures = connectionContext.Signature.ToHeaderList();
-                if (signatures == null)
-                {
-                    return false;
-                }
-                using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(accessKey));
-                var hashBytes = hmac.ComputeHash(Encoding.UTF8.GetBytes(connectionContext.ConnectionId));
-                var hash = "sha256=" + BitConverter.ToString(hashBytes).Replace("-", "");
-                if (signatures.Contains(hash, StringComparer.OrdinalIgnoreCase))
-                {
-                    return true;
+                    var signatures = connectionContext.Signature.ToHeaderList();
+                    if (signatures == null)
+                    {
+                        return false;
+                    }
+                    using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(accessKey));
+                    var hashBytes = hmac.ComputeHash(Encoding.UTF8.GetBytes(connectionContext.ConnectionId));
+                    var hash = "sha256=" + BitConverter.ToString(hashBytes).Replace("-", "");
+                    if (signatures.Contains(hash, StringComparer.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
                 }
             }
             return false;
         }
 
-        internal static Dictionary<string, object> DecodeConnectionStates(this string connectionStates)
+        internal static Dictionary<string, BinaryData> DecodeConnectionStates(this string connectionStates)
         {
             if (!string.IsNullOrEmpty(connectionStates))
             {
                 var states = new Dictionary<string, object>();
-                var parsedStates = Encoding.UTF8.GetString(Convert.FromBase64String(connectionStates));
-                var statesObj = JsonDocument.Parse(parsedStates);
-                foreach (var item in statesObj.RootElement.EnumerateObject())
-                {
-                    // Use ToString() to set pure value without ValueKind.
-                    states.Add(item.Name, item.Value.ToString());
-                }
-                return states;
+                return JsonSerializer.Deserialize<IReadOnlyDictionary<string, BinaryData>>(Convert.FromBase64String(connectionStates), ConnectionStatesConverter.Options)
+                    .ToDictionary(k => k.Key, v => v.Value);
             }
             return null;
         }
 
-        internal static Dictionary<string,object> UpdateStates(this WebPubSubConnectionContext connectionContext, IReadOnlyDictionary<string, object> newStates)
+        internal static Dictionary<string, object> UpdateStates(this WebPubSubConnectionContext connectionContext, IReadOnlyDictionary<string, BinaryData> newStates)
         {
             // states cleared.
             if (newStates == null)
@@ -171,12 +178,15 @@ namespace Microsoft.Azure.WebJobs.Extensions.WebPubSub
                 return null;
             }
 
-            if (connectionContext.States?.Count > 0 || newStates.Count > 0)
+            if (connectionContext.ConnectionStates?.Count > 0 || newStates.Count > 0)
             {
                 var states = new Dictionary<string, object>();
-                if (connectionContext.States?.Count > 0)
+                if (connectionContext.ConnectionStates?.Count > 0)
                 {
-                    states = connectionContext.States.ToDictionary(x => x.Key, y => y.Value);
+                    foreach (var state in connectionContext.ConnectionStates)
+                    {
+                        states.Add(state.Key, state.Value);
+                    }
                 }
 
                 // response states keep empty is no change.
@@ -196,7 +206,8 @@ namespace Microsoft.Azure.WebJobs.Extensions.WebPubSub
 
         internal static string EncodeConnectionStates(this Dictionary<string, object> value)
         {
-            return Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(value)));
+            IReadOnlyDictionary<string, BinaryData> readOnlyDict = value.ToDictionary(x => x.Key, y => y.Value is BinaryData data ? data : FromObjectAsJsonExtended(y.Value));
+            return Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(readOnlyDict, ConnectionStatesConverter.Options)));
         }
 
         private static bool TryParseCloudEvents(this HttpRequest request, out WebPubSubConnectionContext connectionContext)
@@ -218,17 +229,27 @@ namespace Microsoft.Azure.WebJobs.Extensions.WebPubSub
                     userId = request.Headers.GetFirstHeaderValueOrDefault(Constants.Headers.CloudEvents.UserId);
                 }
 
-                Dictionary<string, object> states = null;
+                Dictionary<string, BinaryData> states = null;
                 // connection states.
                 if (request.Headers.ContainsKey(Constants.Headers.CloudEvents.State))
                 {
                     states = request.Headers.GetFirstHeaderValueOrDefault(Constants.Headers.CloudEvents.State).DecodeConnectionStates();
                 }
 
+                if (Constants.MqttWebSocketSubprotocolValue.Equals(request.Headers.GetFirstHeaderValueOrDefault(Constants.Headers.CloudEvents.Subprotocol)))
+                {
+                    var physicalConnectionId = request.Headers[Constants.Headers.CloudEvents.MqttPhysicalConnectionId];
+                    if (physicalConnectionId.Count != 0)
+                    {
+                        var sessionId = request.Headers.GetFirstHeaderValueOrDefault(Constants.Headers.CloudEvents.MqttSessionId);
+                        connectionContext = new MqttConnectionContext(eventType, eventName, hub, connectionId, physicalConnectionId.First(), sessionId, userId, signature, origin, states, headers);
+                        return true;
+                    }
+                }
                 connectionContext = new WebPubSubConnectionContext(eventType, eventName, hub, connectionId, userId, signature, origin, states, headers);
                 return true;
             }
-            catch (Exception)
+            catch
             {
                 connectionContext = null;
                 return false;
@@ -268,7 +289,7 @@ namespace Microsoft.Azure.WebJobs.Extensions.WebPubSub
                 dataType = mediaType.GetDataType();
                 return true;
             }
-            catch (Exception)
+            catch
             {
                 dataType = WebPubSubDataType.Binary;
                 return false;
@@ -300,5 +321,18 @@ namespace Microsoft.Azure.WebJobs.Extensions.WebPubSub
                 Constants.ContentTypes.JsonContentType => WebPubSubDataType.Json,
                 _ => throw new ArgumentException($"Invalid content type: {mediaType}")
             };
+
+        // support JToken for backward compatiblity.
+        private static BinaryData FromObjectAsJsonExtended<T>(T item, JsonSerializerOptions? options = null)
+        {
+            if (item is JToken)
+            {
+                return BinaryData.FromString(Newtonsoft.Json.JsonConvert.SerializeObject(item));
+            }
+            else
+            {
+                return BinaryData.FromObjectAsJson(item, options);
+            }
+        }
     }
 }

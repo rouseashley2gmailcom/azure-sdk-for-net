@@ -15,7 +15,7 @@ namespace Azure.ResourceManager.Sql.Models
     {
         private readonly string _value;
 
-        /// <summary> Determines if two <see cref="ReadWriteEndpointFailoverPolicy"/> values are the same. </summary>
+        /// <summary> Initializes a new instance of <see cref="ReadWriteEndpointFailoverPolicy"/>. </summary>
         /// <exception cref="ArgumentNullException"> <paramref name="value"/> is null. </exception>
         public ReadWriteEndpointFailoverPolicy(string value)
         {
@@ -33,7 +33,7 @@ namespace Azure.ResourceManager.Sql.Models
         public static bool operator ==(ReadWriteEndpointFailoverPolicy left, ReadWriteEndpointFailoverPolicy right) => left.Equals(right);
         /// <summary> Determines if two <see cref="ReadWriteEndpointFailoverPolicy"/> values are not the same. </summary>
         public static bool operator !=(ReadWriteEndpointFailoverPolicy left, ReadWriteEndpointFailoverPolicy right) => !left.Equals(right);
-        /// <summary> Converts a string to a <see cref="ReadWriteEndpointFailoverPolicy"/>. </summary>
+        /// <summary> Converts a <see cref="string"/> to a <see cref="ReadWriteEndpointFailoverPolicy"/>. </summary>
         public static implicit operator ReadWriteEndpointFailoverPolicy(string value) => new ReadWriteEndpointFailoverPolicy(value);
 
         /// <inheritdoc />
@@ -44,7 +44,7 @@ namespace Azure.ResourceManager.Sql.Models
 
         /// <inheritdoc />
         [EditorBrowsable(EditorBrowsableState.Never)]
-        public override int GetHashCode() => _value?.GetHashCode() ?? 0;
+        public override int GetHashCode() => _value != null ? StringComparer.InvariantCultureIgnoreCase.GetHashCode(_value) : 0;
         /// <inheritdoc />
         public override string ToString() => _value;
     }

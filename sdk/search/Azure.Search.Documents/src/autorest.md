@@ -1,22 +1,25 @@
 # Azure.Search.Documents Code Generation
 
-Run `/sdk/search/generate.ps1` to generate code.
+Run `dotnet build /t:GenerateCode` in the `src` directory to generate SDK code.
+
+See the [Contributing guidelines](https://github.com/Azure/azure-sdk-for-net/blob/fe0bf0e7e84a406ec2102c194ea05ccd5011a141/sdk/search/CONTRIBUTING.md) for more details.
 
 ## AutoRest Configuration
 > see https://aka.ms/autorest
 
+```yaml
+use-model-reader-writer: true
+```
+
 ## Swagger Source(s)
-AutoRest doesn't play nicely with multiple remote swagger files.  It will
-however merge two local swagger files together automagically.  At some point,
-we should merge the Service and Index swagger files together but for now we
-copy them locally in `/sdk/search/generate.ps1` and reference them here.
 ```yaml
 title: SearchServiceClient
 input-file:
- - https://github.com/shmed/azure-rest-api-specs/blob/7a003b0aa0def1a454ff0844fa4c6a276bc1ee53/specification/search/data-plane/Azure.Search/preview/2021-04-30-Preview/searchindex.json
- - https://github.com/shmed/azure-rest-api-specs/blob/7a003b0aa0def1a454ff0844fa4c6a276bc1ee53/specification/search/data-plane/Azure.Search/preview/2021-04-30-Preview/searchservice.json
-modelerfour:
-    seal-single-value-enum-by-default: true
+ - https://github.com/Azure/azure-rest-api-specs/blob/1755004c92eefdc7a66b4cd90df27d0af4cb0456/specification/search/data-plane/Azure.Search/preview/2025-05-01-preview/searchindex.json
+ - https://github.com/Azure/azure-rest-api-specs/blob/1755004c92eefdc7a66b4cd90df27d0af4cb0456/specification/search/data-plane/Azure.Search/preview/2025-05-01-preview/searchservice.json
+ - https://github.com/Azure/azure-rest-api-specs/blob/1755004c92eefdc7a66b4cd90df27d0af4cb0456/specification/search/data-plane/Azure.Search/preview/2025-05-01-preview/knowledgeagent.json
+generation1-convenience-client: true
+deserialize-null-collection-as-null-value: true
 ```
 
 ## Release hacks
@@ -27,6 +30,25 @@ directive:
 - remove-operation: Documents_SearchGet
 - remove-operation: Documents_SuggestGet
 ```
+
+### Suppress Abstract Base Class
+
+``` yaml
+suppress-abstract-base-class:
+- CharFilter
+- CognitiveServicesAccount
+- DataChangeDetectionPolicy
+- DataDeletionDetectionPolicy
+- LexicalAnalyzer
+- LexicalNormalizer
+- LexicalTokenizer
+- ScoringFunction
+- SearchIndexerDataIdentity
+- SearchIndexerSkill
+- Similarity
+- TokenFilter
+```
+
 
 ## CodeGen hacks
 These should eventually be fixed in the code generator.
@@ -39,6 +61,50 @@ directive:
   where: $.definitions.LexicalNormalizer
   transform: >
     $["discriminator"] = "@odata.type";
+```
+
+### Remove nullable annotations
+
+``` yaml
+directive:
+  from: swagger-document
+  where: $.definitions.SearchIndexerDataSource.properties.indexerPermissionOptions
+  transform: >
+    delete $["x-nullable"]
+```
+
+### Move KnowledgeAgent models to Azure.Search.Documents.Agents.Models
+
+Models in knowledgeagent.json should be moved to Azure.Search.Documents.Agents.Models.
+
+```yaml
+directive:
+  from: knowledgeagent.json
+  where: $.definitions.*
+  transform: >
+    $["x-namespace"] = "Azure.Search.Documents.Agents.Models"
+```
+
+### Remove models that have newer versions
+
+These classes have `CodeGenModel` pointing to newer models. Don't try to generate the
+old models into the same class.
+
+```yaml
+directive:
+  - remove-model: EdgeNGramTokenFilter
+  - remove-model: KeywordTokenizer
+  - remove-model: LuceneStandardTokenizer
+  - remove-model: NGramTokenFilter
+```
+
+## Renaming models after the AI Studio rebrand to AI Foundry
+These should eventually be fixed in the swagger files.
+```yaml
+directive:
+- from: "searchservice.json"
+  where: $.definitions.AIStudioModelCatalogName
+  transform: $["x-ms-enum"].name = "AIFoundryModelCatalogName";
 ```
 
 ### Mark definitions as objects
@@ -64,15 +130,190 @@ directive:
     $.additionalProperties = true;
 ```
 
-### Rename one of SearchError definitions
+### Fix `SearchResult["@search.documentDebugInfo"]`
+``` yaml
+directive:
+  - from: searchindex.json
+    where: $.definitions.SearchResult.properties
+    transform: >
+      $["@search.documentDebugInfo"]["$ref"] = $["@search.documentDebugInfo"].items["$ref"];
+      delete $["@search.documentDebugInfo"].type;
+      delete $["@search.documentDebugInfo"].items;
+```
 
-SearchError is duplicated between two swaggers, rename one of them
+### Archboard feedback for 11.6.0
+
+```yaml
+directive:
+- from: "searchservice.json"
+  where: $.definitions
+  transform: >
+    $.AzureOpenAIParameters["x-ms-client-name"] = "AzureOpenAIVectorizerParameters";
+    $.AzureOpenAIParameters.properties.authIdentity["x-ms-client-name"] = "AuthenticationIdentity";
+    $.AzureOpenAIParameters.properties.resourceUri["x-ms-client-name"] = "resourceUri";
+
+    $.VectorSearchVectorizer.properties.name["x-ms-client-name"] = "VectorizerName";
+    $.AzureOpenAIVectorizer.properties.azureOpenAIParameters["x-ms-client-name"] = "Parameters";
+
+    $.ScalarQuantizationVectorSearchCompressionConfiguration["x-ms-client-name"] = "ScalarQuantizationCompression";
+    $.BinaryQuantizationVectorSearchCompressionConfiguration["x-ms-client-name"] = "BinaryQuantizationCompression";
+    $.VectorSearchCompressionConfiguration["x-ms-client-name"] = "VectorSearchCompression";
+    $.VectorSearchCompressionConfiguration.properties.name["x-ms-client-name"] = "CompressionName";
+    $.VectorSearchProfile.properties.compression["x-ms-client-name"] = "CompressionName";
+
+    $.OcrSkillLineEnding["x-ms-client-name"] = "OcrLineEnding";
+    $.OcrSkillLineEnding["x-ms-enum"].name = "OcrLineEnding";
+
+    $.SearchIndexerDataUserAssignedIdentity.properties.userAssignedIdentity["x-ms-format"] = "arm-id";
+    $.SearchIndexerIndexProjections["x-ms-client-name"] = "SearchIndexerIndexProjection";
+    $.SearchIndexerSkillset.properties.indexProjections["x-ms-client-name"] = "indexProjection";
+
+    $.VectorSearchCompressionTargetDataType["x-ms-client-name"] = "VectorSearchCompressionTarget";
+    $.VectorSearchCompressionTargetDataType["x-ms-enum"].name = "VectorSearchCompressionTarget";
+
+    $.WebApiVectorizer.properties.customWebApiParameters["x-ms-client-name"] = "Parameters";
+    $.WebApiParameters["x-ms-client-name"] = "WebApiVectorizerParameters";
+    $.WebApiParameters.properties.uri["x-ms-client-name"] = "uri";
+```
+
+### Change VectorizableImageUrlQuery.Url type to Uri
+
+```yaml
+directive:
+  from: swagger-document
+  where: $.definitions.VectorizableImageUrlQuery.properties.url
+  transform: $.format = "url"
+```
+
+### Set `hybridSearch` property to be type `HybridSearch` in SearchRequest
 
 ``` yaml
 directive:
+  - from: searchindex.json
+    where: $.definitions.SearchRequest.properties
+    transform: >
+        delete $.hybridSearch["type"];
+        delete $.hybridSearch.items;
+        $.hybridSearch["$ref"] = "#/definitions/HybridSearch";
+```
+
+### Enable `RawVectorQuery.vector` as embedding field
+
+```yaml
+directive:
+- from: searchindex.json
+  where: $.definitions.RawVectorQuery.properties.vector
+  transform: $["x-ms-embedding-vector"] = true;
+```
+
+### Make `VectorSearchAlgorithmKind` internal
+
+```yaml
+directive:
 - from: searchservice.json
-  where: $.definitions.SearchError
-  transform: $["x-ms-client-name"] = "SearchServiceError"
+  where: $.definitions.VectorSearchAlgorithmKind
+  transform: $["x-accessibility"] = "internal"
+```
+
+### Make `VectorSearchCompressionKind` internal
+
+```yaml
+directive:
+- from: searchservice.json
+  where: $.definitions.VectorSearchCompressionKind
+  transform: $["x-accessibility"] = "internal"
+```
+
+### Make `VectorSearchCompressionKind` internal
+
+```yaml
+directive:
+- from: searchservice.json
+  where: $.definitions.VectorSearchCompressionKind
+  transform: $["x-accessibility"] = "internal"
+```
+
+### Make `VectorQueryKind` internal
+
+```yaml
+directive:
+- from: searchindex.json
+  where: $.definitions.VectorQueryKind
+  transform: $["x-accessibility"] = "internal"
+```
+
+### Make `VectorSearchVectorizerKind` internal
+
+```yaml
+directive:
+- from: searchservice.json
+  where: $.definitions.VectorSearchVectorizerKind
+  transform: $["x-accessibility"] = "internal"
+```
+
+### Make `VectorThresholdKind` internal
+
+```yaml
+directive:
+- from: searchindex.json
+  where: $.definitions.VectorThresholdKind
+  transform: $["x-accessibility"] = "internal"
+```
+
+### Rename `RawVectorQuery` to `VectorizedQuery`
+
+```yaml
+directive:
+- from: searchindex.json
+  where: $.definitions.RawVectorQuery
+  transform: $["x-ms-client-name"] = "VectorizedQuery";
+```
+
+### Rename `AMLVectorizer` to `AzureMachineLearningVectorizer`
+
+```yaml
+directive:
+- from: searchservice.json
+  where: $.definitions.AMLVectorizer
+  transform: $["x-ms-client-name"] = "AzureMachineLearningVectorizer";
+```
+
+### Rename `AMLParameters` to `AzureMachineLearningParameters`
+
+```yaml
+directive:
+- from: searchservice.json
+  where: $.definitions.AMLParameters
+  transform: $["x-ms-client-name"] = "AzureMachineLearningParameters";
+```
+
+### Rename `ServiceLimits.maxStoragePerIndex` to `ServiceLimits.maxStoragePerIndexInBytes`
+
+```yaml
+directive:
+- from: searchservice.json
+  where: $.definitions.ServiceLimits
+  transform: $.properties.maxStoragePerIndex["x-ms-client-name"] = "maxStoragePerIndexInBytes";
+```
+
+### Rename `PIIDetectionSkill.minimumPrecision` to `PIIDetectionSkill.MinPrecision`
+
+```yaml
+directive:
+  - from: searchservice.json
+    where: $.definitions.PIIDetectionSkill
+    transform: $.properties.minimumPrecision["x-ms-client-name"] = "MinPrecision";
+```
+
+### Rename `VectorQuery` property `K`
+
+ Rename `VectorQuery` property `K` to `KNearestNeighborsCount`
+
+```yaml
+directive:
+- from: searchindex.json
+  where: $.definitions.VectorQuery.properties.k
+  transform: $["x-ms-client-name"] = "KNearestNeighborsCount";
 ```
 
 ### Rename one of SearchMode definitions
@@ -301,6 +542,7 @@ directive:
           required: true,
           type: "string",
           enum: [ accept ],
+          "x-ms-enum": { "modelAsString": false },
           "x-ms-parameter-location": "method"
         });
       }
@@ -332,4 +574,18 @@ directive:
   from: swagger-document
   where: $.parameters.ClientRequestIdParameter
   transform: $["x-ms-parameter-location"] = "client";
+```
+
+## Seal single value enums
+
+Prevents the creation of single-value extensible enum in generated code. The following single-value enum will be generated as string constant.
+
+```yaml
+directive:
+  from: swagger-document
+  where: $.parameters.PreferHeaderParameter
+  transform: >
+    $["x-ms-enum"] = {
+      "modelAsString": false
+    }
 ```

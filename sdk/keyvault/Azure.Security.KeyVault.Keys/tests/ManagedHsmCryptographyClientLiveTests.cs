@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Security.Cryptography;
 using System.Threading.Tasks;
 using Azure.Core.TestFramework;
 using Azure.Security.KeyVault.Keys.Cryptography;
@@ -11,8 +12,11 @@ using NUnit.Framework;
 namespace Azure.Security.KeyVault.Keys.Tests
 {
     [ClientTestFixture(
-        KeyClientOptions.ServiceVersion.V7_2,
-        KeyClientOptions.ServiceVersion.V7_3_Preview)]
+        KeyClientOptions.ServiceVersion.V7_6,
+        KeyClientOptions.ServiceVersion.V7_5,
+        KeyClientOptions.ServiceVersion.V7_4,
+        KeyClientOptions.ServiceVersion.V7_3,
+        KeyClientOptions.ServiceVersion.V7_2)]
     public class ManagedHsmCryptographyClientLiveTests : CryptographyClientLiveTests
     {
         private static readonly IEnumerable<KeyOperation> s_aesKeyOps = new[]
@@ -38,14 +42,15 @@ namespace Azure.Security.KeyVault.Keys.Tests
                 // To provision Managed HSM: New-TestResources.ps1 -AdditionalParameters @{enableHsm=$true}
                 : throw new IgnoreException($"Required variable 'AZURE_MANAGEDHSM_URL' is not defined");
 
-        [Test]
+        [RecordedTest]
         public async Task EncryptLocalDecryptOnManagedHsm([EnumValues(
             nameof(EncryptionAlgorithm.A128Cbc),
             nameof(EncryptionAlgorithm.A192Cbc),
             nameof(EncryptionAlgorithm.A256Cbc),
             nameof(EncryptionAlgorithm.A128CbcPad),
             nameof(EncryptionAlgorithm.A192CbcPad),
-            nameof(EncryptionAlgorithm.A256CbcPad))] EncryptionAlgorithm algorithm)
+            nameof(EncryptionAlgorithm.A256CbcPad)
+            )] EncryptionAlgorithm algorithm)
         {
             int keySizeInBytes = algorithm.GetAesCbcEncryptionAlgorithm().KeySizeInBytes;
             JsonWebKey jwk = KeyUtilities.CreateAesKey(keySizeInBytes, s_aesKeyOps);
@@ -102,7 +107,7 @@ namespace Azure.Security.KeyVault.Keys.Tests
             CollectionAssert.AreEqual(plaintext, decrypted.Plaintext);
         }
 
-        [Test]
+        [RecordedTest]
         public async Task AesGcmEncryptDecrypt([EnumValues(
             nameof(EncryptionAlgorithm.A128Gcm),
             nameof(EncryptionAlgorithm.A192Gcm),
@@ -165,11 +170,14 @@ namespace Azure.Security.KeyVault.Keys.Tests
             CollectionAssert.AreEqual(plaintext, decrypted.Plaintext);
         }
 
-        [Test]
+        [RecordedTest]
         public async Task AesKwWrapUnwrapRoundTrip([EnumValues(
             nameof(KeyWrapAlgorithm.A128KW),
             nameof(KeyWrapAlgorithm.A192KW),
-            nameof(KeyWrapAlgorithm.A256KW))] KeyWrapAlgorithm algorithm)
+            nameof(KeyWrapAlgorithm.A256KW),
+            nameof(KeyWrapAlgorithm.CkmAesKeyWrap),
+            nameof(KeyWrapAlgorithm.CkmAesKeyWrapPad)
+            )] KeyWrapAlgorithm algorithm)
         {
             KeyVaultKey key = await CreateTestKey(algorithm);
             RegisterForCleanup(key.Name);
@@ -192,6 +200,32 @@ namespace Azure.Security.KeyVault.Keys.Tests
             Assert.IsNotNull(decrypted.Key);
 
             CollectionAssert.AreEqual(plaintext, decrypted.Key);
+        }
+
+        [RecordedTest]
+        public async Task SignLocalVerifyRoundTripHSM([EnumValues(Exclude = new[] { nameof(SignatureAlgorithm.ES256K) })]SignatureAlgorithm algorithm)
+        {
+            await SignLocalVerifyRoundTripInternal(algorithm);
+        }
+
+        // We do not test using ES256K below since macOS doesn't support it; various ideas to work around that adversely affect runtime code too much.
+
+        [RecordedTest]
+        public async Task LocalSignVerifyRoundTripHSM([EnumValues(Exclude = new[] { nameof(SignatureAlgorithm.ES256K) })] SignatureAlgorithm algorithm)
+        {
+            await LocalSignVerifyRoundTripInternal(algorithm);
+        }
+
+        [RecordedTest]
+        public async Task SignVerifyDataRoundTripHSM([EnumValues] SignatureAlgorithm algorithm)
+        {
+            await SignVerifyDataRoundTripInternal(algorithm);
+        }
+
+        [RecordedTest]
+        public async Task SignVerifyDataStreamRoundTripHSM([EnumValues] SignatureAlgorithm algorithm)
+        {
+            await SignVerifyDataStreamRoundTripInternal(algorithm);
         }
 
         private async Task<KeyVaultKey> CreateTestKey(EncryptionAlgorithm algorithm)

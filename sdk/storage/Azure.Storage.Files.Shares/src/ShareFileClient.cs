@@ -5,9 +5,7 @@ using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Diagnostics;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure.Core;
@@ -16,8 +14,10 @@ using Azure.Storage.Files.Shares.Models;
 using Azure.Storage.Shared;
 using Azure.Storage.Sas;
 using Metadata = System.Collections.Generic.IDictionary<string, string>;
+using Azure.Storage.Common;
 using System.Net.Http.Headers;
-using System.Linq;
+
+#pragma warning disable SA1402  // File may only contain a single type
 
 namespace Azure.Storage.Files.Shares
 {
@@ -125,12 +125,12 @@ namespace Azure.Storage.Files.Shares
         }
 
         /// <summary>
-        /// Determines whether the client is able to generate a SAS.
-        /// If the client is authenticated with a <see cref="StorageSharedKeyCredential"/>.
+        /// Indicates whether the client is able to generate a SAS uri.
+        /// Client can generate a SAS url if it is authenticated with a <see cref="StorageSharedKeyCredential"/>.
         /// </summary>
         public virtual bool CanGenerateSasUri => ClientConfiguration.SharedKeyCredential != null;
 
-        //const string fileType = "file";
+        //const string filetype = "file";
 
         //// FileMaxUploadRangeBytes indicates the maximum number of bytes that can be sent in a call to UploadRange.
         //public const Int64 FileMaxUploadRangeBytes = 4 * Constants.MB; // 4MB
@@ -193,10 +193,17 @@ namespace Azure.Storage.Files.Shares
         /// pipeline policies for authentication, retries, etc., that are
         /// applied to every request.
         /// </param>
-        public ShareFileClient(string connectionString, string shareName, string filePath, ShareClientOptions options)
+        public ShareFileClient(
+            string connectionString,
+            string shareName,
+            string filePath,
+            ShareClientOptions options)
         {
+            Argument.AssertNotNullOrWhiteSpace(shareName, nameof(shareName));
+            Argument.AssertNotNullOrWhiteSpace(filePath, nameof(filePath));
             options ??= new ShareClientOptions();
             var conn = StorageConnectionString.Parse(connectionString);
+            ShareErrors.AssertNotDevelopment(conn, nameof(connectionString));
             ShareUriBuilder uriBuilder =
                 new ShareUriBuilder(conn.FileEndpoint)
                 {
@@ -204,11 +211,14 @@ namespace Azure.Storage.Files.Shares
                     DirectoryOrFilePath = filePath
                 };
             _uri = uriBuilder.ToUri();
+            _accountName = conn.AccountName;
+            _shareName = shareName;
+            _path = filePath;
             _clientConfiguration = new ShareClientConfiguration(
                 pipeline: options.Build(conn.Credentials),
                 sharedKeyCredential: conn.Credentials as StorageSharedKeyCredential,
-                clientDiagnostics: new StorageClientDiagnostics(options),
-                version: options.Version);
+                clientDiagnostics: new ClientDiagnostics(options),
+                clientOptions: options);
             _fileRestClient = BuildFileRestClient(_uri);
         }
 
@@ -225,8 +235,16 @@ namespace Azure.Storage.Files.Shares
         /// pipeline policies for authentication, retries, etc., that are
         /// applied to every request.
         /// </param>
-        public ShareFileClient(Uri fileUri, ShareClientOptions options = default)
-            : this(fileUri, (HttpPipelinePolicy)null, options, null)
+        public ShareFileClient(
+            Uri fileUri,
+            ShareClientOptions options = default)
+            : this(
+                  fileUri: fileUri,
+                  authentication: (HttpPipelinePolicy)null,
+                  options: options,
+                  storageSharedKeyCredential: null,
+                  sasCredential: null,
+                  tokenCredential: null)
         {
         }
 
@@ -246,9 +264,19 @@ namespace Azure.Storage.Files.Shares
         /// pipeline policies for authentication, retries, etc., that are
         /// applied to every request.
         /// </param>
-        public ShareFileClient(Uri fileUri, StorageSharedKeyCredential credential, ShareClientOptions options = default)
-            : this(fileUri, credential.AsPolicy(), options, credential)
+        public ShareFileClient(
+            Uri fileUri,
+            StorageSharedKeyCredential credential,
+            ShareClientOptions options = default)
+            : this(
+                  fileUri: fileUri,
+                  authentication: credential.AsPolicy(),
+                  options: options,
+                  storageSharedKeyCredential: credential,
+                  sasCredential: null,
+                  tokenCredential: null)
         {
+            _accountName ??= credential?.AccountName;
         }
 
         /// <summary>
@@ -271,9 +299,89 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// This constructor should only be used when shared access signature needs to be updated during lifespan of this client.
         /// </remarks>
-        public ShareFileClient(Uri fileUri, AzureSasCredential credential, ShareClientOptions options = default)
-            : this(fileUri, credential.AsPolicy<ShareUriBuilder>(fileUri), options, null)
+        public ShareFileClient(
+            Uri fileUri,
+            AzureSasCredential credential,
+            ShareClientOptions options = default)
+            : this(
+                  fileUri,
+                  credential.AsPolicy<ShareUriBuilder>(fileUri),
+                  options,
+                  storageSharedKeyCredential: null,
+                  sasCredential: credential,
+                  tokenCredential: null)
         {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ShareFileClient"/>
+        /// class.
+        ///
+        /// Note that <see cref="ShareClientOptions.ShareTokenIntent"/> is currently required for token authentication.
+        /// </summary>
+        /// <param name="fileUri">
+        /// A <see cref="Uri"/> referencing the file that includes the
+        /// name of the account, the name of the share, and the path of the
+        /// file.
+        /// </param>
+        /// <param name="credential">
+        /// The token credential used to sign requests.
+        /// </param>
+        /// <param name="options">
+        /// Optional client options that define the transport pipeline
+        /// policies for authentication, retries, etc., that are applied to
+        /// every request.
+        /// </param>
+        public ShareFileClient(
+            Uri fileUri,
+            TokenCredential credential,
+            ShareClientOptions options = default)
+            : this(
+                  fileUri: fileUri,
+                  authentication: credential.AsPolicy(
+                    string.IsNullOrEmpty(options?.Audience?.ToString()) ? ShareAudience.DefaultAudience.CreateDefaultScope() : options.Audience.Value.CreateDefaultScope(),
+                    options),
+                  options: options ?? new ShareClientOptions(),
+                  storageSharedKeyCredential: null,
+                  sasCredential: null,
+                  tokenCredential: credential)
+        {
+            Errors.VerifyHttpsTokenAuth(fileUri);
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ShareFileClient"/>
+        /// class.
+        /// </summary>
+        /// <param name="fileUri">
+        /// A <see cref="Uri"/> referencing the file that includes the
+        /// name of the account, the name of the share, and the path of the
+        /// file.
+        /// </param>
+        /// <param name="diagnostics">
+        /// The diagnostics from the parent client.
+        /// </param>
+        /// <param name="options">
+        /// Optional client options that define the transport pipeline
+        /// policies for authentication, retries, etc., that are applied to
+        /// every request.
+        /// </param>
+        internal ShareFileClient(
+            Uri fileUri,
+            ClientDiagnostics diagnostics,
+            ShareClientOptions options)
+        {
+            Argument.AssertNotNull(fileUri, nameof(fileUri));
+            options ??= new ShareClientOptions();
+            _uri = fileUri;
+
+            _clientConfiguration = new ShareClientConfiguration(
+                pipeline: options.Build(),
+                sharedKeyCredential: default,
+                clientDiagnostics: diagnostics,
+                clientOptions: options);
+
+            _fileRestClient = BuildFileRestClient(fileUri);
         }
 
         /// <summary>
@@ -296,11 +404,19 @@ namespace Azure.Storage.Files.Shares
         /// <param name="storageSharedKeyCredential">
         /// The shared key credential used to sign requests.
         /// </param>
+        /// <param name="sasCredential">
+        /// The SAS credential used to sign requests.
+        /// </param>
+        /// <param name="tokenCredential">
+        /// The token credential used to sign requests.
+        /// </param>
         internal ShareFileClient(
             Uri fileUri,
             HttpPipelinePolicy authentication,
             ShareClientOptions options,
-            StorageSharedKeyCredential storageSharedKeyCredential)
+            StorageSharedKeyCredential storageSharedKeyCredential,
+            AzureSasCredential sasCredential,
+            TokenCredential tokenCredential)
         {
             Argument.AssertNotNull(fileUri, nameof(fileUri));
             options ??= new ShareClientOptions();
@@ -308,8 +424,13 @@ namespace Azure.Storage.Files.Shares
             _clientConfiguration = new ShareClientConfiguration(
                 pipeline: options.Build(authentication),
                 sharedKeyCredential: storageSharedKeyCredential,
-                clientDiagnostics: new StorageClientDiagnostics(options),
-                version: options.Version);
+                sasCredential: sasCredential,
+                tokenCredential: tokenCredential,
+                clientDiagnostics: new ClientDiagnostics(options),
+                clientOptions: options)
+            {
+                Audience = options.Audience ?? ShareAudience.DefaultAudience,
+            };
             _fileRestClient = BuildFileRestClient(fileUri);
         }
 
@@ -335,10 +456,14 @@ namespace Azure.Storage.Files.Shares
         private FileRestClient BuildFileRestClient(Uri uri)
         {
             return new FileRestClient(
-                _clientConfiguration.ClientDiagnostics,
-                _clientConfiguration.Pipeline,
-                uri.AbsoluteUri,
-                _clientConfiguration.Version.ToVersionString());
+                clientDiagnostics: _clientConfiguration.ClientDiagnostics,
+                pipeline: _clientConfiguration.Pipeline,
+                url: uri.AbsoluteUri,
+                version: _clientConfiguration.ClientOptions.Version.ToVersionString(),
+                fileRequestIntent: _clientConfiguration.ClientOptions.ShareTokenIntent,
+                allowTrailingDot: _clientConfiguration.ClientOptions.AllowTrailingDot,
+                fileRangeWriteFromUrl: "update",
+                allowSourceTrailingDot: _clientConfiguration.ClientOptions.AllowSourceTrailingDot);
         }
         #endregion ctors
 
@@ -374,12 +499,96 @@ namespace Azure.Storage.Files.Shares
             if (_name == null || _shareName == null || _accountName == null || _path == null)
             {
                 var builder = new ShareUriBuilder(Uri);
-                _name = builder.LastDirectoryOrFileName;
-                _shareName = builder.ShareName;
-                _accountName = builder.AccountName;
-                _path = builder.DirectoryOrFilePath;
+                _name ??= builder.LastDirectoryOrFileName;
+                _shareName ??= builder.ShareName;
+                _accountName ??= builder.AccountName;
+                _path ??= builder.DirectoryOrFilePath;
             }
         }
+
+        #region internal static accessors for Azure.Storage.DataMovement.Blobs
+        /// <summary>
+        /// Get a <see cref="ShareFileClient"/>'s <see cref="HttpAuthorization"/>
+        /// for passing the authorization when performing service to service copy
+        /// where OAuth is necessary to authenticate the source.
+        /// </summary>
+        /// <param name="client">
+        /// The storage client which to generate the
+        /// authorization header off of.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Optional <see cref="CancellationToken"/> to propagate
+        /// notifications that the operation should be cancelled.
+        /// </param>
+        /// <returns>The BlobServiceClient's HttpPipeline.</returns>
+        protected static async Task<HttpAuthorization> GetCopyAuthorizationHeaderAsync(
+            ShareFileClient client,
+            CancellationToken cancellationToken = default)
+        {
+            if (client.ClientConfiguration.TokenCredential != default)
+            {
+                AccessToken accessToken = await client.ClientConfiguration.TokenCredential.GetTokenAsync(
+                    new TokenRequestContext(new string[] { client.ClientConfiguration.Audience.CreateDefaultScope() }),
+                    cancellationToken).ConfigureAwait(false);
+                return new HttpAuthorization(
+                    Constants.CopyHttpAuthorization.BearerScheme,
+                    accessToken.Token);
+            }
+            return default;
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ShareFileClient"/>
+        /// class with identical configurations but with additional Http Pipeline Policies.
+        /// </summary>
+        /// <param name="client">
+        /// The storage client which to clone the configurations from.
+        /// </param>
+        /// <param name="policies">
+        /// The additional policies and its pipeline position to add to the client.
+        /// </param>
+        /// <returns></returns>
+        protected static ShareFileClient WithAdditionalPolicies(
+            ShareFileClient client,
+            params (HttpPipelinePolicy Policy, HttpPipelinePosition Position)[] policies)
+        {
+            Argument.AssertNotNullOrEmpty(policies, nameof(policies));
+
+            // Update the client options with the provided additional policies.
+            ShareClientOptions existingOptions = client?.ClientConfiguration?.ClientOptions;
+            ShareClientOptions options = existingOptions != default ? new(existingOptions) : new ShareClientOptions();
+            foreach ((HttpPipelinePolicy policy, HttpPipelinePosition position) in policies)
+            {
+                options.AddPolicy(policy, HttpPipelinePosition.PerCall);
+            }
+
+            // Create a deep copy of the ShareDirectoryClient but with updated client options
+            // and the provided additional pipeline policies.
+            if (client.ClientConfiguration?.TokenCredential != default)
+            {
+                return new ShareFileClient(
+                    client.Uri,
+                    client.ClientConfiguration.TokenCredential,
+                    options);
+            }
+            else if (client.ClientConfiguration?.SasCredential != default)
+            {
+                return new ShareFileClient(
+                    client.Uri,
+                    client.ClientConfiguration.SasCredential,
+                    options);
+            }
+            else if (client.ClientConfiguration?.SharedKeyCredential != default)
+            {
+                return new ShareFileClient(
+                    client.Uri,
+                    client.ClientConfiguration.SharedKeyCredential,
+                    options);
+            }
+
+            return new ShareFileClient(client.Uri, options);
+        }
+        #endregion internal static accessors for Azure.Storage.DataMovement.Files.Shares
 
         #region Create
         /// <summary>
@@ -394,7 +603,113 @@ namespace Azure.Storage.Files.Shares
         /// To add content, use <see cref="UploadRangeAsync(HttpRange, Stream, byte[], IProgress{long}, ShareFileRequestConditions, CancellationToken)"/>.
         /// </remarks>
         /// <param name="maxSize">
-        /// Required. Specifies the maximum size for the file.
+        /// Required. Specifies the maximum size for the file in bytes.  The max supported file size is 4 TiB.
+        /// </param>
+        /// <param name="options">
+        /// Optional parameters.
+        /// </param>
+        /// <param name="conditions">
+        /// Optional <see cref="ShareFileRequestConditions"/> to add conditions
+        /// on creating the file.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Optional <see cref="CancellationToken"/> to propagate
+        /// notifications that the operation should be cancelled.
+        /// </param>
+        /// <returns>
+        /// A <see cref="Response{StorageFileInfo}"/> describing the
+        /// state of the file.
+        /// </returns>
+        /// <remarks>
+        /// A <see cref="RequestFailedException"/> will be thrown if
+        /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
+        /// </remarks>
+        public virtual Response<ShareFileInfo> Create(
+            long maxSize,
+            ShareFileCreateOptions options = default,
+            ShareFileRequestConditions conditions = default,
+            CancellationToken cancellationToken = default) =>
+            CreateInternal(
+                maxSize,
+                httpHeaders: options?.HttpHeaders,
+                metadata: options?.Metadata,
+                smbProperties: options?.SmbProperties,
+                filePermission: options?.FilePermission?.Permission,
+                filePermissionFormat: options?.FilePermission?.PermissionFormat,
+                posixProperties: options?.PosixProperties,
+                conditions,
+                async: false,
+                cancellationToken)
+                .EnsureCompleted();
+
+        /// <summary>
+        /// Creates a new file or replaces an existing file.
+        ///
+        /// For more information, see
+        /// <see href="https://docs.microsoft.com/rest/api/storageservices/create-file">
+        /// Create File</see>.
+        /// </summary>
+        /// <remarks>
+        /// This method only initializes the file.
+        /// To add content, use <see cref="UploadRangeAsync(HttpRange, Stream, byte[], IProgress{long}, ShareFileRequestConditions, CancellationToken)"/>.
+        /// </remarks>
+        /// <param name="maxSize">
+        /// Required. Specifies the maximum size for the file in bytes.  The max supported file size is 4 TiB.
+        /// </param>
+        /// <param name="options">
+        /// Optional parameters.
+        /// </param>
+        /// <param name="conditions">
+        /// Optional <see cref="ShareFileRequestConditions"/> to add conditions
+        /// on creating the file.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Optional <see cref="CancellationToken"/> to propagate
+        /// notifications that the operation should be cancelled.
+        /// </param>
+        /// <returns>
+        /// A <see cref="Response{StorageFileInfo}"/> describing the
+        /// state of the file.
+        /// </returns>
+        /// <remarks>
+        /// A <see cref="RequestFailedException"/> will be thrown if
+        /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
+        /// </remarks>
+        public virtual async Task<Response<ShareFileInfo>> CreateAsync(
+            long maxSize,
+            ShareFileCreateOptions options = default,
+            ShareFileRequestConditions conditions = default,
+            CancellationToken cancellationToken = default) =>
+            await CreateInternal(
+                maxSize,
+                httpHeaders: options?.HttpHeaders,
+                metadata: options?.Metadata,
+                smbProperties: options?.SmbProperties,
+                filePermission: options?.FilePermission?.Permission,
+                filePermissionFormat: options?.FilePermission?.PermissionFormat,
+                posixProperties: options?.PosixProperties,
+                conditions,
+                async: true,
+                cancellationToken)
+                .ConfigureAwait(false);
+
+        /// <summary>
+        /// Creates a new file or replaces an existing file.
+        ///
+        /// For more information, see
+        /// <see href="https://docs.microsoft.com/rest/api/storageservices/create-file">
+        /// Create File</see>.
+        /// </summary>
+        /// <remarks>
+        /// This method only initializes the file.
+        /// To add content, use <see cref="UploadRangeAsync(HttpRange, Stream, byte[], IProgress{long}, ShareFileRequestConditions, CancellationToken)"/>.
+        /// </remarks>
+        /// <param name="maxSize">
+        /// Required. Specifies the maximum size for the file in bytes.  The max supported file size is 4 TiB.
         /// </param>
         /// <param name="httpHeaders">
         /// Optional standard HTTP header properties that can be set for the file.
@@ -423,21 +738,28 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+#pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         public virtual Response<ShareFileInfo> Create(
+#pragma warning restore AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
             long maxSize,
-            ShareFileHttpHeaders httpHeaders = default,
-            Metadata metadata = default,
-            FileSmbProperties smbProperties = default,
-            string filePermission = default,
-            ShareFileRequestConditions conditions = default,
-            CancellationToken cancellationToken = default) =>
+            ShareFileHttpHeaders httpHeaders,
+            Metadata metadata,
+            FileSmbProperties smbProperties,
+            string filePermission,
+            ShareFileRequestConditions conditions,
+            CancellationToken cancellationToken) =>
             CreateInternal(
                 maxSize,
                 httpHeaders,
                 metadata,
                 smbProperties,
                 filePermission,
+                filePermissionFormat: default,
+                posixProperties: default,
                 conditions,
                 async: false,
                 cancellationToken)
@@ -455,7 +777,7 @@ namespace Azure.Storage.Files.Shares
         /// To add content, use <see cref="UploadRangeAsync(HttpRange, Stream, byte[], IProgress{long}, ShareFileRequestConditions, CancellationToken)"/>.
         /// </remarks>
         /// <param name="maxSize">
-        /// Required. Specifies the maximum size for the file.
+        /// Required. Specifies the maximum size for the file in bytes.  The max supported file size is 4 TiB.
         /// </param>
         /// <param name="httpHeaders">
         /// Optional standard HTTP header properties that can be set for the file.
@@ -480,6 +802,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
 #pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         [EditorBrowsable(EditorBrowsableState.Never)]
@@ -497,6 +821,8 @@ namespace Azure.Storage.Files.Shares
                 metadata,
                 smbProperties,
                 filePermission,
+                filePermissionFormat: default,
+                posixProperties: default,
                 conditions: default,
                 async: false,
                 cancellationToken)
@@ -514,7 +840,7 @@ namespace Azure.Storage.Files.Shares
         /// To add content, use <see cref="UploadRangeAsync(HttpRange, Stream, byte[], IProgress{long}, ShareFileRequestConditions, CancellationToken)"/>.
         /// </remarks>
         /// <param name="maxSize">
-        /// Required. Specifies the maximum size for the file.
+        /// Required. Specifies the maximum size for the file in bytes.  The max supported file size is 4 TiB.
         /// </param>
         /// <param name="httpHeaders">
         /// Optional standard HTTP header properties that can be set for the file.
@@ -543,21 +869,28 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+#pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         public virtual async Task<Response<ShareFileInfo>> CreateAsync(
+#pragma warning restore AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
             long maxSize,
-            ShareFileHttpHeaders httpHeaders = default,
-            Metadata metadata = default,
-            FileSmbProperties smbProperties = default,
-            string filePermission = default,
-            ShareFileRequestConditions conditions = default,
-            CancellationToken cancellationToken = default) =>
+            ShareFileHttpHeaders httpHeaders,
+            Metadata metadata,
+            FileSmbProperties smbProperties,
+            string filePermission,
+            ShareFileRequestConditions conditions,
+            CancellationToken cancellationToken) =>
             await CreateInternal(
                 maxSize,
                 httpHeaders,
                 metadata,
                 smbProperties,
                 filePermission,
+                filePermissionFormat: default,
+                posixProperties: default,
                 conditions,
                 async: true,
                 cancellationToken)
@@ -575,7 +908,7 @@ namespace Azure.Storage.Files.Shares
         /// To add content, use <see cref="UploadRangeAsync(HttpRange, Stream, byte[], IProgress{long}, ShareFileRequestConditions, CancellationToken)"/>.
         /// </remarks>
         /// <param name="maxSize">
-        /// Required. Specifies the maximum size for the file.
+        /// Required. Specifies the maximum size for the file in bytes.  The max supported file size is 4 TiB.
         /// </param>
         /// <param name="httpHeaders">
         /// Optional standard HTTP header properties that can be set for the file.
@@ -600,6 +933,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
 #pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         [EditorBrowsable(EditorBrowsableState.Never)]
@@ -617,6 +952,8 @@ namespace Azure.Storage.Files.Shares
                 metadata,
                 smbProperties,
                 filePermission,
+                filePermissionFormat: default,
+                posixProperties: default,
                 conditions: default,
                 async: true,
                 cancellationToken)
@@ -634,7 +971,7 @@ namespace Azure.Storage.Files.Shares
         /// To add content, use <see cref="UploadRangeAsync(HttpRange, Stream, byte[], IProgress{long}, ShareFileRequestConditions, CancellationToken)"/>.
         /// </remarks>
         /// <param name="maxSize">
-        /// Required. Specifies the maximum size for the file.
+        /// Required. Specifies the maximum size for the file in bytes.  The max supported file size is 4 TiB.
         /// </param>
         /// <param name="httpHeaders">
         /// Optional standard HTTP header properties that can be set for the file.
@@ -647,6 +984,12 @@ namespace Azure.Storage.Files.Shares
         /// </param>
         /// <param name="filePermission">
         /// Optional file permission to set on the file.
+        /// </param>
+        /// <param name="filePermissionFormat">
+        /// Optional file permission format.
+        /// </param>
+        /// <param name="posixProperties">
+        /// Optional NFS properties.
         /// </param>
         /// <param name="conditions">
         /// Optional <see cref="ShareFileRequestConditions"/> to add conditions
@@ -669,6 +1012,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         private async Task<Response<ShareFileInfo>> CreateInternal(
             long maxSize,
@@ -676,6 +1021,8 @@ namespace Azure.Storage.Files.Shares
             Metadata metadata,
             FileSmbProperties smbProperties,
             string filePermission,
+            FilePermissionFormat? filePermissionFormat,
+            FilePosixProperties posixProperties,
             ShareFileRequestConditions conditions,
             bool async,
             CancellationToken cancellationToken,
@@ -700,25 +1047,26 @@ namespace Azure.Storage.Files.Shares
 
                     ShareExtensions.AssertValidFilePermissionAndKey(filePermission, smbProps.FilePermissionKey);
 
-                    if (filePermission == null && smbProps.FilePermissionKey == null)
-                    {
-                        filePermission = Constants.File.FilePermissionInherit;
-                    }
-
                     ResponseWithHeaders<FileCreateHeaders> response;
 
                     if (async)
                     {
                         response = await FileRestClient.CreateAsync(
                             fileContentLength: maxSize,
-                            fileAttributes: smbProps.FileAttributes?.ToAttributesString() ?? Constants.File.FileAttributesNone,
-                            fileCreationTime: smbProps.FileCreatedOn.ToFileDateTimeString() ?? Constants.File.FileTimeNow,
-                            fileLastWriteTime: smbProps.FileLastWrittenOn.ToFileDateTimeString() ?? Constants.File.FileTimeNow,
+                            fileAttributes: smbProps.FileAttributes.ToAttributesString(),
+                            fileCreationTime: smbProps.FileCreatedOn.ToFileDateTimeString(),
+                            fileLastWriteTime: smbProps.FileLastWrittenOn.ToFileDateTimeString(),
+                            fileChangeTime: smbProps.FileChangedOn.ToFileDateTimeString(),
+                            owner: posixProperties?.Owner,
+                            group: posixProperties?.Group,
+                            fileMode: posixProperties?.FileMode?.ToOctalFileMode(),
+                            nfsFileType: posixProperties?.FileType,
                             metadata: metadata,
                             filePermission: filePermission,
+                            filePermissionFormat: filePermissionFormat,
                             filePermissionKey: smbProps.FilePermissionKey,
                             fileHttpHeaders: httpHeaders.ToFileHttpHeaders(),
-                            leaseAccessConditions: conditions,
+                            shareFileRequestConditions: conditions,
                             cancellationToken: cancellationToken)
                             .ConfigureAwait(false);
                     }
@@ -726,14 +1074,20 @@ namespace Azure.Storage.Files.Shares
                     {
                         response = FileRestClient.Create(
                             fileContentLength: maxSize,
-                            fileAttributes: smbProps.FileAttributes?.ToAttributesString() ?? Constants.File.FileAttributesNone,
-                            fileCreationTime: smbProps.FileCreatedOn.ToFileDateTimeString() ?? Constants.File.FileTimeNow,
-                            fileLastWriteTime: smbProps.FileLastWrittenOn.ToFileDateTimeString() ?? Constants.File.FileTimeNow,
+                            fileAttributes: smbProps.FileAttributes.ToAttributesString(),
+                            fileCreationTime: smbProps.FileCreatedOn.ToFileDateTimeString(),
+                            fileLastWriteTime: smbProps.FileLastWrittenOn.ToFileDateTimeString(),
+                            fileChangeTime: smbProps.FileChangedOn.ToFileDateTimeString(),
+                            owner: posixProperties?.Owner,
+                            group: posixProperties?.Group,
+                            fileMode: posixProperties?.FileMode?.ToOctalFileMode(),
+                            nfsFileType: posixProperties?.FileType,
                             metadata: metadata,
                             filePermission: filePermission,
+                            filePermissionFormat: filePermissionFormat,
                             filePermissionKey: smbProps.FilePermissionKey,
                             fileHttpHeaders: httpHeaders.ToFileHttpHeaders(),
-                            leaseAccessConditions: conditions,
+                            shareFileRequestConditions: conditions,
                             cancellationToken: cancellationToken);
                     }
 
@@ -772,6 +1126,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Response<bool> Exists(
             CancellationToken cancellationToken = default) =>
@@ -794,6 +1150,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual async Task<Response<bool>> ExistsAsync(
             CancellationToken cancellationToken = default) =>
@@ -822,6 +1180,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         private async Task<Response<bool>> ExistsInternal(
             bool async,
@@ -889,6 +1249,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Response<bool> DeleteIfExists(
             ShareFileRequestConditions conditions = default,
@@ -921,6 +1283,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual async Task<Response<bool>> DeleteIfExistsAsync(
             ShareFileRequestConditions conditions = default,
@@ -956,6 +1320,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         private async Task<Response<bool>> DeleteIfExistsInternal(
             ShareFileRequestConditions conditions,
@@ -1009,6 +1375,55 @@ namespace Azure.Storage.Files.Shares
         /// <param name="sourceUri">
         /// Required. Specifies the URL of the source file or blob.
         /// </param>
+        /// <param name="options">
+        /// Optional parameters.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Optional <see cref="CancellationToken"/> to propagate
+        /// notifications that the operation should be cancelled.
+        /// </param>
+        /// <returns>
+        /// A <see cref="Response{StorageFileInfo}"/> describing the
+        /// state of the file copy.
+        /// </returns>
+        /// <remarks>
+        /// A <see cref="RequestFailedException"/> will be thrown if
+        /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
+        /// </remarks>
+        public virtual Response<ShareFileCopyInfo> StartCopy(
+            Uri sourceUri,
+            ShareFileCopyOptions options = default,
+            CancellationToken cancellationToken = default) =>
+            StartCopyInternal(
+                sourceUri: sourceUri,
+                metadata: options?.Metadata,
+                smbProperties: options?.SmbProperties,
+                filePermission: options?.FilePermission,
+                filePermissionFormat: options?.PermissionFormat,
+                filePermissionCopyMode: options?.FilePermissionCopyMode,
+                ignoreReadOnly: options?.IgnoreReadOnly,
+                setArchiveAttribute: options?.Archive,
+                conditions: options?.Conditions,
+                copyableFileSmbProperties: options?.SmbPropertiesToCopy,
+                posixProperties: options?.PosixProperties,
+                modeCopyMode: options?.ModeCopyMode,
+                ownerCopyMode: options?.OwnerCopyMode,
+                async: false,
+                cancellationToken: cancellationToken)
+                .EnsureCompleted();
+
+        /// <summary>
+        /// Copies a blob or file to a destination file within the storage account.
+        ///
+        /// For more information, see
+        /// <see href="https://docs.microsoft.com/rest/api/storageservices/copy-file">
+        /// Copy File</see>.
+        /// </summary>
+        /// <param name="sourceUri">
+        /// Required. Specifies the URL of the source file or blob.
+        /// </param>
         /// <param name="metadata">
         /// Optional custom metadata to set for the file.
         /// </param>
@@ -1047,26 +1462,36 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+#pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         public virtual Response<ShareFileCopyInfo> StartCopy(
+#pragma warning restore AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
             Uri sourceUri,
-            Metadata metadata = default,
-            FileSmbProperties smbProperties = default,
-            string filePermission = default,
-            PermissionCopyMode? filePermissionCopyMode = default,
-            bool? ignoreReadOnly = default,
-            bool? setArchiveAttribute = default,
-            ShareFileRequestConditions conditions = default,
-            CancellationToken cancellationToken = default) =>
+            Metadata metadata,
+            FileSmbProperties smbProperties,
+            string filePermission,
+            PermissionCopyMode? filePermissionCopyMode,
+            bool? ignoreReadOnly,
+            bool? setArchiveAttribute,
+            ShareFileRequestConditions conditions,
+            CancellationToken cancellationToken) =>
             StartCopyInternal(
                 sourceUri,
                 metadata,
                 smbProperties,
                 filePermission,
+                filePermissionFormat: default,
                 filePermissionCopyMode,
                 ignoreReadOnly,
                 setArchiveAttribute,
                 conditions,
+                copyableFileSmbProperties: default,
+                posixProperties: default,
+                modeCopyMode: default,
+                ownerCopyMode: default,
                 async: false,
                 cancellationToken)
                 .EnsureCompleted();
@@ -1095,6 +1520,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
 #pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         [EditorBrowsable(EditorBrowsableState.Never)]
@@ -1108,10 +1535,15 @@ namespace Azure.Storage.Files.Shares
                 metadata,
                 smbProperties: default,
                 filePermission: default,
+                filePermissionFormat: default,
                 filePermissionCopyMode: default,
                 ignoreReadOnly: default,
                 setArchiveAttribute: default,
                 conditions: default,
+                copyableFileSmbProperties: default,
+                posixProperties: default,
+                modeCopyMode: default,
+                ownerCopyMode: default,
                 async: false,
                 cancellationToken)
                 .EnsureCompleted();
@@ -1126,32 +1558,8 @@ namespace Azure.Storage.Files.Shares
         /// <param name="sourceUri">
         /// Required. Specifies the URL of the source file or blob.
         /// </param>
-        /// <param name="metadata">
-        /// Optional custom metadata to set for the file.
-        /// </param>
-        /// <param name="smbProperties">
-        /// Optional SMB properties to set on the target file.
-        /// </param>
-        /// <param name="filePermission">
-        /// Optional file permission to set for the file.
-        /// </param>
-        /// <param name="filePermissionCopyMode">
-        /// Specifies the option to copy file security descriptor from source file or
-        /// to set it using the value which is defined by the header value of FilePermission
-        /// or FilePermissionKey.
-        /// </param>
-        /// <param name="ignoreReadOnly">
-        /// Optional boolean specifying to overwrite the target file if it already
-        /// exists and has read-only attribute set.
-        /// </param>
-        /// <param name="setArchiveAttribute">
-        /// Optional boolean Specifying to set archive attribute on a target file. True
-        /// means archive attribute will be set on a target file despite attribute
-        /// overrides or a source file state.
-        /// </param>
-        /// <param name="conditions">
-        /// Optional <see cref="ShareFileRequestConditions"/> to add conditions
-        /// on creating the file.
+        /// <param name="options">
+        /// Optional parameters.
         /// </param>
         /// <param name="cancellationToken">
         /// Optional <see cref="CancellationToken"/> to propagate
@@ -1164,73 +1572,29 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual async Task<Response<ShareFileCopyInfo>> StartCopyAsync(
             Uri sourceUri,
-            Metadata metadata = default,
-            FileSmbProperties smbProperties = default,
-            string filePermission = default,
-            PermissionCopyMode? filePermissionCopyMode = default,
-            bool? ignoreReadOnly = default,
-            bool? setArchiveAttribute = default,
-            ShareFileRequestConditions conditions = default,
+            ShareFileCopyOptions options = default,
             CancellationToken cancellationToken = default) =>
             await StartCopyInternal(
-                sourceUri,
-                metadata,
-                smbProperties,
-                filePermission,
-                filePermissionCopyMode,
-                ignoreReadOnly,
-                setArchiveAttribute,
-                conditions,
+                sourceUri: sourceUri,
+                metadata: options?.Metadata,
+                smbProperties: options?.SmbProperties,
+                filePermission: options?.FilePermission,
+                filePermissionFormat: options?.PermissionFormat,
+                filePermissionCopyMode: options?.FilePermissionCopyMode,
+                ignoreReadOnly: options?.IgnoreReadOnly,
+                setArchiveAttribute: options?.Archive,
+                conditions: options?.Conditions,
+                copyableFileSmbProperties: options?.SmbPropertiesToCopy,
+                posixProperties: options?.PosixProperties,
+                modeCopyMode: options?.ModeCopyMode,
+                ownerCopyMode: options?.OwnerCopyMode,
                 async: true,
-                cancellationToken).
-                ConfigureAwait(false);
-
-        /// <summary>
-        /// Copies a blob or file to a destination file within the storage account.
-        ///
-        /// For more information, see
-        /// <see href="https://docs.microsoft.com/rest/api/storageservices/copy-file">
-        /// Copy File</see>.
-        /// </summary>
-        /// <param name="sourceUri">
-        /// Required. Specifies the URL of the source file or blob.
-        /// </param>
-        /// <param name="metadata">
-        /// Optional custom metadata to set for the file.
-        /// </param>
-        /// <param name="cancellationToken">
-        /// Optional <see cref="CancellationToken"/> to propagate
-        /// notifications that the operation should be cancelled.
-        /// </param>
-        /// <returns>
-        /// A <see cref="Response{StorageFileInfo}"/> describing the
-        /// state of the file copy.
-        /// </returns>
-        /// <remarks>
-        /// A <see cref="RequestFailedException"/> will be thrown if
-        /// a failure occurs.
-        /// </remarks>
-#pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
-        [EditorBrowsable(EditorBrowsableState.Never)]
-        public virtual async Task<Response<ShareFileCopyInfo>> StartCopyAsync(
-#pragma warning restore AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
-            Uri sourceUri,
-            Metadata metadata,
-            CancellationToken cancellationToken) =>
-            await StartCopyInternal(
-                sourceUri,
-                metadata,
-                smbProperties: default,
-                filePermission: default,
-                filePermissionCopyMode: default,
-                ignoreReadOnly: default,
-                setArchiveAttribute: default,
-                conditions: default,
-                async: true,
-                cancellationToken).
+                cancellationToken: cancellationToken).
                 ConfigureAwait(false);
 
         /// <summary>
@@ -1269,6 +1633,157 @@ namespace Azure.Storage.Files.Shares
         /// <param name="conditions">
         /// Optional <see cref="ShareFileRequestConditions"/> to add conditions
         /// on creating the file.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Optional <see cref="CancellationToken"/> to propagate
+        /// notifications that the operation should be cancelled.
+        /// </param>
+        /// <returns>
+        /// A <see cref="Response{StorageFileInfo}"/> describing the
+        /// state of the file copy.
+        /// </returns>
+        /// <remarks>
+        /// A <see cref="RequestFailedException"/> will be thrown if
+        /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
+        /// </remarks>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+#pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
+        public virtual async Task<Response<ShareFileCopyInfo>> StartCopyAsync(
+#pragma warning restore AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
+            Uri sourceUri,
+            Metadata metadata,
+            FileSmbProperties smbProperties,
+            string filePermission,
+            PermissionCopyMode? filePermissionCopyMode,
+            bool? ignoreReadOnly,
+            bool? setArchiveAttribute,
+            ShareFileRequestConditions conditions,
+            CancellationToken cancellationToken) =>
+            await StartCopyInternal(
+                sourceUri,
+                metadata,
+                smbProperties,
+                filePermission,
+                filePermissionFormat: default,
+                filePermissionCopyMode,
+                ignoreReadOnly,
+                setArchiveAttribute,
+                conditions,
+                copyableFileSmbProperties: default,
+                posixProperties: default,
+                modeCopyMode: default,
+                ownerCopyMode: default,
+                async: true,
+                cancellationToken).
+                ConfigureAwait(false);
+
+        /// <summary>
+        /// Copies a blob or file to a destination file within the storage account.
+        ///
+        /// For more information, see
+        /// <see href="https://docs.microsoft.com/rest/api/storageservices/copy-file">
+        /// Copy File</see>.
+        /// </summary>
+        /// <param name="sourceUri">
+        /// Required. Specifies the URL of the source file or blob.
+        /// </param>
+        /// <param name="metadata">
+        /// Optional custom metadata to set for the file.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Optional <see cref="CancellationToken"/> to propagate
+        /// notifications that the operation should be cancelled.
+        /// </param>
+        /// <returns>
+        /// A <see cref="Response{StorageFileInfo}"/> describing the
+        /// state of the file copy.
+        /// </returns>
+        /// <remarks>
+        /// A <see cref="RequestFailedException"/> will be thrown if
+        /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
+        /// </remarks>
+#pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public virtual async Task<Response<ShareFileCopyInfo>> StartCopyAsync(
+#pragma warning restore AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
+            Uri sourceUri,
+            Metadata metadata,
+            CancellationToken cancellationToken) =>
+            await StartCopyInternal(
+                sourceUri,
+                metadata,
+                smbProperties: default,
+                filePermission: default,
+                filePermissionFormat: default,
+                filePermissionCopyMode: default,
+                ignoreReadOnly: default,
+                setArchiveAttribute: default,
+                conditions: default,
+                copyableFileSmbProperties: default,
+                posixProperties: default,
+                modeCopyMode: default,
+                ownerCopyMode: default,
+                async: true,
+                cancellationToken).
+                ConfigureAwait(false);
+
+        /// <summary>
+        /// Copies a blob or file to a destination file within the storage account.
+        ///
+        /// For more information, see
+        /// <see href="https://docs.microsoft.com/rest/api/storageservices/copy-file">
+        /// Copy File</see>.
+        /// </summary>
+        /// <param name="sourceUri">
+        /// Required. Specifies the URL of the source file or blob.
+        /// </param>
+        /// <param name="metadata">
+        /// Optional custom metadata to set for the file.
+        /// </param>
+        /// <param name="smbProperties">
+        /// Optional SMB properties to set on the target file.
+        /// </param>
+        /// <param name="filePermission">
+        /// Optional file permission to set for the file.
+        /// </param>
+        /// <param name="filePermissionFormat">
+        /// Optional file permission format.
+        /// </param>
+        /// <param name="filePermissionCopyMode">
+        /// Specifies the option to copy file security descriptor from source file or
+        /// to set it using the value which is defined by the header value of FilePermission
+        /// or FilePermissionKey.
+        /// </param>
+        /// <param name="ignoreReadOnly">
+        /// Optional boolean specifying to overwrite the target file if it already
+        /// exists and has read-only attribute set.
+        /// </param>
+        /// <param name="setArchiveAttribute">
+        /// Optional boolean Specifying to set archive attribute on a target file. True
+        /// means archive attribute will be set on a target file despite attribute
+        /// overrides or a source file state.
+        /// </param>
+        /// <param name="conditions">
+        /// Optional <see cref="ShareFileRequestConditions"/> to add conditions
+        /// on creating the file.
+        /// </param>
+        /// <param name="copyableFileSmbProperties">
+        /// SMB properties to copy from the source file.
+        /// </param>
+        /// <param name="posixProperties">
+        /// NFS files only.  NFS properties to set on the destination file.
+        /// </param>
+        /// <param name="modeCopyMode">
+        /// Optional, only applicable to NFS Files.
+        /// If not populated, the desination file will have the default File Mode.
+        /// </param>
+        /// <param name="ownerCopyMode">
+        /// Optional, only applicable to NFS Files.
+        /// If not populated, the desination file will have the default Owner and Group.
         /// </param>
         /// <param name="async">
         /// Whether to invoke the operation asynchronously.
@@ -1284,16 +1799,23 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         private async Task<Response<ShareFileCopyInfo>> StartCopyInternal(
             Uri sourceUri,
             Metadata metadata,
             FileSmbProperties smbProperties,
             string filePermission,
+            FilePermissionFormat? filePermissionFormat,
             PermissionCopyMode? filePermissionCopyMode,
             bool? ignoreReadOnly,
             bool? setArchiveAttribute,
             ShareFileRequestConditions conditions,
+            CopyableFileSmbProperties? copyableFileSmbProperties,
+            FilePosixProperties posixProperties,
+            ModeCopyMode? modeCopyMode,
+            OwnerCopyMode? ownerCopyMode,
             bool async,
             CancellationToken cancellationToken)
         {
@@ -1312,13 +1834,82 @@ namespace Azure.Storage.Files.Shares
                     scope.Start();
                     ResponseWithHeaders<FileStartCopyHeaders> response;
 
+                    if ((copyableFileSmbProperties.GetValueOrDefault() & CopyableFileSmbProperties.FileAttributes) == CopyableFileSmbProperties.FileAttributes
+                        && smbProperties?.FileAttributes != null)
+                    {
+                        throw new ArgumentException($"{nameof(ShareFileCopyOptions)}.{nameof(ShareFileCopyOptions.SmbProperties)}.{nameof(ShareFileCopyOptions.SmbProperties.FileAttributes)} and {nameof(ShareFileCopyOptions)}.{nameof(CopyableFileSmbProperties)}.{nameof(CopyableFileSmbProperties.FileAttributes)} cannot both be set.");
+                    }
+
+                    if ((copyableFileSmbProperties.GetValueOrDefault() & CopyableFileSmbProperties.CreatedOn) == CopyableFileSmbProperties.CreatedOn
+                        && smbProperties?.FileCreatedOn != null)
+                    {
+                        throw new ArgumentException($"{nameof(ShareFileCopyOptions)}.{nameof(ShareFileCopyOptions.SmbProperties)}.{nameof(ShareFileCopyOptions.SmbProperties.FileCreatedOn)} and {nameof(ShareFileCopyOptions)}.{nameof(CopyableFileSmbProperties)}.{nameof(CopyableFileSmbProperties.CreatedOn)} cannot both be set.");
+                    }
+
+                    if ((copyableFileSmbProperties.GetValueOrDefault() & CopyableFileSmbProperties.LastWrittenOn) == CopyableFileSmbProperties.LastWrittenOn
+                        && smbProperties?.FileLastWrittenOn != null)
+                    {
+                        throw new ArgumentException($"{nameof(ShareFileCopyOptions)}.{nameof(ShareFileCopyOptions.SmbProperties)}.{nameof(ShareFileCopyOptions.SmbProperties.FileLastWrittenOn)} and {nameof(ShareFileCopyOptions)}.{nameof(CopyableFileSmbProperties)}.{nameof(CopyableFileSmbProperties.LastWrittenOn)} cannot both be set.");
+                    }
+
+                    if ((copyableFileSmbProperties.GetValueOrDefault() & CopyableFileSmbProperties.ChangedOn) == CopyableFileSmbProperties.ChangedOn
+                        && smbProperties?.FileChangedOn != null)
+                    {
+                        throw new ArgumentException($"{nameof(ShareFileCopyOptions)}.{nameof(ShareFileCopyOptions.SmbProperties)}.{nameof(ShareFileCopyOptions.SmbProperties.FileChangedOn)} and {nameof(ShareFileCopyOptions)}.{nameof(CopyableFileSmbProperties)}.{nameof(CopyableFileSmbProperties.ChangedOn)} cannot both be set.");
+                    }
+
+                    string fileAttributes = null;
+                    if ((copyableFileSmbProperties.GetValueOrDefault() & CopyableFileSmbProperties.FileAttributes)
+                        == CopyableFileSmbProperties.FileAttributes)
+                    {
+                        fileAttributes = Constants.File.Source;
+                    }
+                    else
+                    {
+                        fileAttributes = smbProperties?.FileAttributes.ToAttributesString();
+                    }
+
+                    string fileCreatedOn = null;
+                    if ((copyableFileSmbProperties.GetValueOrDefault() & CopyableFileSmbProperties.CreatedOn)
+                        == CopyableFileSmbProperties.CreatedOn)
+                    {
+                        fileCreatedOn = Constants.File.Source;
+                    }
+                    else
+                    {
+                        fileCreatedOn = smbProperties?.FileCreatedOn.ToFileDateTimeString();
+                    }
+
+                    string fileLastWrittenOn = null;
+                    if ((copyableFileSmbProperties.GetValueOrDefault() & CopyableFileSmbProperties.LastWrittenOn)
+                        == CopyableFileSmbProperties.LastWrittenOn)
+                    {
+                        fileLastWrittenOn = Constants.File.Source;
+                    }
+                    else
+                    {
+                        fileLastWrittenOn = smbProperties?.FileLastWrittenOn.ToFileDateTimeString();
+                    }
+
+                    string fileChangedOn = null;
+                    if ((copyableFileSmbProperties.GetValueOrDefault() & CopyableFileSmbProperties.ChangedOn)
+                        == CopyableFileSmbProperties.ChangedOn)
+                    {
+                        fileChangedOn = Constants.File.Source;
+                    }
+                    else
+                    {
+                        fileChangedOn = smbProperties?.FileChangedOn.ToFileDateTimeString();
+                    }
+
                     CopyFileSmbInfo copyFileSmbInfo = new CopyFileSmbInfo
                     {
                         FilePermissionCopyMode = filePermissionCopyMode,
                         IgnoreReadOnly = ignoreReadOnly,
-                        FileAttributes = smbProperties?.FileAttributes?.ToAttributesString(),
-                        FileCreationTime = smbProperties?.FileCreatedOn.ToFileDateTimeString(),
-                        FileLastWriteTime = smbProperties?.FileLastWrittenOn.ToFileDateTimeString(),
+                        FileAttributes = fileAttributes,
+                        FileCreationTime = fileCreatedOn,
+                        FileLastWriteTime = fileLastWrittenOn,
+                        FileChangeTime = fileChangedOn,
                         SetArchiveAttribute = setArchiveAttribute
                     };
 
@@ -1330,9 +1921,15 @@ namespace Azure.Storage.Files.Shares
                             copySource: uriBuilder.ToString(),
                             metadata: metadata,
                             filePermission: filePermission,
+                            filePermissionFormat: filePermissionFormat,
                             filePermissionKey: smbProperties?.FilePermissionKey,
+                            owner: posixProperties?.Owner,
+                            group: posixProperties?.Group,
+                            fileMode: posixProperties?.FileMode?.ToOctalFileMode(),
+                            fileModeCopyMode: modeCopyMode,
+                            fileOwnerCopyMode: ownerCopyMode,
                             copyFileSmbInfo: copyFileSmbInfo,
-                            leaseAccessConditions: conditions,
+                            shareFileRequestConditions: conditions,
                             cancellationToken: cancellationToken)
                             .ConfigureAwait(false);
                     }
@@ -1342,9 +1939,15 @@ namespace Azure.Storage.Files.Shares
                             copySource: uriBuilder.ToString(),
                             metadata: metadata,
                             filePermission: filePermission,
+                            filePermissionFormat: filePermissionFormat,
                             filePermissionKey: smbProperties?.FilePermissionKey,
+                            owner: posixProperties?.Owner,
+                            group: posixProperties?.Group,
+                            fileMode: posixProperties?.FileMode?.ToOctalFileMode(),
+                            fileModeCopyMode: modeCopyMode,
+                            fileOwnerCopyMode: ownerCopyMode,
                             copyFileSmbInfo: copyFileSmbInfo,
-                            leaseAccessConditions: conditions,
+                            shareFileRequestConditions: conditions,
                             cancellationToken: cancellationToken);
                     }
 
@@ -1394,6 +1997,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Response AbortCopy(
             string copyId,
@@ -1426,6 +2031,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
 #pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         [EditorBrowsable(EditorBrowsableState.Never)]
@@ -1464,6 +2071,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual async Task<Response> AbortCopyAsync(
             string copyId,
@@ -1496,6 +2105,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
 #pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         [EditorBrowsable(EditorBrowsableState.Never)]
@@ -1537,6 +2148,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         private async Task<Response> AbortCopyInternal(
             string copyId,
@@ -1563,7 +2176,7 @@ namespace Azure.Storage.Files.Shares
                     {
                         response = await FileRestClient.AbortCopyAsync(
                             copyId: copyId,
-                            leaseAccessConditions: conditions,
+                            shareFileRequestConditions: conditions,
                             cancellationToken: cancellationToken)
                             .ConfigureAwait(false);
                     }
@@ -1571,7 +2184,7 @@ namespace Azure.Storage.Files.Shares
                     {
                         response = FileRestClient.AbortCopy(
                             copyId: copyId,
-                            leaseAccessConditions: conditions,
+                            shareFileRequestConditions: conditions,
                             cancellationToken: cancellationToken);
                     }
 
@@ -1616,12 +2229,16 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Response<ShareFileDownloadInfo> Download(
-            ShareFileDownloadOptions options,
+            ShareFileDownloadOptions options = default,
             CancellationToken cancellationToken = default) =>
             DownloadInternal(
-                options,
+                options?.Range ?? default,
+                options?.TransferValidation,
+                options?.Conditions,
                 async: false,
                 cancellationToken).EnsureCompleted();
 
@@ -1648,12 +2265,16 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual async Task<Response<ShareFileDownloadInfo>> DownloadAsync(
-            ShareFileDownloadOptions options,
+            ShareFileDownloadOptions options = default,
             CancellationToken cancellationToken = default) =>
             await DownloadInternal(
-                options,
+                options?.Range ?? default,
+                options?.TransferValidation,
+                options?.Conditions,
                 async: true,
                 cancellationToken).ConfigureAwait(false);
 
@@ -1693,28 +2314,24 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         [EditorBrowsable(EditorBrowsableState.Never)]
+#pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         public virtual Response<ShareFileDownloadInfo> Download(
-            HttpRange range = default,
-            bool rangeGetContentHash = default,
-            ShareFileRequestConditions conditions = default,
-            CancellationToken cancellationToken = default)
+#pragma warning restore AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
+            HttpRange range,
+            bool rangeGetContentHash,
+            ShareFileRequestConditions conditions,
+            CancellationToken cancellationToken)
         {
-            ShareFileDownloadOptions options = default;
-            if (range != default || rangeGetContentHash != default || conditions != default)
-            {
-                options = new ShareFileDownloadOptions
-                {
-                    Range = range,
-                    TransactionalHashingOptions = rangeGetContentHash
-                        ? new DownloadTransactionalHashingOptions { Algorithm = TransactionalHashAlgorithm.MD5 }
-                        : default,
-                    Conditions = conditions
-                };
-            }
             return DownloadInternal(
-                options,
+                range,
+                rangeGetContentHash
+                    ? new DownloadTransferValidationOptions { ChecksumAlgorithm = StorageChecksumAlgorithm.MD5 }
+                    : default,
+                conditions,
                 async: false,
                 cancellationToken)
                 .EnsureCompleted();
@@ -1752,6 +2369,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
 #pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         [EditorBrowsable(EditorBrowsableState.Never)]
@@ -1761,19 +2380,12 @@ namespace Azure.Storage.Files.Shares
             bool rangeGetContentHash,
             CancellationToken cancellationToken)
         {
-            ShareFileDownloadOptions options = default;
-            if (range != default || rangeGetContentHash != default)
-            {
-                options = new ShareFileDownloadOptions
-                {
-                    Range = range,
-                    TransactionalHashingOptions = rangeGetContentHash
-                        ? new DownloadTransactionalHashingOptions { Algorithm = TransactionalHashAlgorithm.MD5 }
-                        : default
-                };
-            }
             return DownloadInternal(
-                options,
+                range,
+                rangeGetContentHash
+                    ? new DownloadTransferValidationOptions { ChecksumAlgorithm = StorageChecksumAlgorithm.MD5 }
+                    : default,
+                conditions: default,
                 async: false,
                 cancellationToken)
                 .EnsureCompleted();
@@ -1815,28 +2427,24 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         [EditorBrowsable(EditorBrowsableState.Never)]
+#pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         public virtual async Task<Response<ShareFileDownloadInfo>> DownloadAsync(
-            HttpRange range = default,
-            bool rangeGetContentHash = default,
-            ShareFileRequestConditions conditions = default,
-            CancellationToken cancellationToken = default)
+#pragma warning restore AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
+            HttpRange range,
+            bool rangeGetContentHash,
+            ShareFileRequestConditions conditions,
+            CancellationToken cancellationToken)
         {
-            ShareFileDownloadOptions options = default;
-            if (range != default || rangeGetContentHash != default || conditions != default)
-            {
-                options = new ShareFileDownloadOptions
-                {
-                    Range = range,
-                    TransactionalHashingOptions = rangeGetContentHash
-                        ? new DownloadTransactionalHashingOptions { Algorithm = TransactionalHashAlgorithm.MD5 }
-                        : default,
-                    Conditions = conditions
-                };
-            }
             return await DownloadInternal(
-                options,
+                range,
+                rangeGetContentHash
+                    ? new DownloadTransferValidationOptions { ChecksumAlgorithm = StorageChecksumAlgorithm.MD5 }
+                    : default,
+                conditions,
                 async: true,
                 cancellationToken)
                 .ConfigureAwait(false);
@@ -1874,6 +2482,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
 #pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         [EditorBrowsable(EditorBrowsableState.Never)]
@@ -1883,19 +2493,12 @@ namespace Azure.Storage.Files.Shares
             bool rangeGetContentHash,
             CancellationToken cancellationToken)
         {
-            ShareFileDownloadOptions options = default;
-            if (range != default || rangeGetContentHash != default)
-            {
-                options = new ShareFileDownloadOptions
-                {
-                    Range = range,
-                    TransactionalHashingOptions = rangeGetContentHash
-                        ? new DownloadTransactionalHashingOptions { Algorithm = TransactionalHashAlgorithm.MD5 }
-                        : default
-                };
-            }
             return await DownloadInternal(
-                options,
+                range,
+                rangeGetContentHash
+                    ? new DownloadTransferValidationOptions { ChecksumAlgorithm = StorageChecksumAlgorithm.MD5 }
+                    : default,
+                conditions: default,
                 async: true,
                 cancellationToken)
                 .ConfigureAwait(false);
@@ -1908,8 +2511,14 @@ namespace Azure.Storage.Files.Shares
         /// <see href="https://docs.microsoft.com/rest/api/storageservices/get-file">
         /// Get File</see>.
         /// </summary>
-        /// <param name="options">
-        /// Optional parameters for downloads.
+        /// <param name="range">
+        /// Range to download.
+        /// </param>
+        /// <param name="transferValidationOverride">
+        /// Override for client-configured transfer validation options.
+        /// </param>
+        /// <param name="conditions">
+        /// Request conditions for download.
         /// </param>
         /// <param name="async">
         /// Whether to invoke the operation asynchronously.
@@ -1926,12 +2535,18 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         private async Task<Response<ShareFileDownloadInfo>> DownloadInternal(
-            ShareFileDownloadOptions options,
+            HttpRange range,
+            DownloadTransferValidationOptions transferValidationOverride,
+            ShareFileRequestConditions conditions,
             bool async,
             CancellationToken cancellationToken)
         {
+            DownloadTransferValidationOptions validationOptions = transferValidationOverride ?? ClientConfiguration.TransferValidation.Download;
+
             using (ClientConfiguration.Pipeline.BeginLoggingScope(nameof(ShareFileClient)))
             {
                 ClientConfiguration.Pipeline.LogMethodEnter(
@@ -1947,7 +2562,9 @@ namespace Azure.Storage.Files.Shares
 
                     // Start downloading the file
                     (Response<ShareFileDownloadInfo> initialResponse, Stream stream) = await StartDownloadAsync(
-                        options,
+                        range,
+                        validationOptions,
+                        conditions,
                         async: async,
                         cancellationToken: cancellationToken)
                         .ConfigureAwait(false);
@@ -1962,7 +2579,9 @@ namespace Azure.Storage.Files.Shares
                         startOffset =>
                         {
                             (Response<ShareFileDownloadInfo> Response, Stream ContentStream) = StartDownloadAsync(
-                                options,
+                                range,
+                                validationOptions,
+                                conditions,
                                 startOffset,
                                 async,
                                 cancellationToken)
@@ -1971,14 +2590,16 @@ namespace Azure.Storage.Files.Shares
                             {
                                 throw new ShareFileModifiedException(
                                     "File has been modified concurrently",
-                                    Uri, etag, Response.GetRawResponse().Headers.ETag.GetValueOrDefault(), options?.Range ?? default);
+                                    Uri, etag, Response.GetRawResponse().Headers.ETag.GetValueOrDefault(), range);
                             }
                             return ContentStream;
                         },
                         async startOffset =>
                         {
                             (Response<ShareFileDownloadInfo> Response, Stream ContentStream) = await StartDownloadAsync(
-                                options,
+                                range,
+                                validationOptions,
+                                conditions,
                                 startOffset,
                                 async,
                                 cancellationToken)
@@ -1987,24 +2608,27 @@ namespace Azure.Storage.Files.Shares
                             {
                                 throw new ShareFileModifiedException(
                                     "File has been modified concurrently",
-                                    Uri, etag, Response.GetRawResponse().Headers.ETag.GetValueOrDefault(), options?.Range ?? default);
+                                    Uri, etag, Response.GetRawResponse().Headers.ETag.GetValueOrDefault(), range);
                             }
                             return ContentStream;
                         },
                         ClientConfiguration.Pipeline.ResponseClassifier,
                         Constants.MaxReliabilityRetries);
 
-                    // comparing hash results comes BEFORE decryption
                     // buffer response stream and ensure it matches the transactional hash if any
                     // Storage will not return a hash for payload >4MB, so this buffer is capped similarly
                     // hashing is opt-in, so this buffer is part of that opt-in
-                    if (options?.TransactionalHashingOptions != default && options.TransactionalHashingOptions.Validate)
+                    if (validationOptions != default && validationOptions.ChecksumAlgorithm != StorageChecksumAlgorithm.None && validationOptions.AutoValidateChecksum)
                     {
-                        // safe-truncate; transactional hash download limit well below maxInt
+                        // safe-buffer; transactional hash download limit well below maxInt
                         var readDestStream = new MemoryStream((int)initialResponse.Value.ContentLength);
                         if (async)
                         {
+#if NET6_0_OR_GREATER
+                            await initialResponse.Value.Content.CopyToAsync(readDestStream, cancellationToken).ConfigureAwait(false);
+#else
                             await initialResponse.Value.Content.CopyToAsync(readDestStream).ConfigureAwait(false);
+#endif
                         }
                         else
                         {
@@ -2012,7 +2636,12 @@ namespace Azure.Storage.Files.Shares
                         }
                         readDestStream.Position = 0;
 
-                        ContentHasher.AssertResponseHashMatch(readDestStream, options.TransactionalHashingOptions.Algorithm, initialResponse.GetRawResponse());
+                        await ContentHasher.AssertResponseHashMatchInternal(
+                            readDestStream,
+                            validationOptions.ChecksumAlgorithm,
+                            initialResponse.GetRawResponse(),
+                            async,
+                            cancellationToken).ConfigureAwait(false);
 
                         // we've consumed the network stream to hash it; return buffered stream to the user
                         initialResponse.Value.Content = readDestStream;
@@ -2041,8 +2670,15 @@ namespace Azure.Storage.Files.Shares
         /// <see href="https://docs.microsoft.com/rest/api/storageservices/get-file">
         /// Get File</see>.
         /// </summary>
-        /// <param name="options">
-        /// Optional parameters.
+        /// <param name="range">
+        /// Range to download.
+        /// </param>
+        /// <param name="transferValidationOverride">
+        /// Transfer validation options to use. This method assumes defaults and overrides have already been checked
+        /// and will use exactly what is provided through this argument.
+        /// </param>
+        /// <param name="conditions">
+        /// Request conditions for download.
         /// </param>
         /// <param name="startOffset">
         /// Optional. Starting offset to request - in the event of a retry.
@@ -2058,18 +2694,17 @@ namespace Azure.Storage.Files.Shares
         /// <see cref="Response{ShareFileDownloadInfo}"/> and a <see cref="Stream"/>.
         /// </returns>
         private async Task<(Response<ShareFileDownloadInfo> Response, Stream ContentStream)> StartDownloadAsync(
-            ShareFileDownloadOptions options,
+            HttpRange range,
+            DownloadTransferValidationOptions transferValidationOverride,
+            ShareFileRequestConditions conditions,
             long startOffset = 0,
             bool async = true,
             CancellationToken cancellationToken = default)
         {
-            if (options?.TransactionalHashingOptions?.Algorithm == TransactionalHashAlgorithm.StorageCrc64)
-            {
-                throw new ArgumentException("Azure File Shares do not support transactional CRC 64");
-            }
+            ShareErrors.AssertAlgorithmSupport(transferValidationOverride?.ChecksumAlgorithm);
 
             // calculation gets illegible with null coalesce; just pre-initialize
-            var pageRange = options?.Range ?? default;
+            var pageRange = range;
             pageRange = new HttpRange(
                 pageRange.Offset + startOffset,
                 pageRange.Length.HasValue ?
@@ -2083,8 +2718,8 @@ namespace Azure.Storage.Files.Shares
             {
                 response = await FileRestClient.DownloadAsync(
                     range: pageRange == default ? null : pageRange.ToString(),
-                    rangeGetContentMD5: options?.TransactionalHashingOptions?.Algorithm == TransactionalHashAlgorithm.MD5 ? true : null,
-                    leaseAccessConditions: options?.Conditions,
+                    rangeGetContentMD5: transferValidationOverride?.ChecksumAlgorithm.ResolveAuto() == StorageChecksumAlgorithm.MD5 ? true : null,
+                    shareFileRequestConditions: conditions,
                     cancellationToken: cancellationToken)
                     .ConfigureAwait(false);
             }
@@ -2092,8 +2727,8 @@ namespace Azure.Storage.Files.Shares
             {
                 response = FileRestClient.Download(
                     range: pageRange == default ? null : pageRange.ToString(),
-                    rangeGetContentMD5: options?.TransactionalHashingOptions?.Algorithm == TransactionalHashAlgorithm.MD5 ? true : null,
-                    leaseAccessConditions: options?.Conditions,
+                    rangeGetContentMD5: transferValidationOverride?.ChecksumAlgorithm.ResolveAuto() == StorageChecksumAlgorithm.MD5 ? true : null,
+                    shareFileRequestConditions: conditions,
                     cancellationToken: cancellationToken);
             }
 
@@ -2124,6 +2759,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// The stream returned might throw <see cref="ShareFileModifiedException"/>
         /// if the file is concurrently modified and <see cref="ShareFileOpenReadOptions"/> don't allow modification.
+        ///
+        /// A <see cref="RequestFailedException" /> will be thrown if other failures occur.
         /// </remarks>
 #pragma warning disable AZC0015 // Unexpected client method return type.
         public virtual Stream OpenRead(
@@ -2135,7 +2772,7 @@ namespace Azure.Storage.Files.Shares
                 options?.BufferSize,
                 options?.Conditions,
                 allowModifications: options?.AllowModifications ?? false,
-                hashingOptions: options.TransactionalHashingOptions,
+                options?.TransferValidation,
                 async: false,
                 cancellationToken).EnsureCompleted();
 
@@ -2157,6 +2794,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// The stream returned might throw <see cref="ShareFileModifiedException"/>
         /// if the file is concurrently modified and <see cref="ShareFileOpenReadOptions"/> don't allow modification.
+        ///
+        /// A <see cref="RequestFailedException" /> will be thrown if other failures occur.
         /// </remarks>
 #pragma warning disable AZC0015 // Unexpected client method return type.
         public virtual async Task<Stream> OpenReadAsync(
@@ -2168,7 +2807,7 @@ namespace Azure.Storage.Files.Shares
                 options?.BufferSize,
                 options?.Conditions,
                 allowModifications: options?.AllowModifications ?? false,
-                hashingOptions: options.TransactionalHashingOptions,
+                options?.TransferValidation,
                 async: true,
                 cancellationToken).ConfigureAwait(false);
 
@@ -2181,7 +2820,7 @@ namespace Azure.Storage.Files.Shares
         /// Defaults to the beginning of the file.
         /// </param>
         /// <param name="bufferSize">
-        /// The buffer size to use when the stream downloads parts
+        /// The buffer size (in bytes) to use when the stream downloads parts
         /// of the file.  Defaults to 1 MB.
         /// </param>
         /// <param name="conditions">
@@ -2199,6 +2838,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// The stream returned might throw <see cref="ShareFileModifiedException"/>
         /// if the file is concurrently modified.
+        ///
+        /// A <see cref="RequestFailedException" /> will be thrown if other failures occur.
         /// </remarks>
         [EditorBrowsable(EditorBrowsableState.Never)]
 #pragma warning disable AZC0015 // Unexpected client method return type.
@@ -2213,7 +2854,7 @@ namespace Azure.Storage.Files.Shares
                 bufferSize,
                 conditions,
                 allowModifications: false,
-                hashingOptions: default,
+                transferValidationOverride: default,
                 async: false,
                 cancellationToken).EnsureCompleted();
 
@@ -2229,7 +2870,7 @@ namespace Azure.Storage.Files.Shares
         /// Defaults to the beginning of the file.
         /// </param>
         /// <param name="bufferSize">
-        /// The buffer size to use when the stream downloads parts
+        /// The buffer size (in bytes) to use when the stream downloads parts
         /// of the file.  Defaults to 1 MB.
         /// </param>
         /// <param name="cancellationToken">
@@ -2243,6 +2884,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// The stream returned might throw <see cref="ShareFileModifiedException"/>
         /// if the file is concurrently modified.
+        ///
+        /// A <see cref="RequestFailedException" /> will be thrown if other failures occur.
         /// </remarks>
         [EditorBrowsable(EditorBrowsableState.Never)]
 #pragma warning disable AZC0015 // Unexpected client method return type.
@@ -2252,11 +2895,14 @@ namespace Azure.Storage.Files.Shares
             long position = 0,
             int? bufferSize = default,
             CancellationToken cancellationToken = default)
-                => OpenRead(
-                    position,
-                    bufferSize,
-                    allowfileModifications ? new ShareFileRequestConditions() : null,
-                    cancellationToken);
+                => OpenReadInteral(
+                    position: position,
+                    bufferSize: bufferSize,
+                    conditions: allowfileModifications ? new ShareFileRequestConditions() : null,
+                    allowModifications: allowfileModifications,
+                    transferValidationOverride: default,
+                    async: false,
+                    cancellationToken: cancellationToken).EnsureCompleted();
 
         /// <summary>
         /// Opens a stream for reading from the file.  The stream will only download
@@ -2267,7 +2913,7 @@ namespace Azure.Storage.Files.Shares
         /// Defaults to the beginning of the file.
         /// </param>
         /// <param name="bufferSize">
-        /// The buffer size to use when the stream downloads parts
+        /// The buffer size (in bytes) to use when the stream downloads parts
         /// of the file.  Defaults to 1 MB.
         /// </param>
         /// <param name="conditions">
@@ -2285,6 +2931,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// The stream returned might throw <see cref="ShareFileModifiedException"/>
         /// if the file is concurrently modified.
+        ///
+        /// A <see cref="RequestFailedException" /> will be thrown if other failures occur.
         /// </remarks>
         [EditorBrowsable(EditorBrowsableState.Never)]
 #pragma warning disable AZC0015 // Unexpected client method return type.
@@ -2299,7 +2947,7 @@ namespace Azure.Storage.Files.Shares
                 bufferSize,
                 conditions,
                 allowModifications: false,
-                hashingOptions: default,
+                transferValidationOverride: default,
                 async: true,
                 cancellationToken).ConfigureAwait(false);
 
@@ -2315,7 +2963,7 @@ namespace Azure.Storage.Files.Shares
         /// Defaults to the beginning of the file.
         /// </param>
         /// <param name="bufferSize">
-        /// The buffer size to use when the stream downloads parts
+        /// The buffer size (in bytes) to use when the stream downloads parts
         /// of the file.  Defaults to 1 MB.
         /// </param>
         /// <param name="cancellationToken">
@@ -2329,6 +2977,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// The stream returned might throw <see cref="ShareFileModifiedException"/>
         /// if the file is concurrently modified.
+        ///
+        /// A <see cref="RequestFailedException" /> will be thrown if other failures occur.
         /// </remarks>
         [EditorBrowsable(EditorBrowsableState.Never)]
 #pragma warning disable AZC0015 // Unexpected client method return type.
@@ -2338,11 +2988,14 @@ namespace Azure.Storage.Files.Shares
             long position = 0,
             int? bufferSize = default,
             CancellationToken cancellationToken = default)
-                => await OpenReadAsync(
-                    position,
-                    bufferSize,
-                    allowfileModifications ? new ShareFileRequestConditions() : null,
-                    cancellationToken).ConfigureAwait(false);
+                => await OpenReadInteral(
+                    position: position,
+                    bufferSize: bufferSize,
+                    conditions: allowfileModifications ? new ShareFileRequestConditions() : null,
+                    allowModifications: allowfileModifications,
+                    transferValidationOverride: default,
+                    async: true,
+                    cancellationToken: cancellationToken).ConfigureAwait(false);
 
         /// <summary>
         /// Opens a stream for reading from the file.  The stream will only download
@@ -2353,7 +3006,7 @@ namespace Azure.Storage.Files.Shares
         /// Defaults to the beginning of the file.
         /// </param>
         /// <param name="bufferSize">
-        /// The buffer size to use when the stream downloads parts
+        /// The buffer size (in bytes) to use when the stream downloads parts
         /// of the file.  Defaults to 1 MB.
         /// </param>
         /// <param name="conditions">
@@ -2363,11 +3016,11 @@ namespace Azure.Storage.Files.Shares
         /// <param name="allowModifications">
         /// Whether to allow modifications during the read.
         /// </param>
-        /// <param name="hashingOptions">
-        /// Options for transactional hashing.
-        /// </param>
         /// <param name="async">
         /// Whether to invoke the operation asynchronously.
+        /// </param>
+        /// <param name="transferValidationOverride">
+        /// Optional override for client-configured transfer validation options.
         /// </param>
         /// <param name="cancellationToken">
         /// Optional <see cref="CancellationToken"/> to propagate
@@ -2380,6 +3033,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// The stream returned might throw <see cref="ShareFileModifiedException"/>
         /// if the file is concurrently modified and allowModifications is false.
+        ///
+        /// A <see cref="RequestFailedException" /> will be thrown if other failures occur.
         /// </remarks>
 #pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
         internal async Task<Stream> OpenReadInteral(
@@ -2388,12 +3043,14 @@ namespace Azure.Storage.Files.Shares
             int? bufferSize,
             ShareFileRequestConditions conditions,
             bool allowModifications,
-            DownloadTransactionalHashingOptions hashingOptions,
+            DownloadTransferValidationOptions transferValidationOverride,
 #pragma warning disable CA1801
             bool async,
             CancellationToken cancellationToken)
 #pragma warning restore CA1801
         {
+            DownloadTransferValidationOptions validaitonOptions = transferValidationOverride ?? ClientConfiguration.TransferValidation.Download;
+
             DiagnosticScope scope = ClientConfiguration.ClientDiagnostics.CreateScope($"{nameof(ShareFileClient)}.{nameof(OpenRead)}");
             try
             {
@@ -2406,17 +3063,14 @@ namespace Azure.Storage.Files.Shares
 
                 return new LazyLoadingReadOnlyStream<ShareFileProperties>(
                     async (HttpRange range,
-                    DownloadTransactionalHashingOptions downloadTransactionalHashingOptions,
+                    DownloadTransferValidationOptions downloadValidationOptions,
                     bool async,
                     CancellationToken cancellationToken) =>
                     {
                         Response<ShareFileDownloadInfo> response = await DownloadInternal(
-                            new ShareFileDownloadOptions
-                            {
-                                Range = range,
-                                Conditions = conditions,
-                                TransactionalHashingOptions = downloadTransactionalHashingOptions
-                            },
+                            range,
+                            transferValidationOverride: downloadValidationOptions,
+                            conditions,
                             async,
                             cancellationToken).ConfigureAwait(false);
 
@@ -2433,7 +3087,7 @@ namespace Azure.Storage.Files.Shares
                     },
                     async (bool async, CancellationToken cancellationToken)
                         => await GetPropertiesInternal(conditions: default, async, cancellationToken).ConfigureAwait(false),
-                    hashingOptions,
+                    validaitonOptions,
                     allowModifications,
                     properties.Value.ContentLength,
                     position,
@@ -2474,6 +3128,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Response Delete(
             ShareFileRequestConditions conditions = default,
@@ -2502,6 +3158,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
 #pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         [EditorBrowsable(EditorBrowsableState.Never)]
@@ -2536,6 +3194,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual async Task<Response> DeleteAsync(
             ShareFileRequestConditions conditions = default,
@@ -2564,6 +3224,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
 #pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         [EditorBrowsable(EditorBrowsableState.Never)]
@@ -2603,6 +3265,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         private async Task<Response> DeleteInternal(
             ShareFileRequestConditions conditions,
@@ -2627,14 +3291,14 @@ namespace Azure.Storage.Files.Shares
                     if (async)
                     {
                         response = await FileRestClient.DeleteAsync(
-                            leaseAccessConditions: conditions,
+                            shareFileRequestConditions: conditions,
                             cancellationToken: cancellationToken)
                             .ConfigureAwait(false);
                     }
                     else
                     {
                         response = FileRestClient.Delete(
-                            leaseAccessConditions: conditions,
+                            shareFileRequestConditions: conditions,
                             cancellationToken: cancellationToken);
                     }
 
@@ -2681,6 +3345,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Response<ShareFileProperties> GetProperties(
             ShareFileRequestConditions conditions = default,
@@ -2712,6 +3378,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         [EditorBrowsable(EditorBrowsableState.Never)]
 #pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
@@ -2748,6 +3416,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual async Task<Response<ShareFileProperties>> GetPropertiesAsync(
             ShareFileRequestConditions conditions = default,
@@ -2779,6 +3449,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
 #pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         [EditorBrowsable(EditorBrowsableState.Never)]
@@ -2822,6 +3494,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         private async Task<Response<ShareFileProperties>> GetPropertiesInternal(
             ShareFileRequestConditions conditions,
@@ -2847,14 +3521,14 @@ namespace Azure.Storage.Files.Shares
                     if (async)
                     {
                         response = await FileRestClient.GetPropertiesAsync(
-                            leaseAccessConditions: conditions,
+                            shareFileRequestConditions: conditions,
                             cancellationToken: cancellationToken)
                             .ConfigureAwait(false);
                     }
                     else
                     {
                         response = FileRestClient.GetProperties(
-                            leaseAccessConditions: conditions,
+                            shareFileRequestConditions: conditions,
                             cancellationToken: cancellationToken);
                     }
 
@@ -2881,6 +3555,96 @@ namespace Azure.Storage.Files.Shares
         #endregion GetProperties
 
         #region SetHttpHeaders
+        /// <summary>
+        /// The <see cref="SetHttpHeaders(long?, ShareFileHttpHeaders, FileSmbProperties, string, ShareFileRequestConditions, CancellationToken)"/>
+        /// operation sets system properties on the file.
+        ///
+        /// For more information, see
+        /// <see href="https://docs.microsoft.com/rest/api/storageservices/set-file-properties">
+        /// Set File Properties</see>.
+        /// </summary>
+        /// <param name="options">
+        /// Optional parameters.
+        /// </param>
+        /// <param name="conditions">
+        /// Optional <see cref="ShareFileRequestConditions"/> to add conditions
+        /// on creating the file.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Optional <see cref="CancellationToken"/> to propagate
+        /// notifications that the operation should be cancelled.
+        /// </param>
+        /// <returns>
+        /// A <see cref="Response{StorageFileInfo}"/> describing the
+        /// state of the file.
+        /// </returns>
+        /// <remarks>
+        /// A <see cref="RequestFailedException"/> will be thrown if
+        /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
+        /// </remarks>
+        public virtual Response<ShareFileInfo> SetHttpHeaders(
+            ShareFileSetHttpHeadersOptions options = default,
+            ShareFileRequestConditions conditions = default,
+            CancellationToken cancellationToken = default) =>
+            SetHttpHeadersInternal(
+                options?.NewSize,
+                options?.HttpHeaders,
+                options?.SmbProperties,
+                options?.FilePermission?.Permission,
+                options?.FilePermission?.PermissionFormat,
+                options?.PosixProperties,
+                conditions,
+                async: false,
+                cancellationToken)
+                .EnsureCompleted();
+
+        /// <summary>
+        /// The <see cref="SetHttpHeadersAsync(long?, ShareFileHttpHeaders, FileSmbProperties, string, ShareFileRequestConditions, CancellationToken)"/>
+        /// operation sets system properties on the file.
+        ///
+        /// For more information, see
+        /// <see href="https://docs.microsoft.com/rest/api/storageservices/set-file-properties">
+        /// Set File Properties</see>.
+        /// </summary>
+        /// <param name="options">
+        /// Optional parameters.
+        /// </param>
+        /// <param name="conditions">
+        /// Optional <see cref="ShareFileRequestConditions"/> to add conditions
+        /// on creating the file.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Optional <see cref="CancellationToken"/> to propagate
+        /// notifications that the operation should be cancelled.
+        /// </param>
+        /// <returns>
+        /// A <see cref="Response{StorageFileInfo}"/> describing the
+        /// state of the file.
+        /// </returns>
+        /// <remarks>
+        /// A <see cref="RequestFailedException"/> will be thrown if
+        /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
+        /// </remarks>
+        public virtual async Task<Response<ShareFileInfo>> SetHttpHeadersAsync(
+            ShareFileSetHttpHeadersOptions options = default,
+            ShareFileRequestConditions conditions = default,
+            CancellationToken cancellationToken = default) =>
+            await SetHttpHeadersInternal(
+                options?.NewSize,
+                options?.HttpHeaders,
+                options?.SmbProperties,
+                options?.FilePermission?.Permission,
+                options?.FilePermission?.PermissionFormat,
+                options?.PosixProperties,
+                conditions,
+                async: true,
+                cancellationToken)
+                .ConfigureAwait(false);
+
         /// <summary>
         /// The <see cref="SetHttpHeaders(long?, ShareFileHttpHeaders, FileSmbProperties, string, ShareFileRequestConditions, CancellationToken)"/>
         /// operation sets system properties on the file.
@@ -2919,19 +3683,26 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+#pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         public virtual Response<ShareFileInfo> SetHttpHeaders(
-            long? newSize = default,
-            ShareFileHttpHeaders httpHeaders = default,
-            FileSmbProperties smbProperties = default,
-            string filePermission = default,
-            ShareFileRequestConditions conditions = default,
-            CancellationToken cancellationToken = default) =>
+#pragma warning restore AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
+            long? newSize,
+            ShareFileHttpHeaders httpHeaders,
+            FileSmbProperties smbProperties,
+            string filePermission,
+            ShareFileRequestConditions conditions,
+            CancellationToken cancellationToken) =>
             SetHttpHeadersInternal(
                 newSize,
                 httpHeaders,
                 smbProperties,
                 filePermission,
+                filePermissionFormat: default,
+                posixProperties: default,
                 conditions,
                 async: false,
                 cancellationToken)
@@ -2972,6 +3743,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>s
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
 #pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         [EditorBrowsable(EditorBrowsableState.Never)]
@@ -2987,6 +3760,8 @@ namespace Azure.Storage.Files.Shares
                 httpHeaders,
                 smbProperties,
                 filePermission,
+                filePermissionFormat: default,
+                posixProperties: default,
                 conditions: default,
                 async: false,
                 cancellationToken)
@@ -3030,19 +3805,26 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+#pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         public virtual async Task<Response<ShareFileInfo>> SetHttpHeadersAsync(
-            long? newSize = default,
-            ShareFileHttpHeaders httpHeaders = default,
-            FileSmbProperties smbProperties = default,
-            string filePermission = default,
-            ShareFileRequestConditions conditions = default,
-            CancellationToken cancellationToken = default) =>
+#pragma warning restore AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
+            long? newSize,
+            ShareFileHttpHeaders httpHeaders,
+            FileSmbProperties smbProperties,
+            string filePermission,
+            ShareFileRequestConditions conditions,
+            CancellationToken cancellationToken) =>
             await SetHttpHeadersInternal(
                 newSize,
                 httpHeaders,
                 smbProperties,
                 filePermission,
+                filePermissionFormat: default,
+                posixProperties: default,
                 conditions,
                 async: true,
                 cancellationToken)
@@ -3082,6 +3864,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
 #pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         [EditorBrowsable(EditorBrowsableState.Never)]
@@ -3097,6 +3881,8 @@ namespace Azure.Storage.Files.Shares
                 httpHeaders,
                 smbProperties,
                 filePermission,
+                filePermissionFormat: default,
+                posixProperties: default,
                 conditions: default,
                 async: true,
                 cancellationToken)
@@ -3123,7 +3909,13 @@ namespace Azure.Storage.Files.Shares
         /// Optional SMB properties to set for the file.
         /// </param>
         /// <param name="filePermission">
-        /// Optional file permission to set ofr the file.
+        /// Optional file permission to set for the file.
+        /// </param>
+        /// <param name="filePermissionFormat">
+        /// Optional file permission format.
+        /// </param>
+        /// <param name="posixProperties">
+        /// Optional NFS properties.
         /// </param>
         /// <param name="conditions">
         /// Optional <see cref="ShareFileRequestConditions"/> to add conditions
@@ -3143,12 +3935,16 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         private async Task<Response<ShareFileInfo>> SetHttpHeadersInternal(
             long? newSize,
             ShareFileHttpHeaders httpHeaders,
             FileSmbProperties smbProperties,
             string filePermission,
+            FilePermissionFormat? filePermissionFormat,
+            FilePosixProperties posixProperties,
             ShareFileRequestConditions conditions,
             bool async,
             CancellationToken cancellationToken)
@@ -3170,38 +3966,44 @@ namespace Azure.Storage.Files.Shares
                     FileSmbProperties smbProps = smbProperties ?? new FileSmbProperties();
 
                     ShareExtensions.AssertValidFilePermissionAndKey(filePermission, smbProps.FilePermissionKey);
-                    if (filePermission == null && smbProps.FilePermissionKey == null)
-                    {
-                        filePermission = Constants.File.Preserve;
-                    }
 
                     ResponseWithHeaders<FileSetHttpHeadersHeaders> response;
 
                     if (async)
                     {
                         response = await FileRestClient.SetHttpHeadersAsync(
-                            fileAttributes: smbProps.FileAttributes?.ToAttributesString() ?? Constants.File.Preserve,
-                            fileCreationTime: smbProps.FileCreatedOn.ToFileDateTimeString() ?? Constants.File.Preserve,
-                            fileLastWriteTime: smbProps.FileLastWrittenOn.ToFileDateTimeString() ?? Constants.File.Preserve,
+                            fileAttributes: smbProps.FileAttributes.ToAttributesString(),
+                            fileCreationTime: smbProps.FileCreatedOn.ToFileDateTimeString(),
+                            fileLastWriteTime: smbProps.FileLastWrittenOn.ToFileDateTimeString(),
                             fileContentLength: newSize,
                             filePermission: filePermission,
+                            filePermissionFormat: filePermissionFormat,
                             filePermissionKey: smbProps.FilePermissionKey,
+                            fileChangeTime: smbProps.FileChangedOn.ToFileDateTimeString(),
+                            owner: posixProperties?.Owner,
+                            group: posixProperties?.Group,
+                            fileMode: posixProperties?.FileMode?.ToOctalFileMode(),
                             fileHttpHeaders: httpHeaders.ToFileHttpHeaders(),
-                            leaseAccessConditions: conditions,
+                            shareFileRequestConditions: conditions,
                             cancellationToken: cancellationToken)
                             .ConfigureAwait(false);
                     }
                     else
                     {
                         response = FileRestClient.SetHttpHeaders(
-                            fileAttributes: smbProps.FileAttributes?.ToAttributesString() ?? Constants.File.Preserve,
-                            fileCreationTime: smbProps.FileCreatedOn.ToFileDateTimeString() ?? Constants.File.Preserve,
-                            fileLastWriteTime: smbProps.FileLastWrittenOn.ToFileDateTimeString() ?? Constants.File.Preserve,
+                            fileAttributes: smbProps.FileAttributes.ToAttributesString(),
+                            fileCreationTime: smbProps.FileCreatedOn.ToFileDateTimeString(),
+                            fileLastWriteTime: smbProps.FileLastWrittenOn.ToFileDateTimeString(),
                             fileContentLength: newSize,
                             filePermission: filePermission,
+                            filePermissionFormat: filePermissionFormat,
                             filePermissionKey: smbProps.FilePermissionKey,
+                            fileChangeTime: smbProps.FileChangedOn.ToFileDateTimeString(),
+                            owner: posixProperties?.Owner,
+                            group: posixProperties?.Group,
+                            fileMode: posixProperties?.FileMode?.ToOctalFileMode(),
                             fileHttpHeaders: httpHeaders.ToFileHttpHeaders(),
-                            leaseAccessConditions: conditions,
+                            shareFileRequestConditions: conditions,
                             cancellationToken: cancellationToken);
                     }
 
@@ -3251,6 +4053,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Response<ShareFileInfo> SetMetadata(
             Metadata metadata,
@@ -3285,6 +4089,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
 #pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         [EditorBrowsable(EditorBrowsableState.Never)]
@@ -3325,6 +4131,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual async Task<Response<ShareFileInfo>> SetMetadataAsync(
             Metadata metadata,
@@ -3359,6 +4167,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
 #pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         [EditorBrowsable(EditorBrowsableState.Never)]
@@ -3402,6 +4212,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         private async Task<Response<ShareFileInfo>> SetMetadataInternal(
             Metadata metadata,
@@ -3426,7 +4238,7 @@ namespace Azure.Storage.Files.Shares
                     {
                         response = await FileRestClient.SetMetadataAsync(
                             metadata: metadata,
-                            leaseAccessConditions: conditions,
+                            shareFileRequestConditions: conditions,
                             cancellationToken: cancellationToken)
                             .ConfigureAwait(false);
                     }
@@ -3434,7 +4246,7 @@ namespace Azure.Storage.Files.Shares
                     {
                         response = FileRestClient.SetMetadata(
                             metadata: metadata,
-                            leaseAccessConditions: conditions,
+                            shareFileRequestConditions: conditions,
                             cancellationToken: cancellationToken);
                     }
 
@@ -3484,6 +4296,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Response<ShareFileUploadInfo> ClearRange(
             HttpRange range,
@@ -3522,6 +4336,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual async Task<Response<ShareFileUploadInfo>> ClearRangeAsync(
             HttpRange range,
@@ -3563,6 +4379,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         private async Task<Response<ShareFileUploadInfo>> ClearRangeInternal(
             HttpRange range,
@@ -3592,7 +4410,7 @@ namespace Azure.Storage.Files.Shares
                             contentLength: 0,
                             // TODO remove this
                             optionalbody: new MemoryStream(),
-                            leaseAccessConditions: conditions,
+                            shareFileRequestConditions: conditions,
                             cancellationToken: cancellationToken)
                             .ConfigureAwait(false);
                     }
@@ -3604,7 +4422,7 @@ namespace Azure.Storage.Files.Shares
                             contentLength: 0,
                             // TODO remove this
                             optionalbody: new MemoryStream(),
-                            leaseAccessConditions: conditions,
+                            shareFileRequestConditions: conditions,
                             cancellationToken: cancellationToken);
                     }
 
@@ -3656,18 +4474,23 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Response<ShareFileUploadInfo> UploadRange(
             HttpRange range,
             Stream content,
-            ShareFileUploadRangeOptions options,
+            ShareFileUploadRangeOptions options = default,
             CancellationToken cancellationToken = default) =>
             UploadRangeInternal(
-                range,
-                content,
-                options,
-                false, // async
-                cancellationToken)
+                range: range,
+                content: content,
+                transferValidationOverride: options?.TransferValidation,
+                progressHandler: options?.ProgressHandler,
+                conditions: options?.Conditions,
+                fileLastWrittenMode: options?.FileLastWrittenMode,
+                async: false,
+                cancellationToken: cancellationToken)
                 .EnsureCompleted();
 
         /// <summary>
@@ -3698,18 +4521,23 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual async Task<Response<ShareFileUploadInfo>> UploadRangeAsync(
             HttpRange range,
             Stream content,
-            ShareFileUploadRangeOptions options,
+            ShareFileUploadRangeOptions options = default,
             CancellationToken cancellationToken = default) =>
             await UploadRangeInternal(
-                range,
-                content,
-                options,
-                true, // async
-                cancellationToken)
+                range: range,
+                content: content,
+                transferValidationOverride: options?.TransferValidation,
+                progressHandler: options?.ProgressHandler,
+                conditions: options?.Conditions,
+                fileLastWrittenMode: options?.FileLastWrittenMode,
+                async: true,
+                cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
 
         /// <summary>
@@ -3754,35 +4582,33 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+#pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         public virtual Response<ShareFileUploadInfo> UploadRange(
+#pragma warning restore AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
             HttpRange range,
             Stream content,
-            byte[] transactionalContentHash = null,
-            IProgress<long> progressHandler = default,
-            ShareFileRequestConditions conditions = default,
-            CancellationToken cancellationToken = default)
+            byte[] transactionalContentHash,
+            IProgress<long> progressHandler,
+            ShareFileRequestConditions conditions,
+            CancellationToken cancellationToken)
         {
-            ShareFileUploadRangeOptions options = default;
-            if (transactionalContentHash != default || progressHandler != default || conditions != default)
-            {
-                options = new ShareFileUploadRangeOptions
-                {
-                    TransactionalHashingOptions = transactionalContentHash != default
-                        ? new UploadTransactionalHashingOptions()
-                        {
-                            Algorithm = TransactionalHashAlgorithm.MD5,
-                            PrecalculatedHash = transactionalContentHash
-                        }
-                        : default,
-                    Conditions = conditions,
-                    ProgressHandler = progressHandler
-                };
-            }
             return UploadRangeInternal(
                 range,
                 content,
-                options,
+                transferValidationOverride: transactionalContentHash != default
+                    ? new UploadTransferValidationOptions()
+                    {
+                        ChecksumAlgorithm = StorageChecksumAlgorithm.MD5,
+                        PrecalculatedChecksum = transactionalContentHash
+                    }
+                    : default,
+                progressHandler,
+                conditions,
+                fileLastWrittenMode: default,
                 false, // async
                 cancellationToken)
                 .EnsureCompleted();
@@ -3830,35 +4656,33 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+#pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         public virtual async Task<Response<ShareFileUploadInfo>> UploadRangeAsync(
+#pragma warning restore AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
             HttpRange range,
             Stream content,
-            byte[] transactionalContentHash = default,
-            IProgress<long> progressHandler = default,
-            ShareFileRequestConditions conditions = default,
-            CancellationToken cancellationToken = default)
+            byte[] transactionalContentHash,
+            IProgress<long> progressHandler,
+            ShareFileRequestConditions conditions,
+            CancellationToken cancellationToken)
         {
-            ShareFileUploadRangeOptions options = default;
-            if (transactionalContentHash != default || progressHandler != default || conditions != default)
-            {
-                options = new ShareFileUploadRangeOptions
-                {
-                    TransactionalHashingOptions = transactionalContentHash != default
-                        ? new UploadTransactionalHashingOptions()
-                        {
-                            Algorithm = TransactionalHashAlgorithm.MD5,
-                            PrecalculatedHash = transactionalContentHash
-                        }
-                        : default,
-                    Conditions = conditions,
-                    ProgressHandler = progressHandler
-                };
-            }
             return await UploadRangeInternal(
                 range,
                 content,
-                options,
+                transferValidationOverride: transactionalContentHash != default
+                    ? new UploadTransferValidationOptions()
+                    {
+                        ChecksumAlgorithm = StorageChecksumAlgorithm.MD5,
+                        PrecalculatedChecksum = transactionalContentHash
+                    }
+                    : default,
+                progressHandler,
+                conditions,
+                fileLastWrittenMode: default,
                 true, // async
                 cancellationToken)
                 .ConfigureAwait(false);
@@ -3904,6 +4728,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         [EditorBrowsable(EditorBrowsableState.Never)]
         public virtual Response<ShareFileUploadInfo> UploadRange(
@@ -3914,25 +4740,19 @@ namespace Azure.Storage.Files.Shares
             IProgress<long> progressHandler = default,
             CancellationToken cancellationToken = default)
         {
-            ShareFileUploadRangeOptions options = default;
-            if (transactionalContentHash != default || progressHandler != default)
-            {
-                options = new ShareFileUploadRangeOptions
-                {
-                    TransactionalHashingOptions = transactionalContentHash != default
-                        ? new UploadTransactionalHashingOptions()
-                        {
-                            Algorithm = TransactionalHashAlgorithm.MD5,
-                            PrecalculatedHash = transactionalContentHash
-                        }
-                        : default,
-                    ProgressHandler = progressHandler
-                };
-            }
             return UploadRangeInternal(
                 range,
                 content,
-                options,
+                transferValidationOverride: transactionalContentHash != default
+                    ? new UploadTransferValidationOptions()
+                    {
+                        ChecksumAlgorithm = StorageChecksumAlgorithm.MD5,
+                        PrecalculatedChecksum = transactionalContentHash
+                    }
+                    : default,
+                progressHandler,
+                conditions: default,
+                fileLastWrittenMode: default,
                 false, // async
                 cancellationToken)
                 .EnsureCompleted();
@@ -3978,6 +4798,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         [EditorBrowsable(EditorBrowsableState.Never)]
         public virtual async Task<Response<ShareFileUploadInfo>> UploadRangeAsync(
@@ -3988,25 +4810,19 @@ namespace Azure.Storage.Files.Shares
             IProgress<long> progressHandler = default,
             CancellationToken cancellationToken = default)
         {
-            ShareFileUploadRangeOptions options = default;
-            if (transactionalContentHash != default || progressHandler != default)
-            {
-                options = new ShareFileUploadRangeOptions
-                {
-                    TransactionalHashingOptions = transactionalContentHash != default
-                        ? new UploadTransactionalHashingOptions()
-                        {
-                            Algorithm = TransactionalHashAlgorithm.MD5,
-                            PrecalculatedHash = transactionalContentHash
-                        }
-                        : default,
-                    ProgressHandler = progressHandler
-                };
-            }
             return await UploadRangeInternal(
                 range,
                 content,
-                options,
+                transferValidationOverride: transactionalContentHash != default
+                    ? new UploadTransferValidationOptions()
+                    {
+                        ChecksumAlgorithm = StorageChecksumAlgorithm.MD5,
+                        PrecalculatedChecksum = transactionalContentHash
+                    }
+                    : default,
+                progressHandler,
+                conditions: default,
+                fileLastWrittenMode: default,
                 true, // async
                 cancellationToken)
                 .ConfigureAwait(false);
@@ -4026,8 +4842,18 @@ namespace Azure.Storage.Files.Shares
         /// <param name="content">
         /// A <see cref="Stream"/> containing the content of the range to upload.
         /// </param>
-        /// <param name="options">
-        /// Optional parameters.
+        /// <param name="transferValidationOverride">
+        /// Optional override for transfer validation on upload.
+        /// </param>
+        /// <param name="progressHandler">
+        /// Progress handler for upload operation.
+        /// </param>
+        /// <param name="conditions">
+        /// Request conditions for upload range.
+        /// </param>
+        /// <param name="fileLastWrittenMode">
+        /// Optional.  Specifies if the file last write time should be set to the current time,
+        /// or the last write time currently associated with the file should be preserved.
         /// </param>
         /// <param name="async">
         /// Whether to invoke the operation asynchronously.
@@ -4043,28 +4869,24 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         internal async Task<Response<ShareFileUploadInfo>> UploadRangeInternal(
             HttpRange range,
             Stream content,
-            ShareFileUploadRangeOptions options,
+            UploadTransferValidationOptions transferValidationOverride,
+            IProgress<long> progressHandler,
+            ShareFileRequestConditions conditions,
+            FileLastWrittenMode? fileLastWrittenMode,
             bool async,
             CancellationToken cancellationToken)
         {
+            UploadTransferValidationOptions validationOptions = transferValidationOverride ?? ClientConfiguration.TransferValidation.Upload;
+            ShareErrors.AssertAlgorithmSupport(validationOptions?.ChecksumAlgorithm);
+
             using (ClientConfiguration.Pipeline.BeginLoggingScope(nameof(ShareFileClient)))
             {
-                // File shares only accept MD5 for transactional hashing
-                if (options?.TransactionalHashingOptions != default)
-                {
-                    switch (options.TransactionalHashingOptions.Algorithm)
-                    {
-                        case TransactionalHashAlgorithm.MD5:
-                            break;
-                        default:
-                            throw new ArgumentException("Invalid transactional hash algorithm selected.");
-                    }
-                }
-
                 ClientConfiguration.Pipeline.LogMethodEnter(
                     nameof(ShareFileClient),
                     message:
@@ -4078,9 +4900,13 @@ namespace Azure.Storage.Files.Shares
                     Errors.VerifyStreamPosition(content, nameof(content));
 
                     // compute hash BEFORE attaching progress handler
-                    ContentHasher.GetHashResult hashResult = ContentHasher.GetHashOrDefault(content, options?.TransactionalHashingOptions);
+                    ContentHasher.GetHashResult hashResult = await ContentHasher.GetHashOrDefaultInternal(
+                        content,
+                        validationOptions,
+                        async,
+                        cancellationToken).ConfigureAwait(false);
 
-                    content = content.WithNoDispose().WithProgress(options?.ProgressHandler);
+                    content = content.WithNoDispose().WithProgress(progressHandler);
 
                     ResponseWithHeaders<FileUploadRangeHeaders> response;
 
@@ -4090,9 +4916,10 @@ namespace Azure.Storage.Files.Shares
                             range: range.ToString(),
                             fileRangeWrite: ShareFileRangeWriteType.Update,
                             contentLength: (content?.Length - content?.Position) ?? 0,
+                            fileLastWrittenMode: fileLastWrittenMode,
                             optionalbody: content,
-                            contentMD5: hashResult?.MD5,
-                            leaseAccessConditions: options?.Conditions,
+                            contentMD5: hashResult?.MD5AsArray,
+                            shareFileRequestConditions: conditions,
                             cancellationToken: cancellationToken)
                             .ConfigureAwait(false);
                     }
@@ -4102,9 +4929,10 @@ namespace Azure.Storage.Files.Shares
                             range: range.ToString(),
                             fileRangeWrite: ShareFileRangeWriteType.Update,
                             contentLength: (content?.Length - content?.Position) ?? 0,
+                            fileLastWrittenMode: fileLastWrittenMode,
                             optionalbody: content,
-                            contentMD5: hashResult?.MD5,
-                            leaseAccessConditions: options?.Conditions,
+                            contentMD5: hashResult?.MD5AsArray,
+                            shareFileRequestConditions: conditions,
                             cancellationToken: cancellationToken);
                     }
 
@@ -4157,6 +4985,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Response<ShareFileUploadInfo> UploadRangeFromUri(
             Uri sourceUri,
@@ -4170,6 +5000,7 @@ namespace Azure.Storage.Files.Shares
                 sourceRange: sourceRange,
                 conditions: options?.Conditions,
                 sourceAuthentication: options?.SourceAuthentication,
+                fileLastWrittenMode: options?.FileLastWrittenMode,
                 async: false,
                 cancellationToken)
                 .EnsureCompleted();
@@ -4203,6 +5034,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual async Task<Response<ShareFileUploadInfo>> UploadRangeFromUriAsync(
             Uri sourceUri,
@@ -4216,6 +5049,7 @@ namespace Azure.Storage.Files.Shares
                 sourceRange: sourceRange,
                 conditions: options?.Conditions,
                 sourceAuthentication: options?.SourceAuthentication,
+                fileLastWrittenMode: options?.FileLastWrittenMode,
                 async: true,
                 cancellationToken)
                 .ConfigureAwait(false);
@@ -4250,6 +5084,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         [EditorBrowsable(EditorBrowsableState.Never)]
 #pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
@@ -4266,6 +5102,7 @@ namespace Azure.Storage.Files.Shares
                 sourceRange: sourceRange,
                 conditions: conditions,
                 sourceAuthentication: default,
+                fileLastWrittenMode: default,
                 async: false,
                 cancellationToken)
                 .EnsureCompleted();
@@ -4296,6 +5133,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         [ForwardsClientCalls]
 #pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
@@ -4312,6 +5151,7 @@ namespace Azure.Storage.Files.Shares
                 sourceRange: sourceRange,
                 conditions: default,
                 sourceAuthentication: default,
+                fileLastWrittenMode: default,
                 async: false,
                 cancellationToken)
                 .EnsureCompleted();
@@ -4346,6 +5186,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         [EditorBrowsable(EditorBrowsableState.Never)]
         [ForwardsClientCalls]
@@ -4363,6 +5205,7 @@ namespace Azure.Storage.Files.Shares
                 sourceRange: sourceRange,
                 conditions: conditions,
                 sourceAuthentication: default,
+                fileLastWrittenMode: default,
                 async: true,
                 cancellationToken)
                 .ConfigureAwait(false);
@@ -4393,6 +5236,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
 #pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         [EditorBrowsable(EditorBrowsableState.Never)]
@@ -4408,6 +5253,7 @@ namespace Azure.Storage.Files.Shares
                 sourceRange: sourceRange,
                 conditions: default,
                 sourceAuthentication: default,
+                fileLastWrittenMode: default,
                 async: true,
                 cancellationToken)
                 .ConfigureAwait(false);
@@ -4434,6 +5280,10 @@ namespace Azure.Storage.Files.Shares
         /// <param name="sourceAuthentication">
         /// Optional. Source authentication used to access the source blob.
         /// </param>
+        /// <param name="fileLastWrittenMode">
+        /// Optional.  Specifies if the file last write time should be set to the current time,
+        /// or the last write time currently associated with the file should be preserved.
+        /// </param>
         /// <param name="async">
         /// Whether to invoke the operation asynchronously.
         /// </param>
@@ -4448,6 +5298,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         private async Task<Response<ShareFileUploadInfo>> UploadRangeFromUriInternal(
             Uri sourceUri,
@@ -4455,6 +5307,7 @@ namespace Azure.Storage.Files.Shares
             HttpRange sourceRange,
             ShareFileRequestConditions conditions,
             HttpAuthorization sourceAuthentication,
+            FileLastWrittenMode? fileLastWrittenMode,
             bool async,
             CancellationToken cancellationToken)
         {
@@ -4481,7 +5334,8 @@ namespace Azure.Storage.Files.Shares
                             contentLength: 0,
                             sourceRange: sourceRange.ToString(),
                             copySourceAuthorization: sourceAuthentication?.ToString(),
-                            leaseAccessConditions: conditions,
+                            fileLastWrittenMode: fileLastWrittenMode,
+                            shareFileRequestConditions: conditions,
                             cancellationToken: cancellationToken)
                             .ConfigureAwait(false);
                     }
@@ -4493,7 +5347,8 @@ namespace Azure.Storage.Files.Shares
                             contentLength: 0,
                             sourceRange: sourceRange.ToString(),
                             copySourceAuthorization: sourceAuthentication?.ToString(),
-                            leaseAccessConditions: conditions,
+                            fileLastWrittenMode: fileLastWrittenMode,
+                            shareFileRequestConditions: conditions,
                             cancellationToken: cancellationToken);
                     }
 
@@ -4542,17 +5397,20 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
+        [ForwardsClientCalls]
         public virtual Response<ShareFileUploadInfo> Upload(
             Stream stream,
-            ShareFileUploadOptions options,
+            ShareFileUploadOptions options = default,
             CancellationToken cancellationToken = default) =>
             UploadInternal(
                 stream,
                 options?.ProgressHandler,
                 options?.Conditions,
-                options?.TransactionalHashingOptions,
-                Constants.File.MaxFileUpdateRange,
+                options?.TransferValidation,
+                options?.TransferOptions ?? default,
                 async: false,
                 cancellationToken)
                 .EnsureCompleted();
@@ -4582,17 +5440,20 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
+        [ForwardsClientCalls]
         public virtual async Task<Response<ShareFileUploadInfo>> UploadAsync(
             Stream stream,
-            ShareFileUploadOptions options,
+            ShareFileUploadOptions options = default,
             CancellationToken cancellationToken = default) =>
             await UploadInternal(
                 stream,
                 options?.ProgressHandler,
                 options?.Conditions,
-                options?.TransactionalHashingOptions,
-                Constants.File.MaxFileUpdateRange,
+                options?.TransferValidation,
+                options?.TransferOptions ?? default,
                 async: true,
                 cancellationToken)
                 .ConfigureAwait(false);
@@ -4627,20 +5488,24 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         [ForwardsClientCalls]
         [EditorBrowsable(EditorBrowsableState.Never)]
+#pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         public virtual Response<ShareFileUploadInfo> Upload(
+#pragma warning restore AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
             Stream content,
-            IProgress<long> progressHandler = default,
-            ShareFileRequestConditions conditions = default,
-            CancellationToken cancellationToken = default) =>
+            IProgress<long> progressHandler,
+            ShareFileRequestConditions conditions,
+            CancellationToken cancellationToken) =>
             UploadInternal(
                 content,
                 progressHandler,
                 conditions,
-                hashingOptions: default,
-                Constants.File.MaxFileUpdateRange,
+                transferValidationOverride: default,
+                transferOptions: default,
                 async: false,
                 cancellationToken)
                 .EnsureCompleted();
@@ -4671,6 +5536,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
 #pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         [ForwardsClientCalls]
@@ -4684,8 +5551,8 @@ namespace Azure.Storage.Files.Shares
                 content,
                 progressHandler,
                 conditions: default,
-                hashingOptions: default,
-                Constants.File.MaxFileUpdateRange,
+                transferValidationOverride: default,
+                transferOptions: default,
                 async: false,
                 cancellationToken)
                 .EnsureCompleted();
@@ -4720,20 +5587,24 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         [ForwardsClientCalls]
         [EditorBrowsable(EditorBrowsableState.Never)]
+#pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         public virtual async Task<Response<ShareFileUploadInfo>> UploadAsync(
+#pragma warning restore AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
             Stream content,
-            IProgress<long> progressHandler = default,
-            ShareFileRequestConditions conditions = default,
-            CancellationToken cancellationToken = default) =>
+            IProgress<long> progressHandler,
+            ShareFileRequestConditions conditions,
+            CancellationToken cancellationToken) =>
             await UploadInternal(
                 content,
                 progressHandler,
                 conditions,
-                hashingOptions: default,
-                Constants.File.MaxFileUpdateRange,
+                transferValidationOverride: default,
+                transferOptions: default,
                 async: true,
                 cancellationToken)
                 .ConfigureAwait(false);
@@ -4764,6 +5635,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
 #pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         [ForwardsClientCalls]
@@ -4777,8 +5650,8 @@ namespace Azure.Storage.Files.Shares
                 content,
                 progressHandler,
                 conditions: default,
-                hashingOptions: default,
-                Constants.File.MaxFileUpdateRange,
+                transferValidationOverride: default,
+                transferOptions: default,
                 async: true,
                 cancellationToken)
                 .ConfigureAwait(false);
@@ -4802,12 +5675,11 @@ namespace Azure.Storage.Files.Shares
         /// Optional <see cref="ShareFileRequestConditions"/> to add conditions
         /// on creating the file.
         /// </param>
-        /// <param name="hashingOptions">
-        /// Options for transactional hashing.
+        /// <param name="transferValidationOverride">
+        /// Optional override for client-configured transfer validation options.
         /// </param>
-        /// <param name="singleRangeThreshold">
-        /// The maximum size stream that we'll upload as a single range.  The
-        /// default value is 4MB.
+        /// <param name="transferOptions">
+        /// Partitioned transfer options for upload.
         /// </param>
         /// <param name="async">
         /// Whether to invoke the operation asynchronously.
@@ -4823,125 +5695,121 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         internal async Task<Response<ShareFileUploadInfo>> UploadInternal(
             Stream content,
             IProgress<long> progressHandler,
             ShareFileRequestConditions conditions,
-            UploadTransactionalHashingOptions hashingOptions,
-            int singleRangeThreshold,
+            UploadTransferValidationOptions transferValidationOverride,
+            StorageTransferOptions transferOptions,
             bool async,
             CancellationToken cancellationToken)
         {
-            Errors.VerifyStreamPosition(content, nameof(content));
+            UploadTransferValidationOptions validationOptions = transferValidationOverride ?? ClientConfiguration.TransferValidation.Upload;
+            transferOptions = StorageArgument.PopulateShareFileUploadTransferOptionDefaults(transferOptions);
+            StorageArgument.AssertShareFileUploadTransferOptionBounds(transferOptions, nameof(transferOptions));
 
-            // partitioned uploads don't support pre-calculated hashes
-            if (hashingOptions?.PrecalculatedHash != default)
-            {
-                throw Errors.PrecalculatedHashNotSupportedOnSplit();
-            }
+            var uploader = GetPartitionedUploader(
+                transferOptions,
+                validationOptions,
+                operationName: $"{nameof(ShareFileClient)}.{nameof(Upload)}");
 
-            DiagnosticScope scope = ClientConfiguration.ClientDiagnostics.CreateScope($"{nameof(ShareFileClient)}.{nameof(Upload)}");
-            try
-            {
-                scope.Start();
-
-                // Try to upload the file as a single range
-                Debug.Assert(singleRangeThreshold <= Constants.File.MaxFileUpdateRange);
-                var length = content?.Length - content?.Position;
-                if (length <= singleRangeThreshold)
+            return await uploader.UploadInternal(
+                content,
+                expectedContentLength: default,
+                new ShareFileUploadData
                 {
-                    return await UploadRangeInternal(
-                        new HttpRange(0, length),
-                        content,
-                        new ShareFileUploadRangeOptions
-                        {
-                            TransactionalHashingOptions = hashingOptions,
-                            ProgressHandler = progressHandler,
-                            Conditions = conditions
-                        },
+                    Conditions = conditions,
+                },
+                progressHandler,
+                async,
+                cancellationToken)
+                .ConfigureAwait(false);
+        }
+        #endregion Upload
+
+        #region PartitionedUploader
+        internal class ShareFileUploadData
+        {
+            public ShareFileRequestConditions Conditions { get; set; }
+            public Response<ShareFileUploadInfo> LastUploadRangeResponse { get; set; }
+        }
+
+        internal PartitionedUploader<ShareFileUploadData, ShareFileUploadInfo> GetPartitionedUploader(
+            StorageTransferOptions transferOptions,
+            UploadTransferValidationOptions transferValidation,
+            ArrayPool<byte> arrayPool = null,
+            string operationName = null)
+            => new PartitionedUploader<ShareFileUploadData, ShareFileUploadInfo>(
+                GetPartitionedUploaderBehaviors(this),
+                transferOptions,
+                transferValidation,
+                arrayPool,
+                operationName);
+
+        // static because it makes mocking easier in tests
+        internal static PartitionedUploader<ShareFileUploadData, ShareFileUploadInfo>.Behaviors GetPartitionedUploaderBehaviors(ShareFileClient client)
+            => new PartitionedUploader<ShareFileUploadData, ShareFileUploadInfo>.Behaviors
+            {
+                SingleUploadStreaming = async (stream, data, progressHandler, validationOptions, operationName, async, cancellationToken) =>
+                {
+                    return await client.UploadRangeInternal(
+                        new HttpRange(offset: 0, length: stream.Length),
+                        stream,
+                        validationOptions,
+                        progressHandler,
+                        data.Conditions,
+                        fileLastWrittenMode: null,
                         async,
                         cancellationToken)
                         .ConfigureAwait(false);
-                }
-
-                // Otherwise naively split the file into ranges and upload them individually
-                var response = default(Response<ShareFileUploadInfo>);
-                var pool = default(MemoryPool<byte>);
-                // erase potential precalculated hash now that we're splitting; we'll have to recalculate.
-                hashingOptions = hashingOptions == default
-                    ? default
-                    : new UploadTransactionalHashingOptions
-                    {
-                        Algorithm = hashingOptions.Algorithm
-                    };
-
-                long initalPosition = content.Position;
-
-                try
+                },
+                SingleUploadBinaryData = async (content, data, progressHandler, validationOptions, operationName, async, cancellationToken) =>
                 {
-                    pool = (singleRangeThreshold < MemoryPool<byte>.Shared.MaxBufferSize) ?
-                        MemoryPool<byte>.Shared :
-                        new StorageMemoryPool(singleRangeThreshold, 1);
-                    for (; ; )
-                    {
-                        // Get the next chunk of content
-                        var parentPosition = content.Position;
-                        IMemoryOwner<byte> buffer = pool.Rent(singleRangeThreshold);
-                        if (!MemoryMarshal.TryGetArray<byte>(buffer.Memory, out ArraySegment<byte> segment))
-                        {
-                            throw Errors.UnableAccessArray();
-                        }
-                        var count = async ?
-                            await content.ReadAsync(segment.Array, 0, singleRangeThreshold, cancellationToken).ConfigureAwait(false) :
-                            content.Read(segment.Array, 0, singleRangeThreshold);
-
-                        // Stop when we've exhausted the content
-                        if (count <= 0)
-                        { break; }
-
-                        // Upload the chunk
-                        var partition = new StreamPartition(
-                            buffer.Memory,
-                            parentPosition,
-                            count,
-                            () => buffer.Dispose(),
-                            cancellationToken);
-                        response = await UploadRangeInternal(
-                            new HttpRange(partition.ParentPosition - initalPosition, partition.Length),
-                            partition,
-                            new ShareFileUploadRangeOptions
-                            {
-                                TransactionalHashingOptions = hashingOptions,
-                                ProgressHandler = progressHandler,
-                                Conditions = conditions
-                            },
-                            async,
-                            cancellationToken)
-                            .ConfigureAwait(false);
-                    }
-                }
-                finally
+                    return await client.UploadRangeInternal(
+                        new HttpRange(offset: 0, length: content.ToMemory().Length),
+                        content.ToStream(),
+                        validationOptions,
+                        progressHandler,
+                        data.Conditions,
+                        fileLastWrittenMode: null,
+                        async,
+                        cancellationToken)
+                        .ConfigureAwait(false);
+                },
+                UploadPartitionStreaming = async (stream, offset, data, progressHandler, validationOptions, async, cancellationToken) =>
                 {
-                    if (pool is StorageMemoryPool)
-                    {
-                        pool.Dispose();
-                    }
-                }
-                return response;
-            }
-            catch (Exception ex)
-            {
-                ClientConfiguration.Pipeline.LogException(ex);
-                scope.Failed(ex);
-                throw;
-            }
-            finally
-            {
-                scope.Dispose();
-            }
-        }
-        #endregion Upload
+                    data.LastUploadRangeResponse = await client.UploadRangeInternal(
+                        new HttpRange(offset: offset, length: stream.Length),
+                        stream,
+                        validationOptions,
+                        progressHandler,
+                        data.Conditions,
+                        fileLastWrittenMode: null,
+                        async,
+                        cancellationToken)
+                        .ConfigureAwait(false);
+                },
+                UploadPartitionBinaryData = async (content, offset, data, progressHandler, validationOptions, async, cancellationToken) =>
+                {
+                    data.LastUploadRangeResponse = await client.UploadRangeInternal(
+                        new HttpRange(offset: offset, length: content.ToMemory().Length),
+                        content.ToStream(),
+                        validationOptions,
+                        progressHandler,
+                        data.Conditions,
+                        fileLastWrittenMode: null,
+                        async,
+                        cancellationToken)
+                        .ConfigureAwait(false);
+                },
+                CommitPartitionedUpload = (partitions, data, async, cancellationToken) => Task.FromResult(data.LastUploadRangeResponse),
+                Scope = operationName => client.ClientConfiguration.ClientDiagnostics.CreateScope(operationName ??
+                    $"{nameof(Azure)}.{nameof(Storage)}.{nameof(Files)}.{nameof(Shares)}.{nameof(ShareFileClient)}.{nameof(ShareFileClient.Upload)}")
+            };
+        #endregion
 
         #region GetRangeList
         /// <summary>
@@ -4965,6 +5833,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Response<ShareFileRangeInfo> GetRangeList(
             ShareFileGetRangeListOptions options = default,
@@ -4973,6 +5843,7 @@ namespace Azure.Storage.Files.Shares
                 options?.Range,
                 options?.Snapshot,
                 previousSnapshot: default,
+                supportRename: default,
                 options?.Conditions,
                 operationName: default,
                 async: false,
@@ -5000,6 +5871,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual async Task<Response<ShareFileRangeInfo>> GetRangeListAsync(
             ShareFileGetRangeListOptions options = default,
@@ -5008,6 +5881,7 @@ namespace Azure.Storage.Files.Shares
                 options?.Range,
                 options?.Snapshot,
                 previousSnapshot: default,
+                supportRename: default,
                 options?.Conditions,
                 operationName: default,
                 async: true,
@@ -5040,6 +5914,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         [EditorBrowsable(EditorBrowsableState.Never)]
         public virtual Response<ShareFileRangeInfo> GetRangeList(
@@ -5050,6 +5926,7 @@ namespace Azure.Storage.Files.Shares
                 range,
                 snapshot: default,
                 previousSnapshot: default,
+                supportRename: default,
                 conditions,
                 operationName: default,
                 async: false,
@@ -5078,6 +5955,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
 #pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         [EditorBrowsable(EditorBrowsableState.Never)]
@@ -5089,6 +5968,7 @@ namespace Azure.Storage.Files.Shares
                 range,
                 snapshot: default,
                 previousSnapshot: default,
+                supportRename: default,
                 conditions: default,
                 operationName: default,
                 async: false,
@@ -5121,6 +6001,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         [EditorBrowsable(EditorBrowsableState.Never)]
         public virtual async Task<Response<ShareFileRangeInfo>> GetRangeListAsync(
@@ -5131,6 +6013,7 @@ namespace Azure.Storage.Files.Shares
                 range,
                 snapshot: default,
                 previousSnapshot: default,
+                supportRename: default,
                 conditions,
                 operationName: default,
                 async: true,
@@ -5159,6 +6042,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
 #pragma warning disable AZC0002 // DO ensure all service methods, both asynchronous and synchronous, take an optional CancellationToken parameter called cancellationToken.
         [EditorBrowsable(EditorBrowsableState.Never)]
@@ -5170,6 +6055,7 @@ namespace Azure.Storage.Files.Shares
                 range,
                 snapshot: default,
                 previousSnapshot: default,
+                supportRename: default,
                 conditions: default,
                 operationName: default,
                 async: true,
@@ -5200,6 +6086,12 @@ namespace Azure.Storage.Files.Shares
         /// snapshot, as long as the snapshot specified by
         /// <paramref name="previousSnapshot"/> is the older of the two.
         /// </param>
+        /// <param name="supportRename">
+        /// This header is allowed only when PreviousSnapshot query parameter is set.
+        /// Determines whether the changed ranges for a file that has been renamed or moved between the target snapshot (or the live file) and the previous snapshot should be listed.
+        /// If the value is true, the valid changed ranges for the file will be returned. If the value is false, the operation will result in a failure with 409 (Conflict) response.
+        /// The default value is false.
+        /// </param>
         /// <param name="conditions">
         /// Optional <see cref="ShareFileRequestConditions"/> to add conditions
         /// on creating the file.
@@ -5221,11 +6113,14 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         private async Task<Response<ShareFileRangeInfo>> GetRangeListInternal(
             HttpRange? range,
             string snapshot,
             string previousSnapshot,
+            bool? supportRename,
             ShareFileRequestConditions conditions,
             string operationName,
             bool async,
@@ -5251,8 +6146,9 @@ namespace Azure.Storage.Files.Shares
                         response = await FileRestClient.GetRangeListAsync(
                             sharesnapshot: snapshot,
                             prevsharesnapshot: previousSnapshot,
+                            supportRename: supportRename,
                             range: range?.ToString(),
-                            leaseAccessConditions: conditions,
+                            shareFileRequestConditions: conditions,
                             cancellationToken: cancellationToken)
                             .ConfigureAwait(false);
                     }
@@ -5261,8 +6157,9 @@ namespace Azure.Storage.Files.Shares
                         response = FileRestClient.GetRangeList(
                             sharesnapshot: snapshot,
                             prevsharesnapshot: previousSnapshot,
+                            supportRename: supportRename,
                             range: range?.ToString(),
-                            leaseAccessConditions: conditions,
+                            shareFileRequestConditions: conditions,
                             cancellationToken: cancellationToken);
                     }
 
@@ -5308,6 +6205,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Response<ShareFileRangeInfo> GetRangeListDiff(
             ShareFileGetRangeListDiffOptions options = default,
@@ -5316,6 +6215,7 @@ namespace Azure.Storage.Files.Shares
                 options?.Range,
                 options?.Snapshot,
                 options?.PreviousSnapshot,
+                options?.IncludeRenames,
                 options?.Conditions,
                 operationName: $"{nameof(ShareFileClient)}.{nameof(GetRangeListDiff)}",
                 async: false,
@@ -5344,6 +6244,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual async Task<Response<ShareFileRangeInfo>> GetRangeListDiffAsync(
             ShareFileGetRangeListDiffOptions options = default,
@@ -5352,6 +6254,7 @@ namespace Azure.Storage.Files.Shares
                 options?.Range,
                 options?.Snapshot,
                 options?.PreviousSnapshot,
+                options?.IncludeRenames,
                 options?.Conditions,
                 operationName: $"{nameof(ShareFileClient)}.{nameof(GetRangeListDiff)}",
                 async: true,
@@ -5381,6 +6284,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Pageable<ShareFileHandle> GetHandles(
             CancellationToken cancellationToken = default) =>
@@ -5407,6 +6312,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual AsyncPageable<ShareFileHandle> GetHandlesAsync(
             CancellationToken cancellationToken = default) =>
@@ -5448,6 +6355,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         internal async Task<Response<StorageHandlesSegment>> GetHandlesInternal(
             string marker,
@@ -5535,6 +6444,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual Response<CloseHandlesResult> ForceCloseHandle(
             string handleId,
@@ -5581,6 +6492,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual async Task<Response<CloseHandlesResult>> ForceCloseHandleAsync(
             string handleId,
@@ -5624,6 +6537,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual CloseHandlesResult ForceCloseAllHandles(
             CancellationToken cancellationToken = default) =>
@@ -5657,6 +6572,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         public virtual async Task<CloseHandlesResult> ForceCloseAllHandlesAsync(
             CancellationToken cancellationToken = default) =>
@@ -5693,6 +6610,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         private async Task<CloseHandlesResult> ForceCloseAllHandlesInternal(
             bool async,
@@ -5761,6 +6680,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         private async Task<Response<StorageClosedHandlesSegment>> ForceCloseHandlesInternal(
             string handleId,
@@ -5821,6 +6742,681 @@ namespace Azure.Storage.Files.Shares
         }
         #endregion ForceCloseHandles
 
+        #region Rename
+        /// <summary>
+        /// Renames a file.
+        /// This API does not support renaming a file from one share to another, or between storage accounts.
+        /// </summary>
+        /// <param name="destinationPath">
+        /// The destination path to rename the file to.
+        /// </param>
+        /// <param name="options">
+        /// Optional parameters.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Optional <see cref="CancellationToken"/> to propagate
+        /// notifications that the operation should be cancelled.
+        /// </param>
+        /// <returns>
+        /// A <see cref="Response{ShareFileClient}"/> pointed at the newly renamed File.
+        /// </returns>
+        /// <remarks>
+        /// A <see cref="RequestFailedException"/> will be thrown if
+        /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
+        /// </remarks>
+        public virtual Response<ShareFileClient> Rename(
+            string destinationPath,
+            ShareFileRenameOptions options = default,
+            CancellationToken cancellationToken = default)
+            => RenameInternal(
+                destinationPath: destinationPath,
+                options: options,
+                async: false,
+                cancellationToken: cancellationToken)
+                .EnsureCompleted();
+
+        /// <summary>
+        /// Renames a file.
+        /// This API does not support renaming a file from one share to another, or between storage accounts.
+        /// </summary>
+        /// <param name="destinationPath">
+        /// The destination path to rename the file to.
+        /// </param>
+        /// <param name="options">
+        /// Optional parameters.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Optional <see cref="CancellationToken"/> to propagate
+        /// notifications that the operation should be cancelled.
+        /// </param>
+        /// <returns>
+        /// A <see cref="Response{ShareFileClient}"/> pointed at the newly renamed File.
+        /// </returns>
+        /// <remarks>
+        /// A <see cref="RequestFailedException"/> will be thrown if
+        /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
+        /// </remarks>
+        public virtual async Task<Response<ShareFileClient>> RenameAsync(
+            string destinationPath,
+            ShareFileRenameOptions options = default,
+            CancellationToken cancellationToken = default)
+            => await RenameInternal(
+                destinationPath: destinationPath,
+                options: options,
+                async: true,
+                cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+
+        /// <summary>
+        /// Renames a file.
+        /// This API does not support renaming a file from one share to another, or between storage accounts.
+        /// </summary>
+        /// <param name="destinationPath">
+        /// The destination path to rename the file to.
+        /// </param>
+        /// <param name="options">
+        /// Optional parameters.
+        /// </param>
+        /// <param name="async">
+        /// Whether to invoke the operation asynchronously.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Optional <see cref="CancellationToken"/> to propagate
+        /// notifications that the operation should be cancelled.
+        /// </param>
+        /// <returns>
+        /// A <see cref="Response{ShareFileClient}"/> pointed at the newly renamed File.
+        /// </returns>
+        /// <remarks>
+        /// A <see cref="RequestFailedException"/> will be thrown if
+        /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
+        /// </remarks>
+        private async Task<Response<ShareFileClient>> RenameInternal(
+            string destinationPath,
+            ShareFileRenameOptions options,
+            bool async,
+            CancellationToken cancellationToken)
+        {
+            using (ClientConfiguration.Pipeline.BeginLoggingScope(nameof(ShareFileClient)))
+            {
+                ClientConfiguration.Pipeline.LogMethodEnter(
+                    nameof(ShareFileClient),
+                    message:
+                    $"{nameof(Uri)}: {Uri}\n" +
+                    $"{nameof(destinationPath)}: {destinationPath}\n" +
+                    $"{nameof(options)}: {options}\n");
+
+                DiagnosticScope scope = ClientConfiguration.ClientDiagnostics.CreateScope($"{nameof(ShareFileClient)}.{nameof(Rename)}");
+
+                try
+                {
+                    scope.Start();
+
+                    ShareExtensions.AssertValidFilePermissionAndKey(options?.FilePermission, options?.SmbProperties?.FilePermissionKey);
+
+                    // TODO: this seems weird to do, probably should build a way to append to the query.. without altering it somehow
+                    // in the case that the customer wants the query to be in a certain order
+                    ShareUriBuilder shareUriBuilder = new ShareUriBuilder(Uri);
+                    ShareUriBuilder sourceUriBuilder = new ShareUriBuilder(Uri);
+                    // There's already a check in at the client constructor to prevent both SAS in Uri and AzureSasCredential
+                    if (shareUriBuilder.Sas == null && ClientConfiguration.SasCredential != null)
+                    {
+                        sourceUriBuilder.Query += ClientConfiguration.SasCredential.Signature;
+                    }
+
+                    // Build destination URI
+                    ShareUriBuilder destUriBuilder = new ShareUriBuilder(Uri)
+                    {
+                        Sas = null,
+                        Query = null
+                    };
+
+                    // ShareUriBuider will encode the DirectoryOrFilePath.
+                    // We don't want the query parameters, especially SAS, to be encoded.
+                    // We also have to build the destination client depending on if a SAS was passed with the destination.
+                    ShareFileClient destFileClient;
+                    string[] split = destinationPath.Split('?');
+                    if (split.Length == 2)
+                    {
+                        destUriBuilder.DirectoryOrFilePath = split[0];
+                        destUriBuilder.Query = split[1];
+                        // If the destination already has a SAS, then let's not further add to the Uri if it contains
+                        // AzureSasCredential on the source.
+                        var paramsMap = new UriQueryParamsCollection(split[1]);
+                        if (!paramsMap.ContainsKey(Constants.Sas.Parameters.Version))
+                        {
+                            // No SAS in the destination, use the source credentials to build the destination path
+                            destFileClient = new ShareFileClient(destUriBuilder.ToUri(), ClientConfiguration);
+                        }
+                        else
+                        {
+                            // There's a SAS in the destination path
+                            // Create the destination path with the destination SAS
+                            destFileClient = new ShareFileClient(
+                                destUriBuilder.ToUri(),
+                                ClientConfiguration.ClientDiagnostics,
+                                ClientConfiguration.ClientOptions);
+                        }
+                    }
+                    else
+                    {
+                        // No SAS in the destination, use the source credentials to build the destination path
+                        destUriBuilder.DirectoryOrFilePath = destinationPath;
+                        destUriBuilder.Sas = sourceUriBuilder.Sas;
+                        destFileClient = new ShareFileClient(
+                            destUriBuilder.ToUri(),
+                            ClientConfiguration);
+                    }
+
+                    ResponseWithHeaders<FileRenameHeaders> response;
+
+                    CopyFileSmbInfo copyFileSmbInfo = new CopyFileSmbInfo
+                    {
+                        FileAttributes = options?.SmbProperties?.FileAttributes.ToAttributesString(),
+                        FileCreationTime = options?.SmbProperties?.FileCreatedOn.ToFileDateTimeString(),
+                        FileChangeTime = options?.SmbProperties?.FileChangedOn.ToFileDateTimeString(),
+                        FileLastWriteTime = options?.SmbProperties?.FileLastWrittenOn.ToFileDateTimeString(),
+                        IgnoreReadOnly = options?.IgnoreReadOnly
+                    };
+
+                    FileHttpHeaders fileHttpHeaders = new FileHttpHeaders
+                    {
+                        FileContentType = options?.ContentType
+                    };
+
+                    if (async)
+                    {
+                        response = await destFileClient.FileRestClient.RenameAsync(
+                            renameSource: sourceUriBuilder.ToUri().AbsoluteUri,
+                            replaceIfExists: options?.ReplaceIfExists,
+                            ignoreReadOnly: options?.IgnoreReadOnly,
+                            sourceLeaseId: options?.SourceConditions?.LeaseId,
+                            destinationLeaseId: options?.DestinationConditions?.LeaseId,
+                            filePermission: options?.FilePermission,
+                            filePermissionFormat: options?.FilePermissionFormat,
+                            filePermissionKey: options?.SmbProperties?.FilePermissionKey,
+                            metadata: options?.Metadata,
+                            copyFileSmbInfo: copyFileSmbInfo,
+                            fileHttpHeaders: fileHttpHeaders,
+                            cancellationToken: cancellationToken)
+                            .ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        response = destFileClient.FileRestClient.Rename(
+                            renameSource: sourceUriBuilder.ToUri().AbsoluteUri,
+                            replaceIfExists: options?.ReplaceIfExists,
+                            ignoreReadOnly: options?.IgnoreReadOnly,
+                            sourceLeaseId: options?.SourceConditions?.LeaseId,
+                            destinationLeaseId: options?.DestinationConditions?.LeaseId,
+                            filePermission: options?.FilePermission,
+                            filePermissionFormat: options?.FilePermissionFormat,
+                            filePermissionKey: options?.SmbProperties?.FilePermissionKey,
+                            metadata: options?.Metadata,
+                            copyFileSmbInfo: copyFileSmbInfo,
+                            fileHttpHeaders: fileHttpHeaders,
+                            cancellationToken: cancellationToken);
+                    }
+
+                    return Response.FromValue(
+                        destFileClient,
+                        response.GetRawResponse());
+                }
+                catch (Exception ex)
+                {
+                    ClientConfiguration.Pipeline.LogException(ex);
+                    scope.Failed(ex);
+                    throw;
+                }
+                finally
+                {
+                    ClientConfiguration.Pipeline.LogMethodExit(nameof(ShareFileClient));
+                    scope.Dispose();
+                }
+            }
+        }
+        #endregion Rename
+
+        #region GetSymbolicLink
+        /// <summary>
+        /// Reads the value of the symbolic link.
+        /// Only applicable if this <see cref="ShareFileClient"/> is pointed at an NFS symbolic link.
+        /// </summary>
+        /// <param name="cancellationToken">
+        /// Optional <see cref="CancellationToken"/> to propagate
+        /// notifications that the operation should be cancelled.
+        /// </param>
+        /// <returns>
+        /// A <see cref="Response{FileSymbolicLinkInfo}"/> describing the symbolic link.
+        /// </returns>
+        /// <remarks>
+        /// A <see cref="RequestFailedException"/> will be thrown if
+        /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
+        /// </remarks>
+        public virtual Response<ShareFileSymbolicLinkInfo> GetSymbolicLink(
+            CancellationToken cancellationToken = default) =>
+            GetSymbolicLinkInternal(
+                async: false,
+                cancellationToken: cancellationToken)
+            .EnsureCompleted();
+
+        /// <summary>
+        /// Reads the value of the symbolic link.
+        /// Only applicable if this <see cref="ShareFileClient"/> is pointed at an NFS symbolic link.
+        /// </summary>
+        /// <param name="cancellationToken">
+        /// Optional <see cref="CancellationToken"/> to propagate
+        /// notifications that the operation should be cancelled.
+        /// </param>
+        /// <returns>
+        /// A <see cref="Response{FileSymbolicLinkInfo}"/> describing the symbolic link.
+        /// </returns>
+        /// <remarks>
+        /// A <see cref="RequestFailedException"/> will be thrown if
+        /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
+        /// </remarks>
+        public virtual async Task<Response<ShareFileSymbolicLinkInfo>> GetSymbolicLinkAsync(
+            CancellationToken cancellationToken = default) =>
+            await GetSymbolicLinkInternal(
+                async: true,
+                cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+
+        /// <summary>
+        /// Reads the value of the symbolic link.
+        /// Only applicable if this <see cref="ShareFileClient"/> is pointed at an NFS symbolic link.
+        /// </summary>
+        /// <param name="async">
+        /// Whether to invoke the operation asynchronously.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Optional <see cref="CancellationToken"/> to propagate
+        /// notifications that the operation should be cancelled.
+        /// </param>
+        /// <returns>
+        /// A <see cref="Response{FileSymbolicLinkInfo}"/> describing the symbolic link.
+        /// </returns>
+        /// <remarks>
+        /// A <see cref="RequestFailedException"/> will be thrown if
+        /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
+        /// </remarks>
+        private async Task<Response<ShareFileSymbolicLinkInfo>> GetSymbolicLinkInternal(
+            bool async,
+            CancellationToken cancellationToken)
+        {
+            using (ClientConfiguration.Pipeline.BeginLoggingScope(nameof(ShareFileClient)))
+            {
+                ClientConfiguration.Pipeline.LogMethodEnter(nameof(ShareFileClient), message: string.Empty);
+
+                DiagnosticScope scope = ClientConfiguration.ClientDiagnostics.CreateScope($"{nameof(ShareFileClient)}.{nameof(GetSymbolicLink)}");
+
+                ResponseWithHeaders<FileGetSymbolicLinkHeaders> response;
+
+                try
+                {
+                    scope.Start();
+
+                    if (async)
+                    {
+                        response = await FileRestClient.GetSymbolicLinkAsync(
+                            cancellationToken: cancellationToken)
+                            .ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        response = FileRestClient.GetSymbolicLink(
+                            cancellationToken: cancellationToken);
+                    }
+
+                    return Response.FromValue(
+                        response.ToFileSymbolicLinkInfo(),
+                        response.GetRawResponse());
+                }
+                catch (Exception ex)
+                {
+                    ClientConfiguration.Pipeline.LogException(ex);
+                    scope.Failed(ex);
+                    throw;
+                }
+                finally
+                {
+                    ClientConfiguration.Pipeline.LogMethodExit(nameof(ShareFileClient));
+                    scope.Dispose();
+                }
+            }
+        }
+        #endregion
+
+        #region CreateSymbolicLink
+        /// <summary>
+        /// NFS only.  Creates a symoblic link to the file specified by path.
+        /// </summary>
+        /// <param name="linkText">
+        /// The absolution or relative path to the file to be linked to.
+        /// </param>
+        /// <param name="options">
+        /// Optional parameters.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Optional <see cref="CancellationToken"/> to propagate
+        /// notifications that the operation should be cancelled.
+        /// </param>
+        /// <returns>
+        /// A <see cref="Response{StorageFileInfo}"/> describing the
+        /// state of the file.
+        /// </returns>
+        /// <remarks>
+        /// A <see cref="RequestFailedException"/> will be thrown if
+        /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
+        /// </remarks>
+        public virtual Response<ShareFileInfo> CreateSymbolicLink(
+            string linkText,
+            ShareFileCreateSymbolicLinkOptions options = default,
+            CancellationToken cancellationToken = default) =>
+            CreateSymbolicLinkInternal(
+                linkText: linkText,
+                options: options,
+                async: false,
+                cancellationToken: cancellationToken)
+                .EnsureCompleted();
+
+        /// <summary>
+        /// NFS only.  Creates a symoblic link to the file specified by path.
+        /// </summary>
+        /// <param name="linkText">
+        /// The absolution or relative path to the file to be linked to.
+        /// </param>
+        /// <param name="options">
+        /// Optional parameters.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Optional <see cref="CancellationToken"/> to propagate
+        /// notifications that the operation should be cancelled.
+        /// </param>
+        /// <returns>
+        /// A <see cref="Response{StorageFileInfo}"/> describing the
+        /// state of the file.
+        /// </returns>
+        /// <remarks>
+        /// A <see cref="RequestFailedException"/> will be thrown if
+        /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
+        /// </remarks>
+        public virtual async Task<Response<ShareFileInfo>> CreateSymbolicLinkAsync(
+            string linkText,
+            ShareFileCreateSymbolicLinkOptions options = default,
+            CancellationToken cancellationToken = default) =>
+            await CreateSymbolicLinkInternal(
+                linkText: linkText,
+                options: options,
+                async: true,
+                cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+
+        /// <summary>
+        /// NFS only.  Creates a symoblic link to the file specified by path.
+        /// </summary>
+        /// <param name="linkText">
+        /// The absolution or relative path to the file to be linked to.
+        /// </param>
+        /// <param name="options">
+        /// Optional parameters.
+        /// </param>
+        /// <param name="async">
+        /// Whether to invoke the operation asynchronously.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Optional <see cref="CancellationToken"/> to propagate
+        /// notifications that the operation should be cancelled.
+        /// </param>
+        /// <returns>
+        /// A <see cref="Response{StorageFileInfo}"/> describing the
+        /// state of the file.
+        /// </returns>
+        /// <remarks>
+        /// A <see cref="RequestFailedException"/> will be thrown if
+        /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
+        /// </remarks>
+        private async Task<Response<ShareFileInfo>> CreateSymbolicLinkInternal(
+            string linkText,
+            ShareFileCreateSymbolicLinkOptions options,
+            bool async,
+            CancellationToken cancellationToken)
+        {
+            using (ClientConfiguration.Pipeline.BeginLoggingScope(nameof(ShareFileClient)))
+            {
+                ClientConfiguration.Pipeline.LogMethodEnter(
+                    nameof(ShareFileClient),
+                    message:
+                    $"{nameof(Uri)}: {Uri}\n");
+
+                DiagnosticScope scope = ClientConfiguration.ClientDiagnostics.CreateScope($"{nameof(ShareFileClient)}.{nameof(CreateSymbolicLink)}");
+
+                ResponseWithHeaders<FileCreateSymbolicLinkHeaders> response;
+
+                try
+                {
+                    scope.Start();
+
+                    if (async)
+                    {
+                        response = await FileRestClient.CreateSymbolicLinkAsync(
+                            linkText: linkText,
+                            metadata: options?.Metadata,
+                            fileCreationTime: options?.FileCreatedOn.ToFileDateTimeString(),
+                            fileLastWriteTime: options?.FileLastWrittenOn.ToFileDateTimeString(),
+                            owner: options?.Owner,
+                            group: options?.Group,
+                            shareFileRequestConditions: options?.Conditions,
+                            cancellationToken: cancellationToken)
+                            .ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        response = FileRestClient.CreateSymbolicLink(
+                            linkText: linkText,
+                            metadata: options?.Metadata,
+                            fileCreationTime: options?.FileCreatedOn.ToFileDateTimeString(),
+                            fileLastWriteTime: options?.FileLastWrittenOn.ToFileDateTimeString(),
+                            owner: options?.Owner,
+                            group: options?.Group,
+                            shareFileRequestConditions: options?.Conditions,
+                            cancellationToken: cancellationToken);
+                    }
+
+                    return Response.FromValue(
+                        response.ToShareFileInfo(),
+                        response.GetRawResponse());
+                }
+                catch (Exception ex)
+                {
+                    ClientConfiguration.Pipeline.LogException(ex);
+                    scope.Failed(ex);
+                    throw;
+                }
+                finally
+                {
+                    ClientConfiguration.Pipeline.LogMethodExit(nameof(ShareFileClient));
+                    scope.Dispose();
+                }
+            }
+        }
+        #endregion
+
+        #region CreateHardLink
+        /// <summary>
+        /// NFS only.  Creates a hard link to the file file specified by path.
+        /// </summary>
+        /// <param name="targetFile">
+        /// Path of the file to create the hard link to, not including the share.
+        /// For example: "targetDirectory/targetSubDirectory/.../targetFile"
+        /// </param>
+        /// <param name="conditions">
+        /// Optional <see cref="ShareFileRequestConditions"/> to add conditions
+        /// on creating the hard link.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Optional <see cref="CancellationToken"/> to propagate
+        /// notifications that the operation should be cancelled.
+        /// </param>
+        /// <returns>
+        /// A <see cref="Response{StorageFileInfo}"/> describing the
+        /// state of the hard link.
+        /// </returns>
+        /// <remarks>
+        /// A <see cref="RequestFailedException"/> will be thrown if
+        /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
+        /// </remarks>
+        public virtual Response<ShareFileInfo> CreateHardLink(
+            string targetFile,
+            ShareFileRequestConditions conditions = default,
+            CancellationToken cancellationToken = default)
+            => CreateHardLinkInternal(
+                targetFile: targetFile,
+                conditions: conditions,
+                async: false,
+                cancellationToken: cancellationToken)
+                .EnsureCompleted();
+
+        /// <summary>
+        /// NFS only.  Creates a hard link to the file file specified by path.
+        /// </summary>
+        /// <param name="targetFile">
+        /// Path of the file to create the hard link to, not including the share.
+        /// For example: "targetDirectory/targetSubDirectory/.../targetFile"
+        /// </param>
+        /// <param name="conditions">
+        /// Optional <see cref="ShareFileRequestConditions"/> to add conditions
+        /// on creating the hard link.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Optional <see cref="CancellationToken"/> to propagate
+        /// notifications that the operation should be cancelled.
+        /// </param>
+        /// <returns>
+        /// A <see cref="Response{StorageFileInfo}"/> describing the
+        /// state of the hard link.
+        /// </returns>
+        /// <remarks>
+        /// A <see cref="RequestFailedException"/> will be thrown if
+        /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
+        /// </remarks>
+        public async virtual Task<Response<ShareFileInfo>> CreateHardLinkAsync(
+            string targetFile,
+            ShareFileRequestConditions conditions = default,
+            CancellationToken cancellationToken = default)
+            => await CreateHardLinkInternal(
+                targetFile: targetFile,
+                conditions: conditions,
+                async: true,
+                cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+
+        /// <summary>
+        /// NFS only.  Creates a hard link to the file file specified by path.
+        /// </summary>
+        /// <param name="targetFile">
+        /// Path of the file to create the hard link to, not including the share.
+        /// </param>
+        /// <param name="conditions">
+        /// Optional <see cref="ShareFileRequestConditions"/> to add conditions
+        /// on creating the hard link.
+        /// </param>
+        /// <param name="async">
+        /// Whether to invoke the operation asynchronously.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Optional <see cref="CancellationToken"/> to propagate
+        /// notifications that the operation should be cancelled.
+        /// </param>
+        /// <returns>
+        /// A <see cref="Response{StorageFileInfo}"/> describing the
+        /// state of the hard link.
+        /// </returns>
+        /// <remarks>
+        /// A <see cref="RequestFailedException"/> will be thrown if
+        /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
+        /// </remarks>
+        private async Task<Response<ShareFileInfo>> CreateHardLinkInternal(
+            string targetFile,
+            ShareFileRequestConditions conditions,
+            bool async,
+            CancellationToken cancellationToken)
+        {
+            using (ClientConfiguration.Pipeline.BeginLoggingScope(nameof(ShareFileClient)))
+            {
+                ClientConfiguration.Pipeline.LogMethodEnter(
+                    nameof(ShareFileClient),
+                    message:
+                    $"{nameof(Uri)}: {Uri}\n" +
+                    $"{nameof(targetFile)}: {targetFile}");
+
+                DiagnosticScope scope = ClientConfiguration.ClientDiagnostics.CreateScope($"{nameof(ShareFileClient)}.{nameof(CreateHardLink)}");
+
+                try
+                {
+                    scope.Start();
+
+                    ResponseWithHeaders<FileCreateHardLinkHeaders> response;
+
+                    if (async)
+                    {
+                        response = await FileRestClient.CreateHardLinkAsync(
+                            targetFile: targetFile,
+                            shareFileRequestConditions: conditions,
+                            cancellationToken: cancellationToken)
+                            .ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        response = FileRestClient.CreateHardLink(
+                            targetFile: targetFile,
+                            shareFileRequestConditions: conditions,
+                            cancellationToken: cancellationToken);
+                    }
+
+                    return Response.FromValue(
+                        response.ToShareFileInfo(),
+                        response.GetRawResponse());
+                }
+                catch (Exception ex)
+                {
+                    ClientConfiguration.Pipeline.LogException(ex);
+                    scope.Failed(ex);
+                    throw;
+                }
+                finally
+                {
+                    ClientConfiguration.Pipeline.LogMethodExit(nameof(ShareFileClient));
+                    scope.Dispose();
+                }
+            }
+        }
+        #endregion
+
         #region OpenWrite
         /// <summary>
         /// Opens a stream for writing to the file.
@@ -5844,6 +7440,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
 #pragma warning disable AZC0015 // Unexpected client method return type.
         public virtual Stream OpenWrite(
@@ -5882,6 +7480,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
 #pragma warning disable AZC0015 // Unexpected client method return type.
         public virtual async Task<Stream> OpenWriteAsync(
@@ -5923,6 +7523,8 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
         private async Task<Stream> OpenWriteInternal(
             bool overwrite,
@@ -5950,6 +7552,8 @@ namespace Azure.Storage.Files.Shares
                         metadata: default,
                         smbProperties: default,
                         filePermission: default,
+                        filePermissionFormat: default,
+                        posixProperties: default,
                         conditions: options?.OpenConditions,
                         async: async,
                         cancellationToken: cancellationToken)
@@ -5979,6 +7583,8 @@ namespace Azure.Storage.Files.Shares
                             metadata: default,
                             smbProperties: default,
                             filePermission: default,
+                            filePermissionFormat: default,
+                            posixProperties: default,
                             conditions: options?.OpenConditions,
                             async: async,
                             cancellationToken: cancellationToken)
@@ -5992,7 +7598,8 @@ namespace Azure.Storage.Files.Shares
                     position: position,
                     conditions: options?.OpenConditions,
                     progressHandler: options?.ProgressHandler,
-                    hashingOptions: options?.TransactionalHashingOptions);
+                    options?.TransferValidation ?? ClientConfiguration.TransferValidation.Upload
+                    );
             }
             catch (Exception ex)
             {
@@ -6035,12 +7642,49 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="Exception"/> will be thrown if a failure occurs.
         /// </remarks>
+        [CallerShouldAudit("https://aka.ms/azsdk/callershouldaudit/storage-files-shares")]
         public virtual Uri GenerateSasUri(ShareFileSasPermissions permissions, DateTimeOffset expiresOn) =>
+            GenerateSasUri(permissions, expiresOn, out _);
+
+        /// <summary>
+        /// The <see cref="GenerateSasUri(ShareFileSasPermissions, DateTimeOffset)"/>
+        /// returns a <see cref="Uri"/> that generates a Share File Service
+        /// Shared Access Signature (SAS) Uri based on the Client properties and
+        /// parameters passed. The SAS is signed by the shared key credential
+        /// of the client.
+        ///
+        /// To check if the client is able to sign a Service Sas see
+        /// <see cref="CanGenerateSasUri"/>.
+        ///
+        /// For more information, see
+        /// <see href="https://docs.microsoft.com/en-us/rest/api/storageservices/constructing-a-service-sas">
+        /// Constructing a service SAS</see>.
+        /// </summary>
+        /// <param name="permissions">
+        /// Required. Specifies the list of permissions to be associated with the SAS.
+        /// See <see cref="ShareFileSasPermissions"/>.
+        /// </param>
+        /// <param name="expiresOn">
+        /// Required. Specifies the time at which the SAS becomes invalid. This field
+        /// must be omitted if it has been specified in an associated stored access policy.
+        /// </param>
+        /// <param name="stringToSign">
+        /// For debugging purposes only.  This string will be overwritten with the string to sign that was used to generate the SAS Uri.
+        /// </param>
+        /// <returns>
+        /// A <see cref="Uri"/> containing the SAS Uri.
+        /// </returns>
+        /// <remarks>
+        /// A <see cref="Exception"/> will be thrown if a failure occurs.
+        /// </remarks>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [CallerShouldAudit("https://aka.ms/azsdk/callershouldaudit/storage-files-shares")]
+        public virtual Uri GenerateSasUri(ShareFileSasPermissions permissions, DateTimeOffset expiresOn, out string stringToSign) =>
             GenerateSasUri(new ShareSasBuilder(permissions, expiresOn)
             {
                 ShareName = ShareName,
                 FilePath = Path
-            });
+            }, out stringToSign);
 
         /// <summary>
         /// The <see cref="GenerateSasUri(ShareSasBuilder)"/> returns a
@@ -6065,12 +7709,49 @@ namespace Azure.Storage.Files.Shares
         /// <remarks>
         /// A <see cref="RequestFailedException"/> will be thrown if
         /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
         /// </remarks>
+        [CallerShouldAudit("https://aka.ms/azsdk/callershouldaudit/storage-files-shares")]
         public virtual Uri GenerateSasUri(ShareSasBuilder builder)
+            => GenerateSasUri(builder, out _);
+
+        /// <summary>
+        /// The <see cref="GenerateSasUri(ShareSasBuilder)"/> returns a
+        /// <see cref="Uri"/> that generates a Share File Service
+        /// Shared Access Signature (SAS) Uri based on the Client properties
+        /// and and builder. The SAS is signed by the shared key credential
+        /// of the client.
+        ///
+        /// To check if the client is able to sign a Service Sas see
+        /// <see cref="CanGenerateSasUri"/>.
+        ///
+        /// For more information, see
+        /// <see href="https://docs.microsoft.com/en-us/rest/api/storageservices/constructing-a-service-sas">
+        /// Constructing a Service SAS</see>.
+        /// </summary>
+        /// <param name="builder">
+        /// Used to generate a Shared Access Signature (SAS)
+        /// </param>
+        /// <param name="stringToSign">
+        /// For debugging purposes only.  This string will be overwritten with the string to sign that was used to generate the SAS Uri.
+        /// </param>
+        /// <returns>
+        /// A <see cref="ShareSasBuilder"/> on successfully deleting.
+        /// </returns>
+        /// <remarks>
+        /// A <see cref="RequestFailedException"/> will be thrown if
+        /// a failure occurs.
+        /// If multiple failures occur, an <see cref="AggregateException"/> will be thrown,
+        /// containing each failure instance.
+        /// </remarks>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [CallerShouldAudit("https://aka.ms/azsdk/callershouldaudit/storage-files-shares")]
+        public virtual Uri GenerateSasUri(ShareSasBuilder builder, out string stringToSign)
         {
             builder = builder ?? throw Errors.ArgumentNull(nameof(builder));
 
-            // Deep copy of builder so we don't modify the user's original DataLakeSasBuilder.
+            // Deep copy of builder so we don't modify the user's original ShareSasBuilder.
             builder = ShareSasBuilder.DeepCopy(builder);
 
             // Assign builder's ShareName and Path, if they are null.
@@ -6093,10 +7774,108 @@ namespace Azure.Storage.Files.Shares
             }
             ShareUriBuilder sasUri = new ShareUriBuilder(Uri)
             {
-                Query = builder.ToSasQueryParameters(ClientConfiguration.SharedKeyCredential).ToString()
+                Query = builder.ToSasQueryParameters(ClientConfiguration.SharedKeyCredential, out stringToSign).ToString()
             };
             return sasUri.ToUri();
         }
         #endregion
+
+        #region GetParentClientCore
+
+        private ShareClient _parentShareClient;
+        private ShareDirectoryClient _parentShareDirectoryClient;
+
+        /// <summary>
+        /// Create a new <see cref="ShareClient"/> that pointing to this <see cref="ShareFileClient"/>'s parent container.
+        /// The new <see cref="ShareClient"/>
+        /// uses the same request policy pipeline as the
+        /// <see cref="ShareFileClient"/>.
+        /// </summary>
+        /// <returns>A new <see cref="ShareFileClient"/> instance.</returns>
+        protected internal virtual ShareClient GetParentShareClientCore()
+        {
+            if (_parentShareClient == null)
+            {
+                ShareUriBuilder shareUriBuilder = new ShareUriBuilder(Uri)
+                {
+                    // erase parameters unrelated to container
+                    DirectoryOrFilePath = null,
+                    Snapshot = null,
+                };
+
+                _parentShareClient = new ShareClient(
+                    shareUriBuilder.ToUri(),
+                    ClientConfiguration);
+            }
+
+            return _parentShareClient;
+        }
+
+        /// <summary>
+        /// Create a new <see cref="ShareDirectoryClient"/> that pointing to this <see cref="ShareFileClient"/>'s parent container.
+        /// The new <see cref="ShareDirectoryClient"/>
+        /// uses the same request policy pipeline as the
+        /// <see cref="ShareFileClient"/>.
+        /// </summary>
+        /// <returns>A new <see cref="ShareFileClient"/> instance.</returns>
+        protected internal virtual ShareDirectoryClient GetParentShareDirectoryClientCore()
+        {
+            if (_parentShareDirectoryClient == null)
+            {
+                ShareUriBuilder shareUriBuilder = new ShareUriBuilder(Uri)
+                {
+                    Snapshot = null,
+                };
+
+                if (shareUriBuilder.DirectoryOrFilePath == null || shareUriBuilder.LastDirectoryOrFileName == null)
+                {
+                    throw new InvalidOperationException();
+                }
+                shareUriBuilder.DirectoryOrFilePath = shareUriBuilder.DirectoryOrFilePath.GetParentPath();
+
+                _parentShareDirectoryClient = new ShareDirectoryClient(
+                    shareUriBuilder.ToUri(),
+                    ClientConfiguration);
+            }
+
+            return _parentShareDirectoryClient;
+        }
+        #endregion
+    }
+
+    namespace Specialized
+    {
+        /// <summary>
+        /// Add easy to discover methods to <see cref="ShareFileClient"/> for
+        /// creating <see cref="ShareClient"/> instances.
+        /// </summary>
+        public static partial class SpecializedShareExtensions
+        {
+            /// <summary>
+            /// Create a new <see cref="ShareClient"/> that pointing to this <see cref="ShareFileClient"/>'s parent container.
+            /// The new <see cref="ShareClient"/>
+            /// uses the same request policy pipeline as the
+            /// <see cref="ShareFileClient"/>.
+            /// </summary>
+            /// <param name="client">The <see cref="ShareFileClient"/>.</param>
+            /// <returns>A new <see cref="ShareClient"/> instance.</returns>
+            public static ShareClient GetParentShareClient(this ShareFileClient client)
+            {
+                return client.GetParentShareClientCore();
+            }
+
+            /// <summary>
+            /// Create a new <see cref="ShareDirectoryClient"/> that pointing to this <see cref="ShareFileClient"/>'s parent container.
+            /// The new <see cref="ShareDirectoryClient"/>
+            /// uses the same request policy pipeline as the
+            /// <see cref="ShareFileClient"/>.
+            /// </summary>
+            /// <param name="client">The <see cref="ShareFileClient"/>.</param>
+            /// <returns>A new <see cref="ShareDirectoryClient"/> instance.</returns>
+            public static ShareDirectoryClient GetParentShareDirectoryClient(this ShareFileClient client)
+            {
+                return client.GetParentShareDirectoryClientCore();
+            }
+        }
     }
 }

@@ -15,7 +15,7 @@ namespace Azure.ResourceManager.Sql.Models
     {
         private readonly string _value;
 
-        /// <summary> Determines if two <see cref="ShortTermRetentionPolicyName"/> values are the same. </summary>
+        /// <summary> Initializes a new instance of <see cref="ShortTermRetentionPolicyName"/>. </summary>
         /// <exception cref="ArgumentNullException"> <paramref name="value"/> is null. </exception>
         public ShortTermRetentionPolicyName(string value)
         {
@@ -30,7 +30,7 @@ namespace Azure.ResourceManager.Sql.Models
         public static bool operator ==(ShortTermRetentionPolicyName left, ShortTermRetentionPolicyName right) => left.Equals(right);
         /// <summary> Determines if two <see cref="ShortTermRetentionPolicyName"/> values are not the same. </summary>
         public static bool operator !=(ShortTermRetentionPolicyName left, ShortTermRetentionPolicyName right) => !left.Equals(right);
-        /// <summary> Converts a string to a <see cref="ShortTermRetentionPolicyName"/>. </summary>
+        /// <summary> Converts a <see cref="string"/> to a <see cref="ShortTermRetentionPolicyName"/>. </summary>
         public static implicit operator ShortTermRetentionPolicyName(string value) => new ShortTermRetentionPolicyName(value);
 
         /// <inheritdoc />
@@ -41,7 +41,7 @@ namespace Azure.ResourceManager.Sql.Models
 
         /// <inheritdoc />
         [EditorBrowsable(EditorBrowsableState.Never)]
-        public override int GetHashCode() => _value?.GetHashCode() ?? 0;
+        public override int GetHashCode() => _value != null ? StringComparer.InvariantCultureIgnoreCase.GetHashCode(_value) : 0;
         /// <inheritdoc />
         public override string ToString() => _value;
     }

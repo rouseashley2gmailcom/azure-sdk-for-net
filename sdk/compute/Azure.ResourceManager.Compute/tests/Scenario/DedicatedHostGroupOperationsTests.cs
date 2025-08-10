@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Azure.Core.TestFramework;
 using Azure.ResourceManager.Compute.Tests.Helpers;
@@ -15,11 +16,11 @@ namespace Azure.ResourceManager.Compute.Tests
         {
         }
 
-        private async Task<DedicatedHostGroup> CreateDedicatedHostGroupAsync(string groupName)
+        private async Task<DedicatedHostGroupResource> CreateDedicatedHostGroupAsync(string groupName)
         {
             var collection = (await CreateResourceGroupAsync()).GetDedicatedHostGroups();
             var input = ResourceDataHelper.GetBasicDedicatedHostGroup(DefaultLocation, 2);
-            var lro = await collection.CreateOrUpdateAsync(groupName, input);
+            var lro = await collection.CreateOrUpdateAsync(WaitUntil.Completed, groupName, input);
             return lro.Value;
         }
 
@@ -29,7 +30,7 @@ namespace Azure.ResourceManager.Compute.Tests
         {
             var groupName = Recording.GenerateAssetName("testDHG-");
             var dedicatedHostGroup = await CreateDedicatedHostGroupAsync(groupName);
-            await dedicatedHostGroup.DeleteAsync();
+            await dedicatedHostGroup.DeleteAsync(WaitUntil.Completed);
         }
 
         [TestCase]
@@ -38,9 +39,27 @@ namespace Azure.ResourceManager.Compute.Tests
         {
             var groupName = Recording.GenerateAssetName("testDHG-");
             var group1 = await CreateDedicatedHostGroupAsync(groupName);
-            DedicatedHostGroup group2 = await group1.GetAsync();
+            DedicatedHostGroupResource group2 = await group1.GetAsync();
 
             ResourceDataHelper.AssertGroup(group1.Data, group2.Data);
+        }
+
+        [RecordedTest]
+        [TestCase(null)]
+        [TestCase(true)]
+        [TestCase(false)]
+        public async Task SetTags(bool? useTagResource)
+        {
+            SetTagResourceUsage(Client, useTagResource);
+            var name = Recording.GenerateAssetName("testDHG-");
+            var group = await CreateDedicatedHostGroupAsync(name);
+            var tags = new Dictionary<string, string>()
+            {
+                { "key", "value" }
+            };
+            DedicatedHostGroupResource updated = await group.SetTagsAsync(tags);
+
+            Assert.AreEqual(tags, updated.Data.Tags);
         }
     }
 }

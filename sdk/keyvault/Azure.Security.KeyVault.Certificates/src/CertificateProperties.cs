@@ -3,7 +3,7 @@
 
 using System;
 using System.Collections.Generic;
-using System.Globalization;
+using System.ComponentModel;
 using System.Text.Json;
 using System.Threading;
 using Azure.Core;
@@ -76,7 +76,13 @@ namespace Azure.Security.KeyVault.Certificates
         /// <summary>
         /// Gets the digital thumbprint of the certificate which can be used to uniquely identify it.
         /// </summary>
+        [EditorBrowsable(EditorBrowsableState.Never)]
         public byte[] X509Thumbprint { get; internal set; }
+
+        /// <summary>
+        /// Gets the digital thumbprint of the certificate as a hexadecimal string which can be used to uniquely identify it.
+        /// </summary>
+        public string X509ThumbprintString => X509Thumbprint.ToHexString();
 
         /// <summary>
         /// Gets the tags applied to the certificate.
@@ -158,18 +164,14 @@ namespace Azure.Security.KeyVault.Certificates
             }
         }
 
-        private void ParseId(Uri idToParse)
+        private void ParseId(Uri id)
         {
-            // We expect an identifier with either 3 or 4 segments: host + collection + name [+ version]
-            if (idToParse.Segments.Length != 3 && idToParse.Segments.Length != 4)
-                throw new ArgumentException(string.Format(CultureInfo.InvariantCulture, "Invalid ObjectIdentifier: {0}. Bad number of segments: {1}", idToParse, idToParse.Segments.Length));
+            KeyVaultIdentifier identifier = KeyVaultIdentifier.ParseWithCollection(id, "certificates");
 
-            if (!string.Equals(idToParse.Segments[1], "certificates" + "/", StringComparison.OrdinalIgnoreCase))
-                throw new ArgumentException(string.Format(CultureInfo.InvariantCulture, "Invalid ObjectIdentifier: {0}. segment [1] should be 'certificates/', found '{1}'", idToParse, idToParse.Segments[1]));
-
-            VaultUri = new Uri($"{idToParse.Scheme}://{idToParse.Authority}");
-            Name = idToParse.Segments[2].Trim('/');
-            Version = (idToParse.Segments.Length == 4) ? idToParse.Segments[3].TrimEnd('/') : null;
+            Id = id;
+            VaultUri = identifier.VaultUri;
+            Name = identifier.Name;
+            Version = identifier.Version;
         }
     }
 }

@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,6 +13,7 @@ using Azure.Core.TestFramework;
 using Azure.Search.Documents.Indexes;
 using Azure.Search.Documents.Indexes.Models;
 using Azure.Search.Documents.Models;
+using Azure.Search.Documents.Tests.Samples;
 using Azure.Storage.Blobs;
 using NUnit.Framework;
 
@@ -97,6 +99,20 @@ namespace Azure.Search.Documents.Tests
         private string _indexName = null;
 
         /// <summary>
+        /// The name of the knowledge agent created for test data.
+        /// </summary>
+        public string KnowledgeAgentName
+        {
+            get => TestFixture.Recording.GetVariable("KnowledgeAgentName", _agentName);
+            set
+            {
+                TestFixture.Recording.SetVariable("KnowledgeAgentName", value);
+                _agentName = value;
+            }
+        }
+        private string _agentName = null;
+
+        /// <summary>
         /// The search endpoint suffix.
         /// </summary>
         public string SearchEndpointSuffix => TestFixture.TestEnvironment.SearchEndpointSuffix;
@@ -122,6 +138,12 @@ namespace Azure.Search.Documents.Tests
         /// This is true for any resources that we created.
         /// </summary>
         public bool RequiresCleanup { get; private set; }
+
+        /// <summary>
+        /// Flag indicating whether these knowledge agent resources need to be cleaned up.
+        /// This is true for any knowledge agent resources that we created.
+        /// </summary>
+        public bool RequiresKnowledgeAgentCleanup { get; private set; }
 
         /// <summary>
         /// Flag indicating whether these storage resources need to be cleaned up.
@@ -171,10 +193,11 @@ namespace Azure.Search.Documents.Tests
         /// recordings, instrumentation, etc.
         /// </param>
         /// <returns>A new TestResources context.</returns>
-        public static async Task<SearchResources> CreateWithEmptyIndexAsync<T>(SearchTestBase fixture)
+        public static async Task<SearchResources> CreateWithEmptyIndexAsync<T>(SearchTestBase fixture, bool isSample = false)
         {
+            // TODO: consider setting up RequiresCleanup so the index is deleted at the end of the test run.
             var resources = new SearchResources(fixture);
-            await resources.CreateSearchServiceAndIndexAsync(name =>
+            await resources.CreateSearchServiceAndIndexAsync(isSample, name =>
                 new SearchIndex(name)
                 {
                     Fields = new FieldBuilder().Build(typeof(T))
@@ -191,10 +214,11 @@ namespace Azure.Search.Documents.Tests
         /// recordings, instrumentation, etc.
         /// </param>
         /// <returns>A new TestResources context.</returns>
-        public static async Task<SearchResources> CreateWithEmptyHotelsIndexAsync(SearchTestBase fixture)
+        public static async Task<SearchResources> CreateWithEmptyHotelsIndexAsync(SearchTestBase fixture, bool isSample = false)
         {
+            // TODO: consider setting up RequiresCleanup so the index is deleted at the end of the test run.
             var resources = new SearchResources(fixture);
-            await resources.CreateSearchServiceAndIndexAsync();
+            await resources.CreateSearchServiceAndIndexAsync(isSample);
             return resources;
         }
 
@@ -207,10 +231,28 @@ namespace Azure.Search.Documents.Tests
         /// recordings, instrumentation, etc.
         /// </param>
         /// <returns>A new TestResources context.</returns>
-        public static async Task<SearchResources> CreateWithHotelsIndexAsync(SearchTestBase fixture)
+        public static async Task<SearchResources> CreateWithHotelsIndexAsync(SearchTestBase fixture, bool isSample = false)
+        {
+            // TODO: consider setting up RequiresCleanup so the index is deleted at the end of the test run.
+            var resources = new SearchResources(fixture);
+            await resources.CreateSearchServiceIndexAndDocumentsAsync(isSample);
+            return resources;
+        }
+
+        /// <summary>
+        /// Creates a new Search Service resource, including a Hotel index and sample data set.
+        /// The index schema and data are defined in TestResources.Data.cs.
+        /// The created index is used in knowledge agent creation.
+        /// </summary>
+        /// <param name="fixture">
+        /// The TestFixture with context about our current test run,
+        /// recordings, instrumentation, etc.
+        /// </param>
+        /// <returns>A new TestResources context.</returns>
+        public static async Task<SearchResources> CreateWithknowledgeAgentAsync(SearchTestBase fixture, bool isSample = false)
         {
             var resources = new SearchResources(fixture);
-            await resources.CreateSearchServiceIndexAndDocumentsAsync();
+            await resources.CreateKnowledgeAgentAsync();
             return resources;
         }
 
@@ -226,10 +268,11 @@ namespace Azure.Search.Documents.Tests
         /// Whether to populate the container with Hotel documents. The default is false.
         /// </param>
         /// <returns>A new <see cref="SearchResources"/> context.</returns>
-        public static async Task<SearchResources> CreateWithBlobStorageAsync(SearchTestBase fixture, bool populate = false)
+        public static async Task<SearchResources> CreateWithBlobStorageAsync(SearchTestBase fixture, bool populate = false, bool isSample = false)
         {
+            // TODO: consider setting up RequiresCleanup so the index is deleted at the end of the test run.
             var resources = new SearchResources(fixture);
-            await resources.CreateHotelsBlobContainerAsync(populate);
+            await resources.CreateHotelsBlobContainerAsync(populate, isSample);
             return resources;
         }
 
@@ -245,13 +288,14 @@ namespace Azure.Search.Documents.Tests
         /// Whether to populate the container with Hotel documents. The default is false.
         /// </param>
         /// <returns>A new <see cref="SearchResources"/> context.</returns>
-        public static async Task<SearchResources> CreateWithBlobStorageAndIndexAsync(SearchTestBase fixture, bool populate = false)
+        public static async Task<SearchResources> CreateWithBlobStorageAndIndexAsync(SearchTestBase fixture, bool populate = false, bool isSample = false)
         {
+            // TODO: consider setting up RequiresCleanup so the index is deleted at the end of the test run.
             var resources = new SearchResources(fixture);
 
             // Keep them ordered or records may not match seeded random names.
-            await resources.CreateSearchServiceAndIndexAsync();
-            await resources.CreateHotelsBlobContainerAsync(populate);
+            await resources.CreateSearchServiceAndIndexAsync(isSample);
+            await resources.CreateHotelsBlobContainerAsync(populate, isSample);
 
             return resources;
         }
@@ -267,16 +311,63 @@ namespace Azure.Search.Documents.Tests
         /// recordings, instrumentation, etc.
         /// </param>
         /// <returns>The shared TestResources context.</returns>
-        public static async Task<SearchResources> GetSharedHotelsIndexAsync(SearchTestBase fixture)
+        public static async Task<SearchResources> GetSharedHotelsIndexAsync(SearchTestBase fixture, bool isSample = false)
         {
-            await SharedSearchResources.EnsureInitialized(async () => await CreateWithHotelsIndexAsync(fixture));
+            // TODO: consider whether we should delete the index at the end of the test run here.
+            //       SharedSearchResources seems to purposely cache the index.
+            await SharedSearchResources.EnsureInitialized(async () => await CreateWithHotelsIndexAsync(fixture, isSample), isSample);
 
             // Clone it for the current fixture (note that setting these values
             // will create the recording ServiceName/IndexName/etc. variables)
             return new SearchResources(fixture)
             {
-                IndexName = SharedSearchResources.Search.IndexName,
+                IndexName = isSample ? SharedSearchResources.SearchResourcesForSamples.IndexName : SharedSearchResources.SearchResourcesForTests.IndexName,
             };
+        }
+
+        /// <summary>
+        /// Create a hotels index with the standard test documents and as many
+        /// extra empty documents needed to test.
+        /// </summary>
+        /// <param name="size">The total number of documents in the index.</param>
+        /// <returns>SearchResources for testing.</returns>
+        public static async Task<SearchResources> CreateLargeHotelsIndexAsync(SearchTestBase fixture, int size, bool includeVectors = false, bool isSample = false)
+        {
+            // Start with the standard test hotels
+            SearchResources resources = await CreateWithHotelsIndexAsync(fixture, isSample);
+
+            // Create empty hotels with just an ID for the rest
+            int existingDocumentCount = TestDocuments.Length;
+            IEnumerable<string> hotelIds =
+                Enumerable.Range(
+                    existingDocumentCount + 1,
+                    size - existingDocumentCount)
+                .Select(id => id.ToString());
+
+            List<SearchDocument> hotels = new();
+
+            if (includeVectors)
+            {
+                hotels = hotelIds.Select(id => new SearchDocument { ["hotelId"] = id, ["descriptionVector"] = VectorSearchEmbeddings.DefaultVectorizeDescription }).ToList();
+            }
+            else
+            {
+                Random random = new();
+                hotels = hotelIds.Select(id => new SearchDocument { ["hotelId"] = id, ["rating"] = random.Next(1, 6) }).ToList();
+            }
+
+            // Upload the empty hotels in batches of 1000 until we're complete
+            SearchClient client = resources.GetSearchClient();
+            for (int i = 0; i < hotels.Count; i += 1000)
+            {
+                IEnumerable<SearchDocument> nextHotels = hotels.Skip(i).Take(1000);
+                if (!nextHotels.Any())
+                { break; }
+                await client.IndexDocumentsAsync(IndexDocumentsBatch.Upload(nextHotels));
+                await resources.WaitForIndexingAsync();
+            }
+
+            return resources;
         }
         #endregion Create Test Resources
 
@@ -340,6 +431,7 @@ namespace Azure.Search.Documents.Tests
         /// longer needed.
         /// </summary>
         public async ValueTask DisposeAsync() => await Task.WhenAll(
+            DeleteKnowledgeAgentAsync(),
             DeleteIndexAsync(),
             DeleteBlobContainerAsync());
 
@@ -356,6 +448,22 @@ namespace Azure.Search.Documents.Tests
                 RequiresCleanup = false;
 
                 await WaitForIndexDeletionAsync();
+            }
+        }
+
+        /// <summary>
+        /// Deletes the knowledge agent created as a test resource.
+        /// </summary>
+        /// <returns></returns>
+        private async Task DeleteKnowledgeAgentAsync()
+        {
+            if (RequiresKnowledgeAgentCleanup && !string.IsNullOrEmpty(KnowledgeAgentName))
+            {
+                SearchIndexClient client = GetIndexClient();
+                await client.DeleteKnowledgeAgentAsync(KnowledgeAgentName);
+                RequiresKnowledgeAgentCleanup = false;
+
+                await WaitForKnowledgeAgentDeletionAsync();
             }
         }
 
@@ -383,9 +491,9 @@ namespace Azure.Search.Documents.Tests
         /// </param>
         /// <returns>This TestResources context.</returns>
         private async Task<SearchResources> CreateSearchServiceAndIndexAsync(
-            Func<string, SearchIndex> getIndex = null)
+            bool isSample, Func<string, SearchIndex> getIndex = null)
         {
-            getIndex ??= GetHotelIndex;
+            getIndex ??= isSample ? SearchResourcesSample.GetHotelIndex : GetHotelIndex;
 
             // Create the index
             if (TestFixture.Mode != RecordedTestMode.Playback)
@@ -410,19 +518,70 @@ namespace Azure.Search.Documents.Tests
         /// test documents.
         /// </summary>
         /// <returns>This TestResources context.</returns>
-        private async Task<SearchResources> CreateSearchServiceIndexAndDocumentsAsync()
+        private async Task<SearchResources> CreateSearchServiceIndexAndDocumentsAsync(bool isSample = false)
         {
             // Create the Search Service and Index first
-            await CreateSearchServiceAndIndexAsync();
+            await CreateSearchServiceAndIndexAsync(isSample);
 
             // Upload the documents
             if (TestFixture.Mode != RecordedTestMode.Playback)
             {
                 SearchClient client = new SearchClient(Endpoint, IndexName, new AzureKeyCredential(PrimaryApiKey));
-                IndexDocumentsBatch<Hotel> batch = IndexDocumentsBatch.Upload(TestDocuments);
-                await client.IndexDocumentsAsync(batch);
+
+                if (isSample)
+                {
+                    await client.IndexDocumentsAsync(IndexDocumentsBatch.Upload(SearchResourcesSample.TestDocumentsForSample));
+                }
+                else
+                {
+                    await client.IndexDocumentsAsync(IndexDocumentsBatch.Upload(TestDocuments));
+                }
 
                 await WaitForIndexingAsync();
+            }
+
+            return this;
+        }
+
+        /// <summary>
+        /// Create a new index and knowledge agent.
+        /// </summary>
+        /// <returns>This TestResources context.</returns>
+        private async Task<SearchResources> CreateKnowledgeAgentAsync(bool isSample = false)
+        {
+            // Create index and upload documents
+            await CreateSearchServiceIndexAndDocumentsAsync(isSample);
+
+            // Create the knowledge agent
+            if (TestFixture.Mode != RecordedTestMode.Playback)
+            {
+                // Generate a random knowledge agent Name
+                KnowledgeAgentName = Random.GetName(8);
+                string deploymentName = "gpt-4.1";
+
+                var knowledgeAgent = new KnowledgeAgent(
+                    KnowledgeAgentName,
+                    new List<KnowledgeAgentModel>{
+                    new KnowledgeAgentAzureOpenAIModel(
+                        new AzureOpenAIVectorizerParameters
+                        {
+                            ResourceUri = new Uri(Environment.GetEnvironmentVariable("OPENAI_ENDPOINT")),
+                            ApiKey = Environment.GetEnvironmentVariable("OPENAI_KEY"),
+                            DeploymentName = deploymentName,
+                            ModelName = AzureOpenAIModelName.Gpt41
+                        })
+                    },
+                new List<KnowledgeAgentTargetIndex>
+                    {
+                    new KnowledgeAgentTargetIndex(IndexName),
+                    });
+
+                SearchIndexClient client = new SearchIndexClient(Endpoint, new AzureKeyCredential(PrimaryApiKey));
+                await client.CreateKnowledgeAgentAsync(knowledgeAgent);
+                RequiresKnowledgeAgentCleanup = true;
+
+                // Give the knowledge agent time to stabilize before running tests.
+                await WaitForKnowledgeAgentCreationAsync();
             }
 
             return this;
@@ -432,7 +591,7 @@ namespace Azure.Search.Documents.Tests
         /// Upload <see cref="TestDocuments"/> to a new blob storage container identified by <see cref="BlobContainerName"/>.
         /// </summary>
         /// <returns>The current <see cref="SearchResources"/>.</returns>
-        private async Task<SearchResources> CreateHotelsBlobContainerAsync(bool populate)
+        private async Task<SearchResources> CreateHotelsBlobContainerAsync(bool populate, bool isSample)
         {
             if (TestFixture.Mode != RecordedTestMode.Playback)
             {
@@ -447,26 +606,54 @@ namespace Azure.Search.Documents.Tests
 
                 if (populate)
                 {
-                    Hotel[] hotels = TestDocuments;
-                    List<Task> tasks = new List<Task>(hotels.Length);
-
-                    foreach (Hotel hotel in hotels)
+                    List<Task> tasks;
+                    if (isSample)
                     {
-                        Task task = Task.Run(async () =>
+                        Samples.Hotel[] hotels = SearchResourcesSample.TestDocumentsForSample;
+                        tasks = new List<Task>(hotels.Length);
+
+                        foreach (Samples.Hotel hotel in hotels)
                         {
-                            using MemoryStream stream = new MemoryStream();
-                            await JsonSerializer
-                                .SerializeAsync(stream, hotel, JsonSerialization.SerializerOptions, cts.Token)
-                                .ConfigureAwait(false);
+                            Task task = Task.Run(async () =>
+                            {
+                                using MemoryStream stream = new MemoryStream();
+                                await JsonSerializer
+                                    .SerializeAsync(stream, hotel, JsonSerialization.SerializerOptions, cts.Token)
+                                    .ConfigureAwait(false);
 
-                            stream.Seek(0, SeekOrigin.Begin);
+                                stream.Seek(0, SeekOrigin.Begin);
 
-                            await client
-                                .UploadBlobAsync(hotel.HotelId, stream, cts.Token)
-                                .ConfigureAwait(false);
-                        });
+                                await client
+                                    .UploadBlobAsync(hotel.HotelId, stream, cts.Token)
+                                    .ConfigureAwait(false);
+                            });
 
-                        tasks.Add(task);
+                            tasks.Add(task);
+                        }
+                    }
+                    else
+                    {
+                        Hotel[] hotels = TestDocuments;
+                        tasks = new List<Task>(hotels.Length);
+
+                        foreach (Hotel hotel in hotels)
+                        {
+                            Task task = Task.Run(async () =>
+                            {
+                                using MemoryStream stream = new MemoryStream();
+                                await JsonSerializer
+                                    .SerializeAsync(stream, hotel, JsonSerialization.SerializerOptions, cts.Token)
+                                    .ConfigureAwait(false);
+
+                                stream.Seek(0, SeekOrigin.Begin);
+
+                                await client
+                                    .UploadBlobAsync(hotel.HotelId, stream, cts.Token)
+                                    .ConfigureAwait(false);
+                            });
+
+                            tasks.Add(task);
+                        }
                     }
 
                     await Task.WhenAll(tasks);
@@ -517,6 +704,20 @@ namespace Azure.Search.Documents.Tests
         /// <returns>A Task to await.</returns>
         public async Task WaitForIndexingAsync() =>
             await TestFixture.DelayAsync(TimeSpan.FromSeconds(2));
+
+        /// <summary>
+        /// Wait for knowledge agent creation.
+        /// </summary>
+        /// <returns>A Task to await.</returns>
+        public async Task WaitForKnowledgeAgentCreationAsync() =>
+            await TestFixture.DelayAsync(TimeSpan.FromSeconds(2));
+
+        /// <summary>
+        /// Wait for the knowledge agent to be deleted.
+        /// </summary>
+        /// <returns>A Task to await.</returns>
+        public async Task WaitForKnowledgeAgentDeletionAsync() =>
+            await TestFixture.DelayAsync(TimeSpan.FromSeconds(5));
 
         /// <summary>
         /// Wait for the synonym map to be updated.
